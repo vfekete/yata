@@ -1,0 +1,222 @@
+"""Qt list model exposing tasks to QML."""
+from __future__ import annotations
+
+from datetime import datetime
+
+from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot, Property
+
+from storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, Task, TaskStore
+
+_ID, _TEXT, _STATUS, _DAY_LABEL = (Qt.UserRole + i for i in range(1, 5))
+
+
+def day_label(iso_timestamp: str) -> str:
+    day = datetime.fromisoformat(iso_timestamp).date()
+    return day.strftime("%A, %d %B %Y")
+
+
+class TaskListModel(QAbstractListModel):
+    canReorderChanged = Signal()
+    groupByDayChanged = Signal()
+    statusSortModeChanged = Signal()
+    searchTextChanged = Signal()
+
+    def __init__(self, store: TaskStore, parent=None):
+        super().__init__(parent)
+        self._store = store
+        self._tasks: list[Task] = store.load()
+        self._visible: list[Task] = []
+        self._search = ""
+        self._status_sort = ""
+        self._group_by_day = False
+        self._recompute()
+
+    # --- QAbstractListModel plumbing -------------------------------------
+
+    def roleNames(self):
+        return {
+            _ID: b"taskId",
+            _TEXT: b"text",
+            _STATUS: b"status",
+            _DAY_LABEL: b"dayLabel",
+        }
+
+    def rowCount(self, parent=QModelIndex()):
+        if parent.isValid():
+            return 0
+        return len(self._visible)
+
+    def data(self, index: QModelIndex, role: int):
+        if not index.isValid():
+            return None
+        task = self._visible[index.row()]
+        if role == _ID:
+            return task.id
+        if role == _TEXT:
+            return task.text
+        if role == _STATUS:
+            return task.status
+        if role == _DAY_LABEL:
+            return day_label(task.created_at)
+        return None
+
+    # --- view state --------------------------------------------------------
+
+    def _get_can_reorder(self) -> bool:
+        # Grouping by day does not block manual reordering: dragging a task
+        # onto a different day's section reassigns it to that day (see
+        # moveTask). A search or an active status sort still does, since
+        # the visible order isn't the manual order in those cases.
+        return not (self._search or self._status_sort)
+
+    canReorder = Property(bool, _get_can_reorder, notify=canReorderChanged)
+
+    def _get_group_by_day(self) -> bool:
+        return self._group_by_day
+
+    groupByDay = Property(bool, _get_group_by_day, notify=groupByDayChanged)
+
+    def _get_status_sort_mode(self) -> str:
+        return self._status_sort
+
+    statusSortMode = Property(str, _get_status_sort_mode, notify=statusSortModeChanged)
+
+    def _get_search_text(self) -> str:
+        return self._search
+
+    searchText = Property(str, _get_search_text, notify=searchTextChanged)
+
+    def _recompute(self):
+        items = self._tasks
+        if self._search:
+            needle = self._search.lower()
+            items = [t for t in items if needle in t.text.lower()]
+        if self._group_by_day:
+            # Day (newest first) is always the primary key; within a day,
+            # respect the active status sort if any, else keep manual order
+            # (both via Python's stable sort).
+            def day_sort_key(t: Task):
+                day_ordinal = datetime.fromisoformat(t.created_at).date().toordinal()
+                status_rank = 0 if not self._status_sort or t.status == self._status_sort else 1
+                return (-day_ordinal, status_rank)
+
+            items = sorted(items, key=day_sort_key)
+        elif self._status_sort:
+            items = sorted(items, key=lambda t: t.status != self._status_sort)
+        self.beginResetModel()
+        self._visible = items
+        self.endResetModel()
+
+    # --- mutation slots, callable from QML ---------------------------------
+
+    def _save(self):
+        self._store.save(self._tasks)
+
+    @Slot(result=str)
+    def addTask(self) -> str:
+        task = Task(text="", status=STATUS_ACTIVE)
+        self._tasks.insert(0, task)
+        was_reorderable = self._get_can_reorder()
+        self._recompute()
+        if was_reorderable != self._get_can_reorder():
+            self.canReorderChanged.emit()
+        self._save()
+        return task.id
+
+    def _find(self, task_id: str) -> Task | None:
+        for task in self._tasks:
+            if task.id == task_id:
+                return task
+        return None
+
+    @Slot(str, str)
+    def setText(self, task_id: str, text: str):
+        task = self._find(task_id)
+        if task is None or task.text == text:
+            return
+        task.text = text
+        self._recompute()
+        self._save()
+
+    @Slot(str, str)
+    def setStatus(self, task_id: str, status: str):
+        if status not in (STATUS_ACTIVE, STATUS_DONE, STATUS_CANCELLED):
+            return
+        task = self._find(task_id)
+        if task is None:
+            return
+        task.status = status
+        self._recompute()
+        self._save()
+
+    @Slot(str)
+    def deleteTask(self, task_id: str):
+        task = self._find(task_id)
+        if task is None:
+            return
+        self._tasks.remove(task)
+        self._recompute()
+        self._save()
+
+    @Slot(int, int)
+    def moveTask(self, from_index: int, to_index: int):
+        if not self._get_can_reorder():
+            return
+        if from_index == to_index or not (0 <= from_index < len(self._visible)) or not (
+            0 <= to_index < len(self._visible)
+        ):
+            return
+        moved_task = self._visible[from_index]
+        target_task = self._visible[to_index]
+
+        if self._group_by_day:
+            moved_day = datetime.fromisoformat(moved_task.created_at).date()
+            target_day = datetime.fromisoformat(target_task.created_at).date()
+            if moved_day != target_day:
+                # Dropped onto a different day's section: reassign the task
+                # to that day, keeping its original time of day.
+                old_dt = datetime.fromisoformat(moved_task.created_at)
+                moved_task.created_at = old_dt.replace(
+                    year=target_day.year, month=target_day.month, day=target_day.day
+                ).isoformat()
+
+        # Reposition within the manual-order source list too, so plain
+        # (non-grouped, non-sorted) view reflects the same drag.
+        self._tasks.remove(moved_task)
+        self._tasks.insert(self._tasks.index(target_task), moved_task)
+
+        self._recompute()
+        self._save()
+
+    @Slot(str)
+    def setSearchText(self, text: str):
+        if text == self._search:
+            return
+        was_reorderable = self._get_can_reorder()
+        self._search = text
+        self._recompute()
+        self.searchTextChanged.emit()
+        if was_reorderable != self._get_can_reorder():
+            self.canReorderChanged.emit()
+
+    @Slot(str)
+    def setStatusSortMode(self, mode: str):
+        if mode == self._status_sort:
+            return
+        was_reorderable = self._get_can_reorder()
+        self._status_sort = mode
+        self._recompute()
+        self.statusSortModeChanged.emit()
+        if was_reorderable != self._get_can_reorder():
+            self.canReorderChanged.emit()
+
+    @Slot(bool)
+    def setGroupByDay(self, flag: bool):
+        if flag == self._group_by_day:
+            return
+        was_reorderable = self._get_can_reorder()
+        self._group_by_day = flag
+        self._recompute()
+        self.groupByDayChanged.emit()
+        if was_reorderable != self._get_can_reorder():
+            self.canReorderChanged.emit()

@@ -1,0 +1,20 @@
+[project]
+name = "yata"
+version = "0.7.0"
+description = "Yet Another Todo Application"
+requires-python = ">=3.10"
+dependencies = [
+    "pyside6>=6.7",
+    "python-xlib>=0.33",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
