@@ -7,6 +7,17 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.9.30] - 2026-07-20
+
+### Added
+- **Auto desktop integration**: on startup the app checks
+  `~/.local/share/applications/yata.desktop` for an `X-AppVersion=` field. If
+  the file is absent or its version is older than the running binary, the app
+  installs (or updates) the `.desktop` entry and icon automatically — no manual
+  `install-desktop.sh` run required after updates.
+- `X-AppVersion=` field added to `resources/yata.desktop` template and
+  `install-desktop.sh` (populated from `pyproject.toml` version at install time).
+
 ## [0.9.29] - 2026-07-20
 
 ### Changed

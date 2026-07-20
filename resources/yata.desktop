@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=YATA
+Comment=Yet Another Todo Application — a minimal always-on-desktop task list
+Type=Application
+Categories=Utility;
+Exec=YATA_EXEC_PLACEHOLDER
+StartupWMClass=yata
+Icon=yata
+NoDisplay=false
+X-AppVersion=YATA_VERSION_PLACEHOLDER

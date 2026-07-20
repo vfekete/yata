@@ -3,4 +3,7 @@
 <qresource prefix="/fonts">
     <file alias="VT323-Regular.ttf">../resources/VT323-Regular.ttf</file>
 </qresource>
+<qresource prefix="/icon">
+    <file alias="icon.png">../resources/icon.png</file>
+</qresource>
 </RCC>
