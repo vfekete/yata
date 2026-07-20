@@ -1,4 +1,12 @@
+# Python + tools for single binary deploy
 __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+dist/
+yata-src/deployment/
+yata-src/pysidedeploy.spec
+
+# Claude AI
+claude-docs/
+.claude

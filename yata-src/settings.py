@@ -14,6 +14,14 @@ THEME_MODES = ("light", "dark")
 # paper) and are handled entirely in Theme.qml.
 THEME_TINTS = ("none", "green", "goldenrod", "white", "black")
 
+DEFAULT_OPACITY_PERCENT = 65
+MIN_OPACITY_PERCENT = 5
+MAX_OPACITY_PERCENT = 100
+
+DEFAULT_FONT_SCALE = 1.0
+MIN_FONT_SCALE = 0.5
+MAX_FONT_SCALE = 2.0
+
 
 def monitor_signature() -> str:
     """A string identifying the current monitor layout (order + resolution)."""
@@ -43,6 +51,9 @@ class AppSettings(QObject):
     heightChanged = Signal()
     themeModeChanged = Signal()
     themeTintChanged = Signal()
+    opacityPercentChanged = Signal()
+    fontScaleChanged = Signal()
+    wheelZoomInvertedChanged = Signal()
 
     def __init__(self, settings: QSettings | None = None, parent=None):
         super().__init__(parent)
@@ -52,6 +63,23 @@ class AppSettings(QObject):
         self._theme_mode = mode if mode in THEME_MODES else "dark"
         tint = self._settings.value("theme/tint", "none")
         self._theme_tint = tint if tint in THEME_TINTS else "none"
+        self._opacity_percent = self._clamp_opacity(
+            self._settings.value("theme/opacityPercent", DEFAULT_OPACITY_PERCENT)
+        )
+        self._font_scale = self._clamp_font_scale(
+            self._settings.value("theme/fontScale", DEFAULT_FONT_SCALE)
+        )
+        self._wheel_zoom_inverted = bool(
+            self._settings.value("theme/wheelZoomInverted", False)
+        )
+
+    @staticmethod
+    def _clamp_opacity(value) -> int:
+        return max(MIN_OPACITY_PERCENT, min(MAX_OPACITY_PERCENT, int(round(float(value)))))
+
+    @staticmethod
+    def _clamp_font_scale(value) -> float:
+        return max(MIN_FONT_SCALE, min(MAX_FONT_SCALE, float(value)))
 
     def _load_geometry(self) -> tuple[int, int, int, int]:
         current_signature = monitor_signature()
@@ -149,3 +177,52 @@ class AppSettings(QObject):
         self.themeTintChanged.emit()
 
     themeTint = Property(str, _get_theme_tint, _set_theme_tint, notify=themeTintChanged)
+
+    def _get_opacity_percent(self) -> int:
+        return self._opacity_percent
+
+    def _set_opacity_percent(self, value: int):
+        value = self._clamp_opacity(value)
+        if value == self._opacity_percent:
+            return
+        self._opacity_percent = value
+        self._settings.setValue("theme/opacityPercent", value)
+        self.opacityPercentChanged.emit()
+
+    opacityPercent = Property(
+        int, _get_opacity_percent, _set_opacity_percent, notify=opacityPercentChanged
+    )
+
+    def _get_font_scale(self) -> float:
+        return self._font_scale
+
+    def _set_font_scale(self, value: float):
+        value = self._clamp_font_scale(value)
+        if value == self._font_scale:
+            return
+        self._font_scale = value
+        self._settings.setValue("theme/fontScale", value)
+        self.fontScaleChanged.emit()
+
+    fontScale = Property(float, _get_font_scale, _set_font_scale, notify=fontScaleChanged)
+
+    def _get_wheel_zoom_inverted(self) -> bool:
+        return self._wheel_zoom_inverted
+
+    def _set_wheel_zoom_inverted(self, value: bool):
+        value = bool(value)
+        if value == self._wheel_zoom_inverted:
+            return
+        self._wheel_zoom_inverted = value
+        self._settings.setValue("theme/wheelZoomInverted", value)
+        self.wheelZoomInvertedChanged.emit()
+
+    wheelZoomInverted = Property(
+        bool, _get_wheel_zoom_inverted, _set_wheel_zoom_inverted, notify=wheelZoomInvertedChanged
+    )
+
+    # Read-only so QML can reset to these without hardcoding the values
+    # itself in more than one place (the RESET button and the Ctrl+0
+    # shortcut both need them).
+    defaultOpacityPercent = Property(int, lambda self: DEFAULT_OPACITY_PERCENT, constant=True)
+    defaultFontScale = Property(float, lambda self: DEFAULT_FONT_SCALE, constant=True)

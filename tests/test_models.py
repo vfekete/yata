@@ -204,3 +204,110 @@ def test_persists_across_reload(tmp_path):
 
     assert model2.rowCount() == 1
     assert role(model2, 0, "text") == "Persisted"
+
+
+def test_set_status_records_completed_at_for_done_and_cancelled(model):
+    task_id = model.addTask()
+    model.setText(task_id, "Buy milk")
+    assert model._find(task_id).completed_at == ""
+
+    model.setStatus(task_id, "done")
+    ts_done = model._find(task_id).completed_at
+    assert ts_done != "", "completed_at must be set when status → done"
+
+    model.setStatus(task_id, "active")
+    assert model._find(task_id).completed_at == ts_done, "reset to active must not clear timestamp"
+
+    model.setStatus(task_id, "cancelled")
+    ts_cancelled = model._find(task_id).completed_at
+    assert ts_cancelled != "" and ts_cancelled >= ts_done, "re-finishing updates timestamp"
+
+
+def test_reload_tasks_picks_up_externally_written_file(tmp_path):
+    path = str(tmp_path / "tasks.json")
+    model = TaskListModel(TaskStore(path=path))
+    model.addTask()
+    assert model.rowCount() == 1
+
+    # Simulate an external process replacing tasks.json entirely, bypassing
+    # this model's own _tasks/_save().
+    TaskStore(path=path).save([])
+    assert model.rowCount() == 1  # unchanged until reloadTasks() is called
+
+    model.reloadTasks()
+
+    assert model.rowCount() == 0
+
+
+# --- visibility filter tests -----------------------------------------------
+
+def test_visibility_defaults_all_true(model):
+    assert model.showActive is True
+    assert model.showDone is True
+    assert model.showCancelled is True
+
+
+def test_hide_active_removes_active_tasks(model):
+    a = model.addTask()
+    model.setText(a, "Active task")
+    d = model.addTask()
+    model.setText(d, "Done task")
+    model.setStatus(d, "done")
+
+    model.setShowActive(False)
+
+    ids = [role(model, i, "taskId") for i in range(model.rowCount())]
+    assert a not in ids
+    assert d in ids
+
+
+def test_hide_done_removes_done_tasks(model):
+    a = model.addTask()
+    model.setText(a, "Active task")
+    d = model.addTask()
+    model.setText(d, "Done task")
+    model.setStatus(d, "done")
+
+    model.setShowDone(False)
+
+    ids = [role(model, i, "taskId") for i in range(model.rowCount())]
+    assert d not in ids
+    assert a in ids
+
+
+def test_hide_cancelled_removes_cancelled_tasks(model):
+    a = model.addTask()
+    model.setText(a, "Active task")
+    c = model.addTask()
+    model.setText(c, "Cancelled task")
+    model.setStatus(c, "cancelled")
+
+    model.setShowCancelled(False)
+
+    ids = [role(model, i, "taskId") for i in range(model.rowCount())]
+    assert c not in ids
+    assert a in ids
+
+
+def test_visibility_restoring_shows_tasks_again(model):
+    a = model.addTask()
+    model.setText(a, "Active task")
+    model.setShowActive(False)
+    assert model.rowCount() == 0
+
+    model.setShowActive(True)
+    assert model.rowCount() == 1
+
+
+def test_visibility_filters_stack_with_search(model):
+    a = model.addTask()
+    model.setText(a, "Buy milk")
+    d = model.addTask()
+    model.setText(d, "Buy bread")
+    model.setStatus(d, "done")
+
+    model.setSearchText("buy")
+    model.setShowDone(False)
+
+    assert model.rowCount() == 1
+    assert role(model, 0, "taskId") == a

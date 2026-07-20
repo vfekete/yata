@@ -1,0 +1,149 @@
+[
+  {
+    "text": "This is a deliberately **very long** task title meant purely to demonstrate that YATA correctly *wraps* long task text across multiple lines instead of clipping or overflowing the window: it describes, in unnecessary and repetitive detail, a plan to reorganize the entire home office, including sorting through several boxes of old cables, donating the **CRT monitor** nobody needs anymore, alphabetizing the bookshelf by author surname, backing up every old hard drive to a `NAS` before recycling it, framing the `git commit -m \"initial\"` printout as a joke, testing whether ~~procrastination~~ focus really is a renewable resource, and finally treating myself to a coffee once the whole thing is [actually done](https://example.com/definitely-done) instead of just marked done.",
+    "status": "active",
+    "created_at": "2026-07-14T08:00:00",
+    "id": "35a4aad42d454fcd9d4190d5735604bd",
+    "completed_at": ""
+  },
+  {
+    "text": "Draft the **quarterly review** slides for Monday",
+    "status": "active",
+    "created_at": "2026-07-14T08:20:00",
+    "id": "7f0cdd57c9ad462d80c88a725852cbc7",
+    "completed_at": ""
+  },
+  {
+    "text": "Call the plumber about the *leaking* kitchen faucet",
+    "status": "active",
+    "created_at": "2026-07-14T08:45:00",
+    "id": "21bcd9bb80e64fe9b93431360fdf18bc",
+    "completed_at": ""
+  },
+  {
+    "text": "Pick up dry cleaning (~~Tuesday~~ now Wednesday)",
+    "status": "active",
+    "created_at": "2026-07-14T09:10:00",
+    "id": "c95b215c38c14c87b41abd3c11b0df8c",
+    "completed_at": ""
+  },
+  {
+    "text": "Read the `RFC-822` spec sections on header folding",
+    "status": "active",
+    "created_at": "2026-07-14T09:35:00",
+    "id": "ad58a27d6bd943d6abbaca116cca7b31",
+    "completed_at": ""
+  },
+  {
+    "text": "Reply to Alex re: [budget spreadsheet](https://example.com/budget)",
+    "status": "active",
+    "created_at": "2026-07-14T10:00:00",
+    "id": "391210c54a624cbca697846d3237a577",
+    "completed_at": ""
+  },
+  {
+    "text": "Book flights for the **conference** in October",
+    "status": "done",
+    "created_at": "2026-07-14T10:30:00",
+    "id": "b29d2a307a504fc5b8afda5e752a995e",
+    "completed_at": "2026-07-14T14:22:33"
+  },
+  {
+    "text": "Renew *car* insurance before it lapses",
+    "status": "done",
+    "created_at": "2026-07-14T11:00:00",
+    "id": "6e36a74d979949cba3e7fbbf7dd7c7ec",
+    "completed_at": "2026-07-14T16:45:18"
+  },
+  {
+    "text": "Submit expense report for last week's trip",
+    "status": "done",
+    "created_at": "2026-07-14T11:30:00",
+    "id": "acf671df56e742378aaf61f4220d3e30",
+    "completed_at": "2026-07-14T17:03:55"
+  },
+  {
+    "text": "Fix the `NullPointerException` in the login flow",
+    "status": "done",
+    "created_at": "2026-07-14T13:00:00",
+    "id": "e6728e46f08a465cb12613931ff6ca39",
+    "completed_at": "2026-07-14T13:58:12"
+  },
+  {
+    "text": "Water the plants on the balcony",
+    "status": "done",
+    "created_at": "2026-07-14T13:20:00",
+    "id": "bd3fe3dc6a03419c9876da41d8eb9516",
+    "completed_at": "2026-07-14T19:10:44"
+  },
+  {
+    "text": "Send a birthday card to **Grandma**",
+    "status": "done",
+    "created_at": "2026-07-14T13:45:00",
+    "id": "ac7315259e6a4414a7aaee6560d3e8ec",
+    "completed_at": ""
+  },
+  {
+    "text": "Order a new office chair (~~decided against it~~)",
+    "status": "cancelled",
+    "created_at": "2026-07-14T14:10:00",
+    "id": "217382550a034e79a898ce80d91b37eb",
+    "completed_at": "2026-07-14T14:52:29"
+  },
+  {
+    "text": "Sign up for the pottery class",
+    "status": "cancelled",
+    "created_at": "2026-07-14T14:30:00",
+    "id": "468ef0a3c15545b6828b3627a2d10d77",
+    "completed_at": "2026-07-15T08:14:07"
+  },
+  {
+    "text": "Migrate the blog to *Hugo* -- shelved",
+    "status": "cancelled",
+    "created_at": "2026-07-14T15:00:00",
+    "id": "a036f2c437614102ab1336dcbc238db5",
+    "completed_at": ""
+  },
+  {
+    "text": "Finish reading **Project Hail Mary**",
+    "status": "done",
+    "created_at": "2026-07-15T09:00:00",
+    "id": "da615db36060456eb0f56534c5aeed27",
+    "completed_at": "2026-07-15T23:11:42"
+  },
+  {
+    "text": "Deploy the `v2.3.1` hotfix to production",
+    "status": "done",
+    "created_at": "2026-07-15T09:30:00",
+    "id": "a9318a00e3da436a89df6d82e574b444",
+    "completed_at": "2026-07-15T10:02:19"
+  },
+  {
+    "text": "Review Sam's PR on the *auth* module",
+    "status": "done",
+    "created_at": "2026-07-15T10:15:00",
+    "id": "c08d132d247d439dbc2d08371e4db375",
+    "completed_at": "2026-07-15T11:48:33"
+  },
+  {
+    "text": "Clean out the garage",
+    "status": "done",
+    "created_at": "2026-07-15T15:00:00",
+    "id": "673ccc712d1441d9a4540b3e74e26893",
+    "completed_at": ""
+  },
+  {
+    "text": "Pay the electricity bill",
+    "status": "done",
+    "created_at": "2026-07-15T18:30:00",
+    "id": "eff1b9e4c60346339b3199ecb8a61699",
+    "completed_at": "2026-07-15T19:05:47"
+  },
+  {
+    "text": "Weekend camping trip (~~cancelled~~ due to rain)",
+    "status": "cancelled",
+    "created_at": "2026-07-16T07:00:00",
+    "id": "ec6ac6fe2dd640169548dc5d3dfb137c",
+    "completed_at": "2026-07-16T18:30:22"
+  }
+]

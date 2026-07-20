@@ -7,7 +7,7 @@ from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot, Pr
 
 from storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, Task, TaskStore
 
-_ID, _TEXT, _STATUS, _DAY_LABEL = (Qt.UserRole + i for i in range(1, 5))
+_ID, _TEXT, _STATUS, _DAY_LABEL, _COMPLETED_AT = (Qt.UserRole + i for i in range(1, 6))
 
 
 def day_label(iso_timestamp: str) -> str:
@@ -20,6 +20,10 @@ class TaskListModel(QAbstractListModel):
     groupByDayChanged = Signal()
     statusSortModeChanged = Signal()
     searchTextChanged = Signal()
+    showActiveChanged = Signal()
+    showDoneChanged = Signal()
+    showCancelledChanged = Signal()
+    taskAdded = Signal(str)  # emits the new task's ID after the model is ready
 
     def __init__(self, store: TaskStore, parent=None):
         super().__init__(parent)
@@ -29,6 +33,9 @@ class TaskListModel(QAbstractListModel):
         self._search = ""
         self._status_sort = ""
         self._group_by_day = False
+        self._show_active = True
+        self._show_done = True
+        self._show_cancelled = True
         self._recompute()
 
     # --- QAbstractListModel plumbing -------------------------------------
@@ -39,6 +46,7 @@ class TaskListModel(QAbstractListModel):
             _TEXT: b"text",
             _STATUS: b"status",
             _DAY_LABEL: b"dayLabel",
+            _COMPLETED_AT: b"completedAt",
         }
 
     def rowCount(self, parent=QModelIndex()):
@@ -58,6 +66,8 @@ class TaskListModel(QAbstractListModel):
             return task.status
         if role == _DAY_LABEL:
             return day_label(task.created_at)
+        if role == _COMPLETED_AT:
+            return task.completed_at
         return None
 
     # --- view state --------------------------------------------------------
@@ -81,6 +91,21 @@ class TaskListModel(QAbstractListModel):
 
     statusSortMode = Property(str, _get_status_sort_mode, notify=statusSortModeChanged)
 
+    def _get_show_active(self) -> bool:
+        return self._show_active
+
+    showActive = Property(bool, _get_show_active, notify=showActiveChanged)
+
+    def _get_show_done(self) -> bool:
+        return self._show_done
+
+    showDone = Property(bool, _get_show_done, notify=showDoneChanged)
+
+    def _get_show_cancelled(self) -> bool:
+        return self._show_cancelled
+
+    showCancelled = Property(bool, _get_show_cancelled, notify=showCancelledChanged)
+
     def _get_search_text(self) -> str:
         return self._search
 
@@ -91,6 +116,12 @@ class TaskListModel(QAbstractListModel):
         if self._search:
             needle = self._search.lower()
             items = [t for t in items if needle in t.text.lower()]
+        if not self._show_active:
+            items = [t for t in items if t.status != STATUS_ACTIVE]
+        if not self._show_done:
+            items = [t for t in items if t.status != STATUS_DONE]
+        if not self._show_cancelled:
+            items = [t for t in items if t.status != STATUS_CANCELLED]
         if self._group_by_day:
             # Day (newest first) is always the primary key; within a day,
             # respect the active status sort if any, else keep manual order
@@ -114,6 +145,9 @@ class TaskListModel(QAbstractListModel):
 
     @Slot(result=str)
     def addTask(self) -> str:
+        # Drop any empty tasks left over from a previous ADD that was
+        # abandoned without typing anything (click-away without Enter/Esc).
+        self._tasks = [t for t in self._tasks if t.text]
         task = Task(text="", status=STATUS_ACTIVE)
         self._tasks.insert(0, task)
         was_reorderable = self._get_can_reorder()
@@ -121,6 +155,7 @@ class TaskListModel(QAbstractListModel):
         if was_reorderable != self._get_can_reorder():
             self.canReorderChanged.emit()
         self._save()
+        self.taskAdded.emit(task.id)
         return task.id
 
     def _find(self, task_id: str) -> Task | None:
@@ -146,6 +181,8 @@ class TaskListModel(QAbstractListModel):
         if task is None:
             return
         task.status = status
+        if status in (STATUS_DONE, STATUS_CANCELLED):
+            task.completed_at = datetime.now().isoformat()
         self._recompute()
         self._save()
 
@@ -220,3 +257,33 @@ class TaskListModel(QAbstractListModel):
         self.groupByDayChanged.emit()
         if was_reorderable != self._get_can_reorder():
             self.canReorderChanged.emit()
+
+    @Slot(bool)
+    def setShowActive(self, flag: bool):
+        if flag == self._show_active:
+            return
+        self._show_active = flag
+        self._recompute()
+        self.showActiveChanged.emit()
+
+    @Slot(bool)
+    def setShowDone(self, flag: bool):
+        if flag == self._show_done:
+            return
+        self._show_done = flag
+        self._recompute()
+        self.showDoneChanged.emit()
+
+    @Slot(bool)
+    def setShowCancelled(self, flag: bool):
+        if flag == self._show_cancelled:
+            return
+        self._show_cancelled = flag
+        self._recompute()
+        self.showCancelledChanged.emit()
+
+    @Slot()
+    def reloadTasks(self):
+        """Re-reads tasks.json from disk, discarding any in-memory state."""
+        self._tasks = self._store.load()
+        self._recompute()

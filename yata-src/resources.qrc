@@ -1,0 +1,6 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+<qresource prefix="/fonts">
+    <file alias="VT323-Regular.ttf">../resources/VT323-Regular.ttf</file>
+</qresource>
+</RCC>

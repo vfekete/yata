@@ -3,11 +3,12 @@ import os
 import signal
 import sys
 
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFontDatabase, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
+import resources_rc  # noqa: F401 — registers :/fonts/VT323-Regular.ttf with Qt
 from models import TaskListModel
 from settings import AppSettings
 from storage import TaskStore
@@ -17,10 +18,19 @@ QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
 
 
 def main() -> int:
+    # Must be set before QGuiApplication is constructed. PassThrough keeps
+    # pixel sizes matching each monitor's actual reported scale factor
+    # (rather than rounding to the nearest integer), so the app looks the
+    # same size across differently-scaled monitors.
+    QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
     app = QGuiApplication(sys.argv)
     app.setOrganizationName("yata")
     app.setApplicationName("yata")
     QQuickStyle.setStyle("Basic")
+
+    QFontDatabase.addApplicationFont(":/fonts/VT323-Regular.ttf")
 
     task_model = TaskListModel(TaskStore())
     app_settings = AppSettings()

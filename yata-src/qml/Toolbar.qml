@@ -22,8 +22,9 @@ Item {
         spacing: 6
 
         ToolButton {
-            text: "+"
+            text: "Add"
             font.bold: true
+            focusPolicy: Qt.NoFocus
             ToolTip.visible: hovered
             ToolTip.text: "Add task"
             onClicked: taskModel.addTask()
@@ -35,30 +36,9 @@ Item {
                 text: parent.text
                 font.bold: parent.font.bold
                 font.family: Theme.fontFamily
-                color: Theme.textColor
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-
-        ToolButton {
-            id: dayButton
-            text: "Day"
-            checkable: true
-            checked: taskModel.groupByDay
-            ToolTip.visible: hovered
-            ToolTip.text: "Group by day"
-            onToggled: taskModel.setGroupByDay(checked)
-            background: Rectangle {
-                radius: 4
-                color: dayButton.checked ? Theme.accentColor : (dayButton.hovered ? Theme.hoverColor : "transparent")
-                opacity: dayButton.checked ? 0.5 : 1.0
-            }
-            contentItem: Text {
-                text: dayButton.text
-                color: Theme.textColor
-                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
                 font.capitalization: Font.AllUppercase
+                color: Theme.textColor
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
@@ -66,9 +46,9 @@ Item {
 
         ToolButton {
             id: statusButton
-            text: "Status"
+            text: "Order"
             ToolTip.visible: hovered
-            ToolTip.text: "Sort by status"
+            ToolTip.text: "Sort by order"
             onClicked: statusMenu.popup()
             background: Rectangle {
                 radius: 4
@@ -80,6 +60,7 @@ Item {
                 text: statusButton.text
                 color: Theme.textColor
                 font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
                 font.capitalization: Font.AllUppercase
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -87,6 +68,13 @@ Item {
 
             Menu {
                 id: statusMenu
+                // Popups are parented into the window's Overlay layer, not
+                // the item that opened them, so this needs its own explicit
+                // font size rather than inheriting one.
+                font.pixelSize: Theme.taskFontPixelSize
+                // Explicit reactive width for the same reason as ThemeMenu:
+                // longest item is "Cancelled first" → multiplier 13 is safe.
+                width: Theme.taskFontPixelSize * 13
                 MenuItem {
                     text: "Manual order"
                     checkable: true
@@ -118,6 +106,52 @@ Item {
             }
         }
 
+        ToolButton {
+            id: reloadButton
+            text: "Reload"
+            ToolTip.visible: hovered
+            ToolTip.text: "Reload tasks from disk"
+            onClicked: taskModel.reloadTasks()
+            background: Rectangle {
+                radius: 4
+                color: reloadButton.hovered ? Theme.hoverColor : "transparent"
+            }
+            contentItem: Text {
+                text: reloadButton.text
+                color: Theme.textColor
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
+                font.capitalization: Font.AllUppercase
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+
+        ToolButton {
+            id: themeButton
+            text: "Theme"
+            ToolTip.visible: hovered
+            ToolTip.text: "Change theme"
+            onClicked: themeMenu.popup()
+            background: Rectangle {
+                radius: 4
+                color: themeButton.hovered ? Theme.hoverColor : "transparent"
+            }
+            contentItem: Text {
+                text: themeButton.text
+                color: Theme.textColor
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
+                font.capitalization: Font.AllUppercase
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            ThemeMenu {
+                id: themeMenu
+            }
+        }
+
         TextField {
             id: searchField
             Layout.fillWidth: true
@@ -125,6 +159,7 @@ Item {
             rightPadding: clearIcon.width + 14
             color: Theme.textColor
             font.family: Theme.fontFamily
+            font.pixelSize: Theme.taskFontPixelSize
             onTextChanged: taskModel.setSearchText(text)
             background: Rectangle {
                 radius: 4
@@ -144,60 +179,6 @@ Item {
                     anchors.fill: parent
                     anchors.margins: -4
                     onClicked: searchField.text = ""
-                }
-            }
-        }
-
-        // Shares the remaining space equally with the search field above,
-        // so the field renders at half the width it would otherwise take,
-        // and pushes the theme button to the toolbar's right edge.
-        Item {
-            Layout.fillWidth: true
-        }
-
-        ToolButton {
-            id: themeButton
-            text: "Theme"
-            ToolTip.visible: hovered
-            ToolTip.text: "Change theme"
-            onClicked: themeMenu.popup()
-            background: Rectangle {
-                radius: 4
-                color: themeButton.hovered ? Theme.hoverColor : "transparent"
-            }
-            contentItem: Text {
-                text: themeButton.text
-                color: Theme.textColor
-                font.family: Theme.fontFamily
-                font.capitalization: Font.AllUppercase
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            Menu {
-                id: themeMenu
-                MenuItem {
-                    text: "Dark theme"
-                    checkable: true
-                    checked: appSettings.themeMode === "dark"
-                    onTriggered: appSettings.themeMode = "dark"
-                    padding: 10
-                }
-                MenuItem {
-                    text: "Light theme"
-                    checkable: true
-                    checked: appSettings.themeMode === "light"
-                    onTriggered: appSettings.themeMode = "light"
-                    padding: 10
-                }
-                MenuSeparator {}
-                Menu {
-                    title: "Tint"
-                    MenuItem { text: "None (plain)"; onTriggered: appSettings.themeTint = "none"; padding: 10 }
-                    MenuItem { text: "Green"; onTriggered: appSettings.themeTint = "green"; padding: 10 }
-                    MenuItem { text: "Goldenrod"; onTriggered: appSettings.themeTint = "goldenrod"; padding: 10 }
-                    MenuItem { text: "White"; onTriggered: appSettings.themeTint = "white"; padding: 10 }
-                    MenuItem { text: "Black"; onTriggered: appSettings.themeTint = "black"; padding: 10 }
                 }
             }
         }
