@@ -21,8 +21,6 @@ A minimal always-on-desktop todo list for GNOME/Ubuntu: a borderless,
 transparent, vertical list of one-line tasks that sits on the desktop like a
 sticky note.
 
-See `claude-docs/instructions.md` for the full specification.
-
 ## Features
 
 - Add, edit, cancel, mark done, re-open and delete tasks
