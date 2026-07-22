@@ -375,3 +375,81 @@ def test_filter_defaults_with_empty_settings(tmp_path):
     assert m.showActive is True
     assert m.showDone is True
     assert m.showCancelled is True
+
+
+# --- calendar view tests (MonthView/YearView) -------------------------------
+
+def test_month_counts_aggregates_by_day_and_status(model):
+    a = model.addTask()
+    model.setText(a, "Active on the 5th")
+    model._find(a).created_at = datetime(2026, 3, 5, 9, 0).isoformat()
+
+    d = model.addTask()
+    model.setText(d, "Done on the 5th")
+    model._find(d).created_at = datetime(2026, 3, 5, 10, 0).isoformat()
+    model.setStatus(d, "done")
+
+    c = model.addTask()
+    model.setText(c, "Cancelled on the 12th")
+    model._find(c).created_at = datetime(2026, 3, 12, 8, 0).isoformat()
+    model.setStatus(c, "cancelled")
+
+    other_month = model.addTask()
+    model.setText(other_month, "Different month entirely")
+    model._find(other_month).created_at = datetime(2026, 4, 1, 8, 0).isoformat()
+
+    counts = model.monthCounts(2026, 3)
+    by_day = {c["day"]: c for c in counts}
+
+    assert by_day[5] == {"day": 5, "active": 1, "done": 1, "cancelled": 0}
+    assert by_day[12] == {"day": 12, "active": 0, "done": 0, "cancelled": 1}
+    assert 1 not in by_day  # April's task must not leak into March's counts
+
+
+def test_month_counts_empty_month_returns_empty_list(model):
+    assert model.monthCounts(1999, 1) == []
+
+
+def test_year_counts_aggregates_by_month_and_status(model):
+    jan = model.addTask()
+    model.setText(jan, "January task")
+    model._find(jan).created_at = datetime(2026, 1, 15, 9, 0).isoformat()
+
+    dec = model.addTask()
+    model.setText(dec, "December task")
+    model._find(dec).created_at = datetime(2026, 12, 20, 9, 0).isoformat()
+    model.setStatus(dec, "done")
+
+    other_year = model.addTask()
+    model.setText(other_year, "Different year entirely")
+    model._find(other_year).created_at = datetime(2025, 1, 15, 9, 0).isoformat()
+
+    counts = model.yearCounts(2026)
+    by_month = {c["month"]: c for c in counts}
+
+    assert by_month[1] == {"month": 1, "active": 1, "done": 0, "cancelled": 0}
+    assert by_month[12] == {"month": 12, "active": 0, "done": 1, "cancelled": 0}
+    assert len(by_month) == 2  # 2025's task must not leak into 2026's counts
+
+
+def test_index_for_date_finds_first_matching_row(model):
+    older = model.addTask()
+    model.setText(older, "Older day")
+    model._find(older).created_at = datetime(2026, 5, 1, 9, 0).isoformat()
+
+    newer = model.addTask()
+    model.setText(newer, "Newer day")
+    model._find(newer).created_at = datetime(2026, 5, 10, 9, 0).isoformat()
+
+    model.setGroupByDay(True)  # newest day sorts first
+
+    assert model.indexForDate(2026, 5, 10) == 0
+    assert model.indexForDate(2026, 5, 1) == 1
+
+
+def test_index_for_date_returns_minus_one_when_no_match(model):
+    t = model.addTask()
+    model.setText(t, "Some task")
+    model._find(t).created_at = datetime(2026, 5, 1, 9, 0).isoformat()
+
+    assert model.indexForDate(2026, 5, 2) == -1

@@ -309,3 +309,45 @@ class TaskListModel(QAbstractListModel):
         """Re-reads tasks.json from disk, discarding any in-memory state."""
         self._tasks = self._store.load()
         self._recompute()
+
+    # --- calendar views (MonthView/YearView) --------------------------------
+
+    @Slot(int, int, result='QVariant')
+    def monthCounts(self, year: int, month: int):
+        """Per-day active/done/cancelled counts for one month.
+
+        Sparse: only days with at least one task are included. Ungrouped by
+        self._search/showActive/etc. — the calendar always reflects every
+        task regardless of the current visibility filters, since it's a
+        navigation aid, not a filtered view.
+        """
+        counts: dict[int, dict[str, int]] = {}
+        for t in self._tasks:
+            d = datetime.fromisoformat(t.created_at).date()
+            if d.year == year and d.month == month:
+                bucket = counts.setdefault(d.day, {"active": 0, "done": 0, "cancelled": 0})
+                bucket[t.status] += 1
+        return [{"day": day, **c} for day, c in sorted(counts.items())]
+
+    @Slot(int, result='QVariant')
+    def yearCounts(self, year: int):
+        """Per-month active/done/cancelled counts for one year. Sparse, see monthCounts."""
+        counts: dict[int, dict[str, int]] = {}
+        for t in self._tasks:
+            d = datetime.fromisoformat(t.created_at).date()
+            if d.year == year:
+                bucket = counts.setdefault(d.month, {"active": 0, "done": 0, "cancelled": 0})
+                bucket[t.status] += 1
+        return [{"month": month, **c} for month, c in sorted(counts.items())]
+
+    @Slot(int, int, int, result=int)
+    def indexForDate(self, year: int, month: int, day: int) -> int:
+        """Row index of the first task on the given date in the current
+        (visible, day-grouped) list, or -1. Callers switch to Day/grouped
+        view first (setGroupByDay(True) recomputes _visible synchronously),
+        then use this to scroll the ListView to that day."""
+        for i, t in enumerate(self._visible):
+            d = datetime.fromisoformat(t.created_at).date()
+            if d.year == year and d.month == month and d.day == day:
+                return i
+        return -1

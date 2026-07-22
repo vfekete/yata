@@ -7,6 +7,83 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.12.4] - 2026-07-22
+
+### Fixed
+- **YearView's grid could overflow past the right edge during a window-width
+  resize**, leaving an asymmetric ~10px gap on the left and none (or
+  negative) on the right — reproduced and measured: at one width the grid
+  sat 8px from the left but overflowed the container by 10px on the right.
+  Root cause: `Layout.alignment: Qt.AlignHCenter` positions a `GridLayout`
+  using its implicit width from the *previous* layout pass, one frame behind
+  its actual rendered width (which reacts immediately to `cellSize`-driven
+  `Layout.preferredWidth` on each cell) — a fast resize could catch that gap.
+  Fixed in both `YearView.qml` and `MonthView.qml` (same architecture, same
+  latent bug, not yet reported there) by binding the grid's `x` directly to
+  `Math.round((parent.width - width) / 2)` instead of relying on
+  `Layout.alignment`, so position and width update atomically in the same
+  binding pass. MonthView's weekday-label row and day grid are now grouped
+  into one nested `ColumnLayout` and centered as a single unit, so the two
+  rows can't drift out of alignment with each other either.
+
+## [0.12.3] - 2026-07-22
+
+### Fixed
+- **`CalendarCell` label/count font sizes are now fractions of the cell's own
+  computed size** (`Math.min(width, height) * 0.18`/`0.22`), not a fixed
+  multiple of `Theme.taskFontPixelSize`. The fixed multiple didn't track
+  either window resize or font zoom, so the (also too-large, per feedback)
+  counts could outgrow their square at a small window or high zoom instead
+  of staying bounded inside it.
+
+## [0.12.2] - 2026-07-22
+
+### Fixed
+- **MonthView's weekday columns were uneven widths** ("Fri" narrower, "Tue"/
+  "Sat" wider) — each column's width was implicitly driven by that weekday
+  abbreviation's own proportional-font text width (`Layout.fillWidth: true`
+  alone doesn't force equal columns in `GridLayout`), not a shared value.
+  Fixed by computing an explicit `cellSize` and applying it as
+  `Layout.preferredWidth` uniformly to both the weekday-label row and every
+  day cell.
+- **Day/month cells are now square**, sized off whichever dimension (grid
+  width ÷ 7, or remaining window height ÷ 6) is tighter, instead of
+  stretching to fill both independently. Applied to both `MonthView.qml` and
+  `YearView.qml` for consistency. The grid centers itself when the square
+  size leaves leftover space in the other dimension.
+
+## [0.12.1] - 2026-07-22
+
+### Fixed
+- **`CalendarCell` counts were too small and the done count read as gray, not
+  green.** Font size doubled (`0.85×` → `1.7×` task font, now bold). Done/
+  cancelled counts now use `Theme.checkIconColor`/`Theme.crossIconColor` (the
+  same green-check/red-cross semantic tokens the task list's status icons
+  use) instead of `Theme.doneColor`/`Theme.cancelledColor` — those are the
+  muted strikethrough *text* color for the task list (deliberately gray for
+  the "none" theme), correct there but not what a status-color count needed.
+
+## [0.12.0] - 2026-07-22
+
+### Added
+- **MONTH view**: FilterBar's "Month" button now shows a real month calendar
+  grid (`yata-src/qml/MonthView.qml`) instead of just a visual toggle —
+  always 7 columns (Monday-first), regardless of window width; cells shrink
+  rather than the grid reflowing. Each day cell shows active/done/cancelled
+  counts (only nonzero ones). Prev/next arrows page between months (no
+  bound — old months with data are reachable). Clicking a day switches to
+  DAY view and scrolls the list to that day.
+- **YEAR view**: FilterBar's "Year" button shows a 12-month grid, 4 columns x
+  3 rows (`yata-src/qml/YearView.qml`), each cell showing that month's
+  active/done/cancelled counts. Prev/next arrows page between years.
+  Clicking a month switches to MONTH view showing that month.
+- New shared `CalendarCell.qml` (day/month box: label + 3 status counts,
+  clickable) and `PagerArrow.qml` (‹/› pagination arrow), used by both views.
+- `models.py`: `monthCounts(year, month)` and `yearCounts(year)` (sparse
+  per-day/per-month status tallies, `@Slot(..., result='QVariant')`) and
+  `indexForDate(year, month, day)` (row index in the current day-grouped
+  list, for MonthView's day-click-to-scroll navigation).
+
 ## [0.11.4] - 2026-07-22
 
 ### Changed

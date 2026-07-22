@@ -18,6 +18,14 @@ Window {
     // "beneath other windows, above icons". See README.md.
     flags: Qt.FramelessWindowHint
 
+    // MonthView/YearView's currently-displayed page. Not persisted — each
+    // resets to the current month/year at app start; navigating away and
+    // back within a session keeps whatever was last paged to, since these
+    // are plain properties on a component that's never destroyed.
+    property int calYear: new Date().getFullYear()
+    property int calMonth: new Date().getMonth() + 1
+    property int calYearPage: new Date().getFullYear()
+
     Shortcut {
         sequences: [StandardKey.ZoomIn]
         onActivated: appSettings.fontScale = Math.min(appSettings.fontScale + 0.1, 2.0)
@@ -108,6 +116,7 @@ Window {
             }
 
             FilterBar {
+                id: filterBar
                 Layout.fillWidth: true
             }
 
@@ -118,6 +127,7 @@ Window {
                 ListView {
                     id: listView
                     anchors.fill: parent
+                    visible: !filterBar.monthActive && !filterBar.yearActive
                     clip: true
                     spacing: 0
                     model: taskModel
@@ -153,7 +163,7 @@ Window {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: parent.height * 0.1
-                    visible: listView.contentHeight > listView.height && !listView.atYEnd
+                    visible: listView.visible && listView.contentHeight > listView.height && !listView.atYEnd
                     gradient: Gradient {
                         GradientStop { position: 0.0; color: "transparent" }
                         GradientStop {
@@ -162,6 +172,55 @@ Window {
                                    ? (Theme.dark ? "#111827" : "#f9fafb")
                                    : Theme.contentBackground
                         }
+                    }
+                }
+
+                // Month/Year calendar grids replace the task list entirely
+                // while active — presentational components (Main.qml owns
+                // the paging state) so a click in YearView can retarget
+                // MonthView's year/month via a plain property assignment
+                // rather than fighting a broken two-way binding.
+                MonthView {
+                    anchors.fill: parent
+                    visible: filterBar.monthActive
+                    year: root.calYear
+                    month: root.calMonth
+                    onPrevMonth: {
+                        if (root.calMonth <= 1) {
+                            root.calMonth = 12
+                            root.calYear -= 1
+                        } else {
+                            root.calMonth -= 1
+                        }
+                    }
+                    onNextMonth: {
+                        if (root.calMonth >= 12) {
+                            root.calMonth = 1
+                            root.calYear += 1
+                        } else {
+                            root.calMonth += 1
+                        }
+                    }
+                    onDayClicked: (y, m, d) => {
+                        filterBar.setGrouping("day", true)
+                        Qt.callLater(function() {
+                            var idx = taskModel.indexForDate(y, m, d)
+                            if (idx >= 0)
+                                listView.positionViewAtIndex(idx, ListView.Beginning)
+                        })
+                    }
+                }
+
+                YearView {
+                    anchors.fill: parent
+                    visible: filterBar.yearActive
+                    year: root.calYearPage
+                    onPrevYear: root.calYearPage -= 1
+                    onNextYear: root.calYearPage += 1
+                    onMonthClicked: (y, m) => {
+                        root.calYear = y
+                        root.calMonth = m
+                        filterBar.setGrouping("month", true)
                     }
                 }
             }

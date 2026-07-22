@@ -20,11 +20,14 @@ Item {
     id: root
     implicitHeight: flow.implicitHeight + 4
 
-    // "Month"/"Year" grouping have no backend yet (taskModel only knows
-    // about day-grouping) — they're purely local UI toggles. All three are
-    // mutually exclusive (at most one active at a time); activating any one
-    // clears the other two, and the active one can be switched off entirely
-    // (clicking it again turns it off, nothing turns back on).
+    // Month/Year switch the content area to MonthView/YearView (Main.qml
+    // reads these two properties to decide what to show instead of the task
+    // ListView) — unlike Day, taskModel has no month/year-grouping concept
+    // of its own, these are purely local UI state. All three are mutually
+    // exclusive (at most one active at a time); activating any one clears
+    // the other two, and the active one can be switched off entirely
+    // (clicking it again turns it off, nothing turns back on — back to the
+    // plain task list).
     property bool monthActive: false
     property bool yearActive: false
 
