@@ -10,6 +10,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
 import resources_rc  # noqa: F401 — registers :/fonts/VT323-Regular.ttf and :/icon/icon.png
+from icons import IconProvider
 from models import TaskListModel
 from settings import AppSettings
 from storage import TaskStore
@@ -130,11 +131,13 @@ def main() -> int:
 
     task_model = TaskListModel(TaskStore())
     app_settings = AppSettings()
+    icon_provider = IconProvider()
 
     engine = QQmlApplicationEngine()
     engine.addImportPath(QML_DIR)
     engine.rootContext().setContextProperty("taskModel", task_model)
     engine.rootContext().setContextProperty("appSettings", app_settings)
+    engine.rootContext().setContextProperty("iconProvider", icon_provider)
     engine.load(os.path.join(QML_DIR, "Main.qml"))
 
     if not engine.rootObjects():

@@ -43,18 +43,22 @@ def engine_and_model(qml_app, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "yata-src"))
+    import resources_rc  # noqa: F401,PLC0415 — registers qrc:/icons/*.svg etc.
+    from icons import IconProvider  # noqa: PLC0415
     from models import TaskListModel  # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
     from storage import TaskStore  # noqa: PLC0415
 
     task_model = TaskListModel(TaskStore())
     app_settings = AppSettings()
+    icon_provider = IconProvider()
 
     engine = QQmlApplicationEngine()
     qml_dir = os.path.join(os.path.dirname(__file__), "..", "yata-src", "qml")
     engine.addImportPath(qml_dir)
     engine.rootContext().setContextProperty("taskModel", task_model)
     engine.rootContext().setContextProperty("appSettings", app_settings)
+    engine.rootContext().setContextProperty("iconProvider", icon_provider)
     engine.load(os.path.join(qml_dir, "Main.qml"))
 
     qml_app.processEvents()

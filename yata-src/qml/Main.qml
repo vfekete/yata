@@ -35,6 +35,11 @@ Window {
     y: appSettings.y
     width: appSettings.width
     height: appSettings.height
+    // Twice the combined width of the ADD/RELOAD/THEME toolbar buttons,
+    // scaling with font zoom same as they do (toolbar.actionButtonsWidth is
+    // itself font-scale-dependent) — below this, FilterBar's groups have
+    // nowhere reasonable left to wrap into.
+    minimumWidth: toolbar.actionButtonsWidth * 2
 
     onXChanged: appSettings.x = x
     onYChanged: appSettings.y = y
@@ -95,7 +100,7 @@ Window {
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 6
-            spacing: 4
+            spacing: 2
 
             Toolbar {
                 id: toolbar
@@ -114,7 +119,7 @@ Window {
                     id: listView
                     anchors.fill: parent
                     clip: true
-                    spacing: 2
+                    spacing: 0
                     model: taskModel
                     ScrollBar.vertical: ScrollBar { id: vbar; policy: ScrollBar.AsNeeded }
 

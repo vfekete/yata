@@ -44,18 +44,22 @@ def qml_window(tmp_path, monkeypatch):
 
     src = os.path.join(os.path.dirname(__file__), "..", "yata-src")
     sys.path.insert(0, src)
+    import resources_rc  # noqa: F401,PLC0415 — registers qrc:/icons/*.svg etc.
+    from icons import IconProvider    # noqa: PLC0415
     from models import TaskListModel   # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
     from storage import TaskStore     # noqa: PLC0415
 
     task_model = TaskListModel(TaskStore())
     app_settings = AppSettings()
+    icon_provider = IconProvider()
 
     engine = QQmlApplicationEngine()
     qml_dir = os.path.join(src, "qml")
     engine.addImportPath(qml_dir)
     engine.rootContext().setContextProperty("taskModel", task_model)
     engine.rootContext().setContextProperty("appSettings", app_settings)
+    engine.rootContext().setContextProperty("iconProvider", icon_provider)
     engine.load(os.path.join(qml_dir, "Main.qml"))
 
     app.processEvents()
@@ -83,6 +87,31 @@ def _is_textfield_focused(window):
     """True when a TextField/TextInput currently holds active focus."""
     cls = _focus_class(window)
     return "TextField" in cls or "TextInput" in cls
+
+
+def _find_by_class_prefix(item, prefix, results=None):
+    """Recursively collect QQuickItems whose C++ class name starts with prefix."""
+    if results is None:
+        results = []
+    if item.metaObject().className().startswith(prefix):
+        results.append(item)
+    for child in item.childItems():
+        _find_by_class_prefix(child, prefix, results)
+    return results
+
+
+def _task_row_center(window, row_index):
+    """Map the row_index-th TaskDelegate's center to window coordinates.
+
+    Reads the live layout instead of a hardcoded pixel offset, since the
+    toolbar/sub-toolbar stack above the list (and thus where the list
+    starts) has changed shape more than once (e.g. the 0.9.35 OrderBar).
+    """
+    delegates = _find_by_class_prefix(window.contentItem(), "TaskDelegate")
+    delegates.sort(key=lambda item: item.mapToItem(window.contentItem(), 0, 0).y())
+    delegate = delegates[row_index]
+    center = delegate.mapToItem(window.contentItem(), delegate.width() / 2, delegate.height() / 2)
+    return QPoint(round(center.x()), round(center.y()))
 
 
 # ── tests ────────────────────────────────────────────────────────────────────
@@ -125,21 +154,13 @@ def test_click_other_task_steals_focus(qml_window):
     print(f"\n[click-steal] focus before click: {cls_before}")
     print(f"  window size: {window.width()} x {window.height()}")
 
-    # Estimate click position for the second task row (index 1).
-    # Layout (all values approximate):
-    #   ColumnLayout margins = 6 px
-    #   Toolbar height ≈ 44 px (button row + padding)
-    #   spacing = 4 px
-    #   FilterBar height ≈ 19 px (small-font row + padding)
-    #   spacing = 4 px
-    #   ListView starts at y ≈ 77
-    #   Task row height = 30 px, spacing = 2 px
-    #   Index-0 row: y ∈ [77, 107]
-    #   Index-1 row: y ∈ [109, 139]  → click at y = 124
-    cx = window.width() // 2
-    cy = 124
-    print(f"  clicking at ({cx}, {cy})")
-    QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(cx, cy))
+    # Click the second task row (index 1, "Target task") — its position is
+    # read from the live layout rather than a hardcoded pixel offset, since
+    # what's stacked above the list (toolbar/sub-toolbars) has changed shape
+    # more than once.
+    point = _task_row_center(window, 1)
+    print(f"  clicking at ({point.x()}, {point.y()})")
+    QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, point)
     QTest.qWait(200)
 
     cls_after = _focus_class(window)

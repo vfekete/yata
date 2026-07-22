@@ -4,6 +4,12 @@
     <file alias="VT323-Regular.ttf">../resources/VT323-Regular.ttf</file>
 </qresource>
 <qresource prefix="/icon">
-    <file alias="icon.png">../resources/icon.png</file>
+    <file alias="icon.png">../resources/assets/app-icon.png</file>
+</qresource>
+<qresource prefix="/icons">
+    <file alias="calendar.svg">../resources/assets/noun-calendar-999730.svg</file>
+    <file alias="visibility.svg">../resources/assets/noun-visibility-5028261.svg</file>
+    <file alias="order.svg">../resources/assets/noun-arrow-up-down-5553937.svg</file>
+    <file alias="search.svg">../resources/assets/noun-search-2353120.svg</file>
 </qresource>
 </RCC>

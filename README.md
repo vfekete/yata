@@ -13,7 +13,7 @@
   </tr>
   <tr>
     <td><img src="docs/screenshots/main_settings.png" alt="Theme menu — opacity slider, tints, dark/light" width="100%"/></td>
-    <td><img src="docs/screenshots/main_order.png" alt="Order menu — sort by status within day groups" width="100%"/></td>
+    <td></td>
   </tr>
 </table>
 
@@ -82,6 +82,16 @@ This project was built with [Claude Sonnet 4.6](https://www.anthropic.com/claude
 **VT323** font by Peter Hull — used for the CRT tint themes.  
 Copyright 2011 The VT323 Project Authors (peter.hull@oikoi.com).  
 Licensed under the [SIL Open Font License 1.1](resources/OFL-VT323.txt).
+
+**Toolbar icons** from [the Noun Project](https://thenounproject.com) (the SVGs
+bundled in `resources/assets/` have their in-file attribution text stripped
+so they render cleanly at icon size — attribution is given here instead, as
+required by the Noun Project's license), licensed under
+[Creative Commons Attribution (CC BY)](https://help.thenounproject.com/hc/en-us/articles/200509798-What-licenses-do-you-offer-for-icons):
+- "Calendar" by Adrien Coquet — `resources/assets/noun-calendar-999730.svg`
+- "Visibility" by Ferdinand Partahi Jaya Tambunan — `resources/assets/noun-visibility-5028261.svg`
+- "Arrow Up Down" by Nursila — `resources/assets/noun-arrow-up-down-5553937.svg`
+- "Search" by Lyhn — `resources/assets/noun-search-2353120.svg`
 
 ## Known limitation
 

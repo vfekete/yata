@@ -10,7 +10,7 @@ APPS_DIR="$HOME/.local/share/applications"
 
 mkdir -p "$ICON_DIR" "$APPS_DIR"
 
-cp "$REPO/resources/icon.png" "$ICON_DIR/yata.png"
+cp "$REPO/resources/assets/app-icon.png" "$ICON_DIR/yata.png"
 
 VERSION=$(grep '^version' "$REPO/pyproject.toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
 sed \

@@ -22,6 +22,14 @@ Item {
 
     width: ListView.view.width
     height: Math.max(30, mainRow.implicitHeight + 12)
+    // Hovering toggles taskText between wrapped/elided, which changes
+    // mainRow.implicitHeight and thus this row's height. Without animating
+    // that change, the instant resize shifts every row below it under the
+    // pointer in the same frame, so the mouse ends up over a different row
+    // than the one it was just on ("jumping" — see claude-docs/freq/r-1.md).
+    Behavior on height {
+        NumberAnimation { duration: 120; easing.type: Easing.InOutQuad }
+    }
 
     // Text.linkColor is unreliable even with StyledText (Qt may ignore it).
     // Embed the color directly via <font color> so it is always applied.
@@ -147,7 +155,8 @@ Item {
 
         Column {
             Layout.fillWidth: true
-            Layout.alignment: Qt.AlignTop
+            Layout.alignment: Qt.AlignVCenter
+            Layout.rightMargin: 50
             visible: !root.editing
             spacing: 2
 

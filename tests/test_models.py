@@ -326,14 +326,16 @@ def test_filter_state_persists_across_restart(tmp_path):
     m1.setStatusSortMode("done")
     m1.setShowActive(False)
     m1.setShowDone(False)
-    m1.setShowCancelled(False)
+    # showCancelled stays True: at least one of the three must remain visible
+    # (see test_visibility_last_filter_cannot_be_hidden), so it can't also be
+    # set False here.
 
     m2 = _make_model(tmp_path)
     assert m2.groupByDay is True
     assert m2.statusSortMode == "done"
     assert m2.showActive is False
     assert m2.showDone is False
-    assert m2.showCancelled is False
+    assert m2.showCancelled is True
 
 
 def test_filter_false_persists_correctly(tmp_path):
@@ -341,12 +343,29 @@ def test_filter_false_persists_correctly(tmp_path):
     m1 = _make_model(tmp_path)
     m1.setShowActive(False)
     m1.setShowDone(False)
-    m1.setShowCancelled(False)
 
     m2 = _make_model(tmp_path)
     assert m2.showActive is False
     assert m2.showDone is False
-    assert m2.showCancelled is False
+    assert m2.showCancelled is True
+
+
+def test_visibility_last_filter_cannot_be_hidden(model):
+    # Active/Done/Cancelled must always leave at least one visible, so the
+    # third setShowX(False) — turning off the last one still on — is a no-op.
+    model.setShowActive(False)
+    model.setShowDone(False)
+    model.setShowCancelled(False)
+
+    assert model.showCancelled is True
+
+    # Same guard regardless of which one is hidden last.
+    model.setShowActive(True)
+    model.setShowDone(True)
+    model.setShowCancelled(False)
+    model.setShowActive(False)
+    model.setShowDone(False)
+    assert model.showDone is True
 
 
 def test_filter_defaults_with_empty_settings(tmp_path):

@@ -7,6 +7,239 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.11.4] - 2026-07-22
+
+### Changed
+- **README screenshots regenerated** against the current UI/version, using
+  the committed mock fixture (`tests/fixtures/mock_tasks.json`) and a real
+  live-desktop capture (not the offscreen test harness, which can't render
+  `MultiEffect` glow or a translucent window's real desktop backdrop) at
+  991×511 — same size as the originals — matching each original's theme,
+  grouping state, and hover/popup target as closely as the redesigned UI
+  allows: `main-green.png`, `main-goldenrod.png`, `main-dark.png`,
+  `main-yata.png`, `main_settings.png`.
+- **`main_order.png` removed** (file + README reference): it documented the
+  old "Order" toolbar dropdown, which no longer exists — that control was
+  merged into FilterBar's inline MANUAL/ACTIVE/DONE/CANCEL buttons earlier
+  this session, so there's no current equivalent popup to screenshot.
+
+## [0.11.3] - 2026-07-22
+
+### Changed
+- README's Noun Project icon attribution now names the license (Creative
+  Commons Attribution / CC BY) with a link to the Noun Project's licensing
+  page.
+
+## [0.11.2] - 2026-07-22
+
+### Changed
+- **Search lupe color**: now matches the visible "Search for task"
+  placeholder text exactly — `TextField.placeholderTextColor` is now
+  explicitly `Theme.mutedTextColor` (was left at the Basic style's
+  unspecified default) and the icon's `tint` is set to that same value,
+  rather than `Theme.textColor` (only what *typed* text uses, and visibly
+  brighter than the placeholder).
+- **FilterBar row tightened**, per a mockup comparison: `Main.qml`'s
+  `ColumnLayout` spacing 4px → 2px (closer to the toolbar above it);
+  `FilterBar.qml`'s `Flow` is now vertically centered in its row (was
+  top-anchored with the padding all below it, reading off-center) and its
+  root `Item`'s height padding trimmed 6px → 4px; `FilterButton` label text
+  0.8× → 0.75× the task font; new `IconIndicator.sizeScale` property (default
+  1.0, only the three FilterBar group icons set `0.9`, leaving Toolbar's
+  search icon unaffected) makes the group icons proportionally smaller.
+
+## [0.11.1] - 2026-07-22
+
+### Changed
+- **Search field icon**: the plain "🔍" Unicode glyph is replaced with a
+  proper SVG icon (`resources/assets/noun-search-2353120.svg`, Noun Project,
+  attribution stripped from the file and added to README same as the other
+  three icons), rendered via `IconIndicator` and tinted `Theme.textColor`
+  (not the muted indicator color the FilterBar group icons use).
+- **`IconIndicator` now sizes its box to each icon's own aspect ratio**
+  instead of forcing every icon into the same square. A forced square gave
+  narrow icons (the arrow-up-down order icon) dead horizontal padding inside
+  their box, which visually pushed the following button (MANUAL) further
+  away than the calendar→DAY or eye→ACTIVE gaps, despite identical spacing.
+  Box height stays fixed (scales with the task font); box width is now
+  `height × (implicitWidth / implicitHeight)`, read back from the loaded
+  image itself — self-correcting for any future icon swap, not a hardcoded
+  per-icon ratio.
+
+## [0.11.0] - 2026-07-22
+
+### Added
+- **Responsive FilterBar wrapping**: the Day/Month/Year, visibility-filter,
+  and sort-order groups now live in a `Flow` (each group its own inner
+  `RowLayout`, so it wraps as a whole unit) instead of one fixed `RowLayout`.
+  As the window narrows: order wraps below day+visibility first, then
+  visibility also wraps below day (leaving order beneath that) — three
+  stacked rows at the narrowest width, instead of silently overflowing off
+  the right edge as before.
+- **Minimum window width**: `Main.qml`'s `Window.minimumWidth` is now
+  `toolbar.actionButtonsWidth * 2` — twice the combined width of the
+  ADD/RELOAD/THEME toolbar buttons (`Toolbar.qml`'s new
+  `actionButtonsWidth` property), which itself scales with font zoom since
+  the buttons' own widths do.
+- **Search field magnifying-glass icon**: a small static "🔍" now sits inside
+  the search `TextField`'s left edge (mirroring the existing right-side
+  clear-"✕" pattern, but non-interactive), muted-colored like other
+  indicator icons.
+
+## [0.10.4] - 2026-07-22
+
+### Changed
+- **At least one of Active/Done/Cancelled must stay visible.** `models.py`'s
+  `setShowActive`/`setShowDone`/`setShowCancelled` now reject (no-op) a
+  `False` call that would leave all three hidden — enforced in the model
+  layer, so the FilterBar button for the last remaining visible filter
+  simply doesn't turn off on click (no dialog, no error). Two existing tests
+  (`test_filter_state_persists_across_restart`,
+  `test_filter_false_persists_correctly`) previously set all three to
+  `False` in sequence, which is no longer a reachable state — updated to
+  leave one visible; new `test_visibility_last_filter_cannot_be_hidden`
+  covers the guard itself.
+
+## [0.10.3] - 2026-07-22
+
+### Fixed
+- **FilterBar gaps didn't scale with font zoom**: the 8px button spacing and
+  18px inter-group gap were fixed pixel values, so at smaller zoom levels
+  (`Ctrl+-`) they looked proportionally wider next to the shrunk text (and
+  proportionally tighter when zoomed in). Both are now computed from
+  `Theme.taskFontPixelSize` (`FilterBar.qml`'s new `buttonSpacing`/
+  `groupGap` properties, 8px/18px at the default 14px task font, scaling
+  linearly with it) so the row's proportions stay consistent at any zoom.
+
+## [0.10.2] - 2026-07-22
+
+### Added
+- **"Year" grouping button**, alongside Day/Month in FilterBar's first group.
+  Mutually exclusive with both Day and Month (at most one active at a time;
+  the active one can be switched off entirely) via a new
+  `FilterBar.setGrouping(which, checked)` helper that replaced the previous
+  pairwise Day/Month cross-clearing logic. Like Month, Year has no backend
+  yet — `taskModel` only supports day-grouping — so it's local UI state only.
+
+### Changed
+- Replaced the calendar icon: `resources/assets/noun-calendar-999733.svg` →
+  `noun-calendar-999730.svg` (same artist, different Noun Project icon).
+  Same treatment as before — attribution text stripped, `viewBox` tightened
+  to the drawing bounds, `%FILLCOLOR%` placeholder added — and
+  `resources.qrc`/`README.md` updated to the new filename.
+- FilterBar button spacing tightened from 10px to 8px.
+
+## [0.10.1] - 2026-07-22
+
+### Fixed
+- **IconIndicator icons rendered oversized, uncentered, and solid black** on
+  a live run (reported with screenshots) instead of small/muted/centered.
+  Two separate bugs:
+  - Sizing: `IconIndicator.qml` set plain `width`/`height`, which a
+    `RowLayout` child silently overrides during its own positioning pass —
+    the icon fell back to the SVG's native intrinsic size instead of the
+    intended fixed square. Fixed by using `Layout.preferredWidth`/
+    `Layout.preferredHeight` instead, the actual layout API for this.
+    Centering was already correct once sizing was; it just had nothing sane
+    to center before.
+  - Color: `MultiEffect { colorization: 1.0; colorizationColor: ... }` did
+    not reliably recolor the icons on a live run (rendered flat black),
+    unlike this codebase's other `MultiEffect` uses (shadow/glow), which do
+    work. Replaced with a Python-side fix: new `yata-src/icons.py`
+    (`IconProvider`, exposed to QML as the `iconProvider` context property)
+    reads each embedded SVG via `QFile` — same pattern `main.py` already
+    uses for the app icon — and substitutes a `%FILLCOLOR%` placeholder now
+    baked into each SVG's root `fill="..."` attribute, returning a colored
+    `data:` URI. (QML's own `XMLHttpRequest` was tried first and rejected —
+    Qt blocks it from reading `qrc:` resources unless the process-wide
+    `QML_XHR_ALLOW_FILE_READ=1` escape hatch is set.)
+
+## [0.10.0] - 2026-07-22
+
+### Added
+- **Icon-prefixed unified control bar**: FilterBar and OrderBar are merged
+  into one row: `<calendar> DAY MONTH   <eye> ACTIVE DONE CANCEL   <arrows>
+  MANUAL ACTIVE DONE CANCEL`. `OrderBar.qml` was deleted; its buttons moved
+  into `FilterBar.qml`. Each group gets a static, non-clickable icon
+  (`IconIndicator.qml`) recolored to `Theme.mutedTextColor` via `MultiEffect`
+  colorization — an indicator, not a control, so it's deliberately muted and
+  ignores taps. "Cancelled" labels shortened to "Cancel" in both groups.
+- **New "Month" grouping toggle**, mutually exclusive with "Day" (activating
+  one clears the other; either can be switched off entirely). Purely a local
+  `FilterBar.qml` UI property for now — `taskModel` has no month-grouping
+  concept yet, so it visually works but has no backend effect.
+- Three Noun Project SVG icons (calendar, visibility/eye, arrow-up-down) added
+  under `resources/assets/`, embedded via `resources.qrc`'s new `/icons`
+  prefix (same mechanism as the app icon/font, so they survive the Nuitka
+  standalone build). Their in-file "Created by ... from the Noun Project"
+  attribution text was stripped (required for them to render cleanly at icon
+  size) and each SVG's `viewBox` was tightened to its actual drawn bounding
+  box (native paddings varied wildly) — required attribution was moved to
+  README.md's Third-party notices instead.
+
+### Changed
+- **Application icon relocated** to `resources/assets/app-icon.png` (was
+  `resources/icon.png`). Updated `yata-src/resources.qrc` and
+  `install-desktop.sh` to the new path and regenerated `resources_rc.py`
+  (byte-identical embedded PNG — same file, just moved).
+
+## [0.9.35] - 2026-07-22
+
+### Added
+- **ORDER sub-toolbar**: the "Order" dropdown menu (Manual/Active first/Done
+  first/Cancelled first) is now a second sub-toolbar, `OrderBar.qml`, below
+  the existing DAY/ACTIVE/DONE/CANCELLED FilterBar — same toggle-pill visual
+  style, reusing `taskModel.statusSortMode`. Layout is now:
+  `ADD RELOAD THEME [Search]` / `DAY ACTIVE DONE CANCELLED` /
+  `ORDER: MANUAL | FIRST: ACTIVE DONE CANCELLED`. The "Order" `ToolButton`
+  and its dropdown `Menu` were removed from `Toolbar.qml` entirely — this is
+  the only way to change sort order now.
+
+### Changed
+- Extracted the toggle-pill button (glow-on-active, shared visual language
+  for both FilterBar and the new OrderBar) out of `FilterBar.qml`'s inline
+  `component FilterButton` into its own file, `FilterButton.qml`, so both
+  bars use the identical component instead of duplicating it.
+
+### Fixed
+- `tests/test_focus_behavior.py::test_click_other_task_steals_focus` used a
+  hardcoded pixel offset to click the second task row, which broke once
+  OrderBar shifted the list down. Replaced with `_task_row_center()`, which
+  reads the live QML item tree for the actual delegate position — robust to
+  future toolbar/sub-toolbar layout changes instead of needing another
+  manual recalculation.
+
+## [0.9.34] - 2026-07-22
+
+### Changed
+- **Task text / hover-buttons spacing**: `TaskDelegate.qml`'s task-text
+  `Column` now has `Layout.rightMargin: 50` (on top of `mainRow`'s existing
+  4px `RowLayout` spacing), so the done/cancel/reopen/delete buttons sit at
+  least 50px away from the task text instead of hugging it.
+
+## [0.9.33] - 2026-07-22
+
+### Fixed
+- **Task text vertical alignment on hover**: `TaskDelegate.qml`'s task-text
+  column was top-aligned within its row, which reads oddly once a row grows
+  taller than its collapsed height (e.g. from the 0.9.32 hover-wrap fix, or
+  the DONE/CANCELED label row). Now `Layout.alignment: Qt.AlignVCenter`, so
+  the text centers vertically as the row resizes; the hover action buttons
+  (done/cancel/reopen/delete) keep their own `Qt.AlignTop`, unchanged.
+
+## [0.9.32] - 2026-07-22
+
+### Fixed
+- **List hover "jumping"** (`claude-docs/freq/r-1.md`): hovering over a task row
+  switches its text between wrapped/elided, which changes the row's height —
+  previously this happened instantly, so every row below shifted under the
+  pointer in the same frame and the mouse would end up over the wrong row,
+  especially sweeping first-to-last. Fixed two ways: `ListView.spacing` in
+  `Main.qml` is now `0` (was `2`, the tiny gap that made adjacent rows'
+  expand/collapse compound into a bigger jump), and `TaskDelegate.qml`'s row
+  `height` now has a `Behavior` (`NumberAnimation`, 120ms, `InOutQuad`) so the
+  resize animates smoothly instead of snapping.
+
 ## [0.9.31] - 2026-07-21
 
 ### Fixed

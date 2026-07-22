@@ -7,6 +7,12 @@ Item {
     id: root
     implicitHeight: row.implicitHeight + 8
 
+    // Sum of ADD/RELOAD/THEME's own widths plus the spacing between them —
+    // i.e. "the width of the upper toolbar buttons one after another",
+    // scaling with font zoom same as the buttons themselves. Used by
+    // Main.qml to set the window's minimumWidth.
+    readonly property real actionButtonsWidth: addButton.width + reloadButton.width + themeButton.width + row.spacing * 2
+
     // Empty toolbar background doubles as a window drag handle, since the
     // window has no title bar. Buttons/fields declared below sit on top and
     // consume their own clicks first.
@@ -22,6 +28,7 @@ Item {
         spacing: 6
 
         ToolButton {
+            id: addButton
             text: "Add"
             font.bold: true
             focusPolicy: Qt.NoFocus
@@ -41,68 +48,6 @@ Item {
                 color: Theme.textColor
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-            }
-        }
-
-        ToolButton {
-            id: statusButton
-            text: "Order"
-            ToolTip.visible: hovered
-            ToolTip.text: "Sort by order"
-            onClicked: statusMenu.popup()
-            background: Rectangle {
-                radius: 4
-                color: taskModel.statusSortMode !== "" ? Theme.accentColor
-                       : (statusButton.hovered ? Theme.hoverColor : "transparent")
-                opacity: taskModel.statusSortMode !== "" ? 0.5 : 1.0
-            }
-            contentItem: Text {
-                text: statusButton.text
-                color: Theme.textColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize
-                font.capitalization: Font.AllUppercase
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            Menu {
-                id: statusMenu
-                // Popups are parented into the window's Overlay layer, not
-                // the item that opened them, so this needs its own explicit
-                // font size rather than inheriting one.
-                font.pixelSize: Theme.taskFontPixelSize
-                // Explicit reactive width for the same reason as ThemeMenu:
-                // longest item is "Cancelled first" → multiplier 13 is safe.
-                width: Theme.taskFontPixelSize * 13
-                MenuItem {
-                    text: "Manual order"
-                    checkable: true
-                    checked: taskModel.statusSortMode === ""
-                    onTriggered: taskModel.setStatusSortMode("")
-                    padding: 10
-                }
-                MenuItem {
-                    text: "Active first"
-                    checkable: true
-                    checked: taskModel.statusSortMode === "active"
-                    onTriggered: taskModel.setStatusSortMode("active")
-                    padding: 10
-                }
-                MenuItem {
-                    text: "Done first"
-                    checkable: true
-                    checked: taskModel.statusSortMode === "done"
-                    onTriggered: taskModel.setStatusSortMode("done")
-                    padding: 10
-                }
-                MenuItem {
-                    text: "Cancelled first"
-                    checkable: true
-                    checked: taskModel.statusSortMode === "cancelled"
-                    onTriggered: taskModel.setStatusSortMode("cancelled")
-                    padding: 10
-                }
             }
         }
 
@@ -156,6 +101,8 @@ Item {
             id: searchField
             Layout.fillWidth: true
             placeholderText: "Search for task"
+            placeholderTextColor: Theme.mutedTextColor
+            leftPadding: searchIcon.width + 12
             rightPadding: clearIcon.width + 14
             color: Theme.textColor
             font.family: Theme.fontFamily
@@ -164,6 +111,20 @@ Item {
             background: Rectangle {
                 radius: 4
                 color: Theme.fieldColor
+            }
+
+            // Static "lupe" (magnifying glass) marking this field as search —
+            // non-interactive, unlike clearIcon on the right. Explicitly
+            // matched to placeholderTextColor above (the visible "Search for
+            // task" text's actual color) rather than Theme.textColor, which
+            // is only what typed-in text uses and rendered visibly brighter.
+            IconIndicator {
+                id: searchIcon
+                iconName: "search"
+                tint: Theme.mutedTextColor
+                anchors.left: parent.left
+                anchors.leftMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
             }
 
             Text {

@@ -275,6 +275,8 @@ class TaskListModel(QAbstractListModel):
     def setShowActive(self, flag: bool):
         if flag == self._show_active:
             return
+        if not flag and not self._show_done and not self._show_cancelled:
+            return  # at least one of Active/Done/Cancelled must stay visible
         self._show_active = flag
         self._settings.setValue("filters/showActive", flag)
         self._recompute()
@@ -284,6 +286,8 @@ class TaskListModel(QAbstractListModel):
     def setShowDone(self, flag: bool):
         if flag == self._show_done:
             return
+        if not flag and not self._show_active and not self._show_cancelled:
+            return  # at least one of Active/Done/Cancelled must stay visible
         self._show_done = flag
         self._settings.setValue("filters/showDone", flag)
         self._recompute()
@@ -293,6 +297,8 @@ class TaskListModel(QAbstractListModel):
     def setShowCancelled(self, flag: bool):
         if flag == self._show_cancelled:
             return
+        if not flag and not self._show_active and not self._show_done:
+            return  # at least one of Active/Done/Cancelled must stay visible
         self._show_cancelled = flag
         self._settings.setValue("filters/showCancelled", flag)
         self._recompute()
