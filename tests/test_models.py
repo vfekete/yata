@@ -1,14 +1,20 @@
 from datetime import datetime, timedelta
 
 import pytest
+from PySide6.QtCore import QSettings
 
 from models import TaskListModel, day_label
 from storage import TaskStore
 
 
+def _make_model(tmp_path, name="tasks.json", settings_name="settings.ini"):
+    s = QSettings(str(tmp_path / settings_name), QSettings.IniFormat)
+    return TaskListModel(TaskStore(path=str(tmp_path / name)), settings=s)
+
+
 @pytest.fixture
 def model(tmp_path):
-    return TaskListModel(TaskStore(path=str(tmp_path / "tasks.json")))
+    return _make_model(tmp_path)
 
 
 def role(model, row, name):
@@ -195,12 +201,11 @@ def test_day_label_always_uses_a_full_date():
 
 
 def test_persists_across_reload(tmp_path):
-    path = str(tmp_path / "tasks.json")
-    model1 = TaskListModel(TaskStore(path=path))
+    model1 = _make_model(tmp_path)
     task_id = model1.addTask()
     model1.setText(task_id, "Persisted")
 
-    model2 = TaskListModel(TaskStore(path=path))
+    model2 = _make_model(tmp_path)
 
     assert model2.rowCount() == 1
     assert role(model2, 0, "text") == "Persisted"
@@ -311,3 +316,43 @@ def test_visibility_filters_stack_with_search(model):
 
     assert model.rowCount() == 1
     assert role(model, 0, "taskId") == a
+
+
+# --- filter persistence tests -----------------------------------------------
+
+def test_filter_state_persists_across_restart(tmp_path):
+    m1 = _make_model(tmp_path)
+    m1.setGroupByDay(True)
+    m1.setStatusSortMode("done")
+    m1.setShowActive(False)
+    m1.setShowDone(False)
+    m1.setShowCancelled(False)
+
+    m2 = _make_model(tmp_path)
+    assert m2.groupByDay is True
+    assert m2.statusSortMode == "done"
+    assert m2.showActive is False
+    assert m2.showDone is False
+    assert m2.showCancelled is False
+
+
+def test_filter_false_persists_correctly(tmp_path):
+    # Explicitly tests that stored "false" values aren't read back as True.
+    m1 = _make_model(tmp_path)
+    m1.setShowActive(False)
+    m1.setShowDone(False)
+    m1.setShowCancelled(False)
+
+    m2 = _make_model(tmp_path)
+    assert m2.showActive is False
+    assert m2.showDone is False
+    assert m2.showCancelled is False
+
+
+def test_filter_defaults_with_empty_settings(tmp_path):
+    m = _make_model(tmp_path)
+    assert m.groupByDay is False
+    assert m.statusSortMode == ""
+    assert m.showActive is True
+    assert m.showDone is True
+    assert m.showCancelled is True

@@ -3,9 +3,19 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot, Property
+from PySide6.QtCore import QAbstractListModel, QModelIndex, QSettings, Qt, Signal, Slot, Property
 
 from storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, Task, TaskStore
+
+
+def _read_bool(s: QSettings, key: str, default: bool) -> bool:
+    """Read a boolean from QSettings, correctly handling stored 'false' strings."""
+    v = s.value(key, default)
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.lower() not in ("false", "0", "no")
+    return bool(v)
 
 _ID, _TEXT, _STATUS, _DAY_LABEL, _COMPLETED_AT = (Qt.UserRole + i for i in range(1, 6))
 
@@ -25,17 +35,18 @@ class TaskListModel(QAbstractListModel):
     showCancelledChanged = Signal()
     taskAdded = Signal(str)  # emits the new task's ID after the model is ready
 
-    def __init__(self, store: TaskStore, parent=None):
+    def __init__(self, store: TaskStore, settings: QSettings | None = None, parent=None):
         super().__init__(parent)
         self._store = store
+        self._settings = settings or QSettings("yata", "yata")
         self._tasks: list[Task] = store.load()
         self._visible: list[Task] = []
         self._search = ""
-        self._status_sort = ""
-        self._group_by_day = False
-        self._show_active = True
-        self._show_done = True
-        self._show_cancelled = True
+        self._status_sort = str(self._settings.value("filters/statusSortMode", ""))
+        self._group_by_day = _read_bool(self._settings, "filters/groupByDay", False)
+        self._show_active = _read_bool(self._settings, "filters/showActive", True)
+        self._show_done = _read_bool(self._settings, "filters/showDone", True)
+        self._show_cancelled = _read_bool(self._settings, "filters/showCancelled", True)
         self._recompute()
 
     # --- QAbstractListModel plumbing -------------------------------------
@@ -242,6 +253,7 @@ class TaskListModel(QAbstractListModel):
             return
         was_reorderable = self._get_can_reorder()
         self._status_sort = mode
+        self._settings.setValue("filters/statusSortMode", mode)
         self._recompute()
         self.statusSortModeChanged.emit()
         if was_reorderable != self._get_can_reorder():
@@ -253,6 +265,7 @@ class TaskListModel(QAbstractListModel):
             return
         was_reorderable = self._get_can_reorder()
         self._group_by_day = flag
+        self._settings.setValue("filters/groupByDay", flag)
         self._recompute()
         self.groupByDayChanged.emit()
         if was_reorderable != self._get_can_reorder():
@@ -263,6 +276,7 @@ class TaskListModel(QAbstractListModel):
         if flag == self._show_active:
             return
         self._show_active = flag
+        self._settings.setValue("filters/showActive", flag)
         self._recompute()
         self.showActiveChanged.emit()
 
@@ -271,6 +285,7 @@ class TaskListModel(QAbstractListModel):
         if flag == self._show_done:
             return
         self._show_done = flag
+        self._settings.setValue("filters/showDone", flag)
         self._recompute()
         self.showDoneChanged.emit()
 
@@ -279,6 +294,7 @@ class TaskListModel(QAbstractListModel):
         if flag == self._show_cancelled:
             return
         self._show_cancelled = flag
+        self._settings.setValue("filters/showCancelled", flag)
         self._recompute()
         self.showCancelledChanged.emit()
 

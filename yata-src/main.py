@@ -16,7 +16,7 @@ from storage import TaskStore
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.9.30"
+APP_VERSION = "0.9.31"
 
 
 def _version_tuple(v: str) -> tuple:
@@ -75,10 +75,8 @@ def _ensure_desktop_entry(
             elif line.startswith("Exec="):
                 installed_exec = line.split("=", 1)[1].strip()
 
-    version_ok = (
-        installed_version is not None
-        and _version_tuple(installed_version) >= _version_tuple(app_version)
-    )
+    version_ok = (installed_version is not None and
+                  _version_tuple(installed_version) >= _version_tuple(app_version))
     if version_ok and installed_exec == exec_cmd:
         return
 

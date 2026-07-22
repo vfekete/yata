@@ -7,6 +7,16 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.9.31] - 2026-07-21
+
+### Fixed
+- **Filter persistence**: all five filter/view settings — DAY on/off, ORDER mode,
+  ACTIVE/DONE/CANCELLED visibility — are now saved to `QSettings` the moment they
+  change and restored on next launch. Previously only the theme, opacity, zoom
+  level, and zoom direction were persisted. The model reads its initial state from
+  the `filters/` settings group on construction; each setter writes immediately so
+  a crash or external kill cannot lose the last-changed value.
+
 ## [0.9.30] - 2026-07-20
 
 ### Added
