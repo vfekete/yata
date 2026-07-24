@@ -43,10 +43,10 @@ Window {
     y: appSettings.y
     width: appSettings.width
     height: appSettings.height
-    // Twice the combined width of the ADD/RELOAD/THEME toolbar buttons,
-    // scaling with font zoom same as they do (toolbar.actionButtonsWidth is
-    // itself font-scale-dependent) — below this, FilterBar's groups have
-    // nowhere reasonable left to wrap into.
+    // Twice the combined width of the ADD/RELOAD/THEME/LINKS toolbar
+    // buttons, scaling with font zoom same as they do
+    // (toolbar.actionButtonsWidth is itself font-scale-dependent) — below
+    // this, FilterBar's groups have nowhere reasonable left to wrap into.
     minimumWidth: toolbar.actionButtonsWidth * 2
 
     onXChanged: appSettings.x = x
@@ -113,6 +113,8 @@ Window {
             Toolbar {
                 id: toolbar
                 Layout.fillWidth: true
+                linksActive: filterBar.linksActive
+                onLinksToggled: filterBar.setGrouping("links", !filterBar.linksActive)
             }
 
             FilterBar {
@@ -127,7 +129,7 @@ Window {
                 ListView {
                     id: listView
                     anchors.fill: parent
-                    visible: !filterBar.monthActive && !filterBar.yearActive
+                    visible: !filterBar.monthActive && !filterBar.yearActive && !filterBar.linksActive
                     clip: true
                     spacing: 0
                     model: taskModel
@@ -141,6 +143,18 @@ Window {
                     property bool dragActive: false
                     property int dragFromIndex: -1
                     property int dragHoverIndex: -1
+
+                    // Briefly tints the row a "to task" navigation lands on,
+                    // standing in for the hover highlight the real mouse
+                    // cursor doesn't produce since it never actually moved
+                    // there. Cleared by flashTimer below; matches
+                    // TaskDelegate's 3-blink/1.2s flash animation duration.
+                    property string flashTaskId: ""
+                    Timer {
+                        id: flashTimer
+                        interval: 1200
+                        onTriggered: listView.flashTaskId = ""
+                    }
 
                     // The scrollbar is an overlay (doesn't reserve its own width),
                     // so rows must leave room for it themselves or their hover
@@ -221,6 +235,29 @@ Window {
                         root.calYear = y
                         root.calMonth = m
                         filterBar.setGrouping("month", true)
+                    }
+                }
+
+                // Replaces the task list entirely while active, same as
+                // Month/Year. "To task" just turns Links off (revealing
+                // whatever the underlying list state already was — no
+                // forced Day mode, unlike MonthView's dayClicked, since
+                // there's no date associated with a link click to justify
+                // one) and scrolls to that task once it's back.
+                LinksView {
+                    anchors.fill: parent
+                    visible: filterBar.linksActive
+                    searchText: toolbar.searchText
+                    onToTaskClicked: (taskId) => {
+                        filterBar.setGrouping("links", false)
+                        Qt.callLater(function() {
+                            var idx = taskModel.indexForTask(taskId)
+                            if (idx >= 0) {
+                                listView.positionViewAtIndex(idx, ListView.Beginning)
+                                listView.flashTaskId = taskId
+                                flashTimer.restart()
+                            }
+                        })
                     }
                 }
             }

@@ -453,3 +453,92 @@ def test_index_for_date_returns_minus_one_when_no_match(model):
     model._find(t).created_at = datetime(2026, 5, 1, 9, 0).isoformat()
 
     assert model.indexForDate(2026, 5, 2) == -1
+
+
+# --- links view tests --------------------------------------------------------
+
+def test_linked_tasks_finds_markdown_links_regardless_of_status(model):
+    a = model.addTask()
+    model.setText(a, "Check [the site](https://example.com/a)")
+
+    d = model.addTask()
+    model.setText(d, "Read [the doc](https://example.com/b)")
+    model.setStatus(d, "done")
+
+    c = model.addTask()
+    model.setText(c, "Visit [somewhere](https://example.com/c)")
+    model.setStatus(c, "cancelled")
+
+    no_link = model.addTask()
+    model.setText(no_link, "No links here at all")
+
+    linked = model.linkedTasks()
+    assert len(linked) == 3
+    by_id = {entry["taskId"]: entry for entry in linked}
+    assert by_id[a]["links"] == [{"label": "the site", "url": "https://example.com/a"}]
+    assert by_id[a]["status"] == "active"
+    assert by_id[d]["links"] == [{"label": "the doc", "url": "https://example.com/b"}]
+    assert by_id[d]["status"] == "done"
+    assert by_id[c]["links"] == [{"label": "somewhere", "url": "https://example.com/c"}]
+    assert by_id[c]["status"] == "cancelled"
+
+
+def test_linked_tasks_ignores_visibility_and_search_filters(model):
+    t = model.addTask()
+    model.setText(t, "Has a [link](https://example.com)")
+    model.setStatus(t, "cancelled")
+
+    # Hide cancelled tasks from the normal list, and search for something
+    # that doesn't match — linkedTasks() must still return it.
+    model.setShowCancelled(False)
+    model.setSearchText("nonexistent")
+
+    linked = model.linkedTasks()
+    assert len(linked) == 1
+    assert linked[0]["taskId"] == t
+
+
+def test_linked_tasks_collects_multiple_urls_per_task_in_order(model):
+    t = model.addTask()
+    model.setText(t, "See [first](https://example.com/1) and [second](https://example.com/2)"
+                      " and [third](https://example.com/3)")
+
+    linked = model.linkedTasks()
+    assert linked[0]["links"] == [
+        {"label": "first", "url": "https://example.com/1"},
+        {"label": "second", "url": "https://example.com/2"},
+        {"label": "third", "url": "https://example.com/3"},
+    ]
+
+
+def test_linked_tasks_empty_when_no_task_has_a_link(model):
+    t = model.addTask()
+    model.setText(t, "Just plain text, no links")
+    assert model.linkedTasks() == []
+
+
+def test_linked_tasks_falls_back_to_url_when_label_is_empty(model):
+    t = model.addTask()
+    model.setText(t, "Bare link: [](https://example.com/bare)")
+
+    linked = model.linkedTasks()
+    assert linked[0]["links"] == [{"label": "https://example.com/bare", "url": "https://example.com/bare"}]
+
+
+def test_index_for_task_finds_row_in_current_visible_list(model):
+    a = model.addTask()
+    model.setText(a, "First")
+    b = model.addTask()
+    model.setText(b, "Second")
+
+    assert model.indexForTask(b) == 0  # newest first (manual order, top-insert)
+    assert model.indexForTask(a) == 1
+
+
+def test_index_for_task_returns_minus_one_when_not_visible(model):
+    t = model.addTask()
+    model.setText(t, "Some task")
+    model.setStatus(t, "cancelled")
+    model.setShowCancelled(False)
+
+    assert model.indexForTask(t) == -1

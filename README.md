@@ -5,15 +5,15 @@
 <table>
   <tr>
     <td><img src="docs/screenshots/main-green.png" alt="Green phosphor CRT theme" width="100%"/></td>
-    <td><img src="docs/screenshots/main-goldenrod.png" alt="Amber phosphor CRT theme" width="100%"/></td>
+    <td><img src="docs/screenshots/main-goldenrod.png" alt="Amber phosphor CRT theme — Month calendar view" width="100%"/></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/main-dark.png" alt="Dark theme — Markdown rendering and long task wrapping" width="100%"/></td>
+    <td><img src="docs/screenshots/main-dark.png" alt="Dark theme — Markdown rendering, long task wrapping, hover delete glow" width="100%"/></td>
     <td><img src="docs/screenshots/main-yata.png" alt="Teletype-paper theme with day grouping and hover actions" width="100%"/></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/main_settings.png" alt="Theme menu — opacity slider, tints, dark/light" width="100%"/></td>
-    <td></td>
+    <td><img src="docs/screenshots/main-links.png" alt="Links view — every URL mentioned across tasks, with hover-to-navigate" width="100%"/></td>
   </tr>
 </table>
 
@@ -53,6 +53,14 @@ sticky note.
 - Toolbar button captions render in capitals (ADD, DAY, STATUS, RELOAD,
   THEME) in every theme; RELOAD re-reads `tasks.json` from disk, for
   picking up changes made by an external process
+- Month and Year calendar views (FilterBar's MONTH/YEAR buttons) show
+  active/done/cancelled counts per day or month; clicking a day jumps back
+  to the task list grouped by day and scrolled to it
+- A "LINKS" toolbar button switches the list to every task that mentions at
+  least one `[label](url)` Markdown link, across all tasks regardless of
+  status or filters, each showing its status and a button that scrolls back
+  to that task; the search field searches link labels/URLs while this view
+  is active instead of task text
 
 ## Usage notes
 
@@ -92,6 +100,7 @@ required by the Noun Project's license), licensed under
 - "Visibility" by Ferdinand Partahi Jaya Tambunan — `resources/assets/noun-visibility-5028261.svg`
 - "Arrow Up Down" by Nursila — `resources/assets/noun-arrow-up-down-5553937.svg`
 - "Search" by Lyhn — `resources/assets/noun-search-2353120.svg`
+- "Link" by Design Queen — `resources/assets/noun-link-7985857.svg`
 
 ## Known limitation
 

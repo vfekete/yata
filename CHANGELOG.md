@@ -7,6 +7,126 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.14.3] - 2026-07-24
+
+### Changed
+- **main-yata.png (teletype-paper theme) regenerated at full opacity** (was 65%) — the translucent look washed out the paper-cream background against the desktop behind it. `scripts/capture_screenshots.py`'s `main-yata` scenario now sets `opacity=100`.
+
+## [0.14.2] - 2026-07-24
+
+### Fixed
+- **main_settings.png's popup was in the wrong corner.** `scripts/capture_screenshots.py` opened the ThemeMenu via a direct `popup()` call without first moving the mouse there — `Menu.popup()` with no arguments opens at the *current cursor position*, not anchored to its button, so it landed wherever the pointer happened to be left over from a previous scenario. Fixed by moving the pointer onto the THEME toolbar button immediately before calling `popup()`, matching what a real click would do. Regenerated `docs/screenshots/main_settings.png`.
+
+## [0.14.1] - 2026-07-24
+
+### Changed
+- **Regenerated all README screenshots** to reflect the current toolbar
+  (LINKS button, redesigned FilterBar) and added a 6th: the Links view with
+  a hover-glowing "to task" button. New `scripts/capture_screenshots.py`
+  drives a real, isolated, live app instance per scenario (theme/filters/
+  hover targets set programmatically, then captured via ImageMagick's
+  `import`) so this never has to be redone by hand again — see the script's
+  own docstring for usage and how to re-pick the capture window's position/
+  zoom if the target monitor layout ever changes.
+- README's Features list now documents the Month/Year calendar views and
+  the Links view, both previously undocumented there.
+
+## [0.14.0] - 2026-07-24
+
+### Added
+- **Search now works in the Links view.** The toolbar's search field is
+  shared between contexts: while Links is active its placeholder switches
+  from "Search for task" to "Search for link", and typing filters the link
+  list by link **label or URL** (case-insensitive substring), client-side
+  against the already-fetched link list — a separate filter context from the
+  main list's task-text search, which keeps running unaffected underneath.
+  Shows "No links match your search" instead of "No links found in any task"
+  when a search yields zero results but links do exist.
+
+## [0.13.5] - 2026-07-24
+
+### Changed
+- **"To task" flash duration shortened to 1.2s** (was 2s), still 3 blinks —
+  `TaskDelegate.qml`'s per-blink `NumberAnimation` duration and `Main.qml`'s
+  clearing `Timer` interval both updated to match.
+
+## [0.13.4] - 2026-07-24
+
+### Changed
+- **"To task" flash now blinks 3 times over 2s** (was a single flash+fade
+  over 1.5s): `TaskDelegate.qml`'s flash animation is now a
+  `SequentialAnimation { loops: 3 }`, each iteration an instant jump to full
+  glow opacity followed by an eased fade over 1/3 of the total 2s. The
+  clearing `Timer` in `Main.qml` was bumped from 1500ms to 2000ms to match.
+
+## [0.13.3] - 2026-07-24
+
+### Changed
+- **"To task" flash highlight redesigned**: instead of reusing the plain
+  hover background tint, `TaskDelegate` now has a dedicated flash overlay
+  that jumps instantly to full brightness in the app's glow color
+  (`Theme.filterGlowColor` — the same color used for FilterBar's active-toggle
+  glow) and fades out over 1.5s with an eased (`Easing.OutCubic`) curve, so it
+  reads as "sudden flash, slow fade" rather than a flat on/off tint.
+
+## [0.13.2] - 2026-07-24
+
+### Fixed
+- **LinksView "to task" navigation now visually highlights the destination
+  row.** Clicking "to task" scrolls the main list to that task but doesn't
+  move the real mouse cursor, so the row never got the usual hover tint and
+  looked unselected. `TaskDelegate` now also tints its background when
+  `ListView.flashTaskId` matches its own task id; `Main.qml` sets that
+  property (and a 1.5s `Timer` clears it) right after `positionViewAtIndex`.
+  Only the background tint is replicated — wrap/elide and the action-button
+  row still require a real hover, so the flash can't be mistaken for one or
+  accidentally clicked.
+
+## [0.13.1] - 2026-07-24
+
+### Changed
+- **LinksView row layout**: the status tag now sits *beneath* the link list
+  (`LinkRow.qml`'s links `Text` and `StatusTag` are stacked in a `Column`),
+  matching how the status tag sits beneath the task name in the main list —
+  previously it was a leading sibling on the same line.
+- **Links now show their label, not the raw URL** — `models.py`'s
+  `linkedTasks()`/`_MARKDOWN_LINK_RE` now capture both the `[label]` and
+  `(url)` parts of each Markdown link (falls back to the URL itself for the
+  rare empty-label case); the URL is still the click target, just not what's
+  displayed. All links per task are shown, comma-separated (already worked —
+  re-verified after this change since it touched the same code path).
+- **"To task" icon** halved in size (`taskFontPixelSize × 1`, was `× 2`) and
+  moved 8px further from the row's right edge (`Layout.rightMargin: 8`).
+
+## [0.13.0] - 2026-07-24
+
+### Added
+- **Links view** (`claude-docs/freq/r-2.md`): a new "LINKS" button in the main
+  toolbar (`ADD RELOAD THEME LINKS [Search]`) replaces the task list with a
+  list of every task that mentions at least one Markdown `[label](url)` link
+  — regardless of status or the current visibility/search filters, since
+  it's a lookup across all tasks, not the filtered view. Mutually exclusive
+  with Day/Month/Year (activating any one of the four clears the rest,
+  matching the existing FilterBar pattern — the mutual-exclusivity state and
+  logic stays centralized in `FilterBar.qml` even though Links' own toggle
+  button lives in `Toolbar.qml`; `Main.qml` relays between the two).
+- Each row (`LinkRow.qml`) shows: a status tag (`StatusTag.qml`, new —
+  ACTIVE/DONE/CANCELLED, colored + glowing, ACTIVE has no timestamp unlike
+  the other two), the task's URL(s) as clickable links (opens the default
+  browser via `Qt.openUrlExternally`, same as the main list's Markdown
+  links), and a "to task" icon button (new
+  `resources/assets/noun-link-7985857.svg`, Noun Project, attribution
+  stripped from the file per the established pattern and added to README)
+  that switches back to the task list and scrolls to that task.
+- New `Theme.activeTagColor` — "white with glow" per spec; `Theme.textColor`
+  for the "none" theme (already correctly near-white in dark mode without
+  being illegible in light mode, unlike a literal white), `Theme.accentColor`
+  for CRT tints (each tint's own most prominent color).
+- `models.py`: `linkedTasks()` (sparse list of tasks with Markdown links,
+  `@Slot(result='QVariant')`) and `indexForTask(task_id)` (row index in the
+  current visible list, for the "to task" scroll-to behavior — mirrors
+  `indexForDate`). 6 new tests.
+
 ## [0.12.4] - 2026-07-22
 
 ### Fixed

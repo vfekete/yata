@@ -130,4 +130,15 @@ QtObject {
     // hover gets a lightened shade for the same on-vs-hover distinction.
     readonly property color filterGlowColor: tintName === "none" ? "#00FFFF" : current.accent
     readonly property color filterHoverColor: tintName === "none" ? "#FFFFFF" : Qt.lighter(current.accent, 1.4)
+
+    // LinksView's "ACTIVE" status tag (see StatusTag.qml). Spec: "white with
+    // glow; for tints, color follows tint color but has adequate brightness
+    // to express white". A literal white would be unreadable in "none"
+    // theme's light mode, so "none" reuses textColor (already the correct
+    // near-white in dark mode / near-black in light mode for legibility).
+    // CRT tints reuse accentColor — each tint's own brightest/most prominent
+    // color, which for the inverted "black" (dark-ink-on-cream) tint is
+    // correctly its darkest ink color, not literal white, since that's what
+    // reads as "the prominent accent" against that tint's own background.
+    readonly property color activeTagColor: tintName === "none" ? textColor : accentColor
 }

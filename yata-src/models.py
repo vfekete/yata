@@ -1,11 +1,19 @@
 """Qt list model exposing tasks to QML."""
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QSettings, Qt, Signal, Slot, Property
 
 from storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, Task, TaskStore
+
+# Matches Markdown [label](url) links — same syntax TaskDelegate.qml's
+# mdToHtml() already renders as clickable, so "a URL mentioned in a task"
+# means exactly what's already clickable there, not any URL-shaped substring.
+# Captures both groups: label is shown in LinksView (not the raw URL), url is
+# the actual link target.
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]\n]*)\]\(([^)\n]*)\)")
 
 
 def _read_bool(s: QSettings, key: str, default: bool) -> bool:
@@ -351,3 +359,36 @@ class TaskListModel(QAbstractListModel):
             if d.year == year and d.month == month and d.day == day:
                 return i
         return -1
+
+    # --- links view ----------------------------------------------------------
+
+    @Slot(str, result=int)
+    def indexForTask(self, task_id: str) -> int:
+        """Row index of the given task in the current visible list, or -1
+        (e.g. it's filtered out by the active Active/Done/Cancelled
+        visibility toggles). Used by the Links view's "to task" button."""
+        for i, t in enumerate(self._visible):
+            if t.id == task_id:
+                return i
+        return -1
+
+    @Slot(result='QVariant')
+    def linkedTasks(self):
+        """Every task that mentions at least one [label](url) Markdown link,
+        regardless of status or the active visibility/search filters — this
+        is a lookup across ALL tasks, not the currently filtered view.
+        Every link in a task is included (not just the first), in the order
+        it appears. "label" falls back to the URL itself for the (unusual)
+        empty-label case, e.g. `[](https://example.com)`."""
+        result = []
+        for t in self._tasks:
+            matches = _MARKDOWN_LINK_RE.findall(t.text)
+            if matches:
+                links = [{"label": label or url, "url": url} for label, url in matches]
+                result.append({
+                    "taskId": t.id,
+                    "status": t.status,
+                    "completedAt": t.completed_at,
+                    "links": links,
+                })
+        return result

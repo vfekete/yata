@@ -15,6 +15,18 @@ Item {
     property bool forceEditing: false
     readonly property bool editing: forceEditing || text.length === 0
     readonly property bool hovered: hoverHandler.hovered
+    // Set briefly by ListView.flashTaskId after "to task" navigation (see
+    // LinksView), so the destination row reads as "selected" even though the
+    // real mouse cursor didn't move there. Drives flashOverlay below rather
+    // than the plain hover tint — a sudden jump to full glow brightness, then
+    // an eased fade to transparent, reads as "just landed here" rather than
+    // as a real (and possibly misleading) hover state.
+    readonly property bool flashed: root.taskId !== "" && root.ListView.view.flashTaskId === root.taskId
+    onFlashedChanged: if (flashed) {
+        flashFade.stop()
+        flashOverlay.opacity = 1.0
+        flashFade.start()
+    }
 
     function activateFocus() {
         editField.forceActiveFocus()
@@ -87,6 +99,32 @@ Item {
         anchors.fill: parent
         radius: 4
         color: root.hovered ? Theme.hoverColor : "transparent"
+    }
+
+    // "To task" navigation flash: 3 consecutive blinks totaling 1.2s. Each
+    // blink jumps instantly to full-brightness glow (PropertyAction, no
+    // fade-in) then fades out over the rest of its 1/3 share via
+    // NumberAnimation. Uses the same glow color as the FilterBar toggle
+    // buttons' active state, so it reads as "on-palette highlight" rather
+    // than introducing a new color meaning.
+    Rectangle {
+        id: flashOverlay
+        anchors.fill: parent
+        radius: 4
+        color: Theme.filterGlowColor
+        opacity: 0
+    }
+    SequentialAnimation {
+        id: flashFade
+        loops: 3
+        PropertyAction { target: flashOverlay; property: "opacity"; value: 1.0 }
+        NumberAnimation {
+            target: flashOverlay
+            property: "opacity"
+            to: 0.0
+            duration: 1200 / 3
+            easing.type: Easing.OutCubic
+        }
     }
 
     // Marks the current drop target while a drag is in progress.

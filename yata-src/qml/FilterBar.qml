@@ -20,28 +20,36 @@ Item {
     id: root
     implicitHeight: flow.implicitHeight + 4
 
-    // Month/Year switch the content area to MonthView/YearView (Main.qml
-    // reads these two properties to decide what to show instead of the task
-    // ListView) — unlike Day, taskModel has no month/year-grouping concept
-    // of its own, these are purely local UI state. All three are mutually
-    // exclusive (at most one active at a time); activating any one clears
-    // the other two, and the active one can be switched off entirely
-    // (clicking it again turns it off, nothing turns back on — back to the
-    // plain task list).
+    // Month/Year/Links switch the content area to MonthView/YearView/
+    // LinksView (Main.qml reads these properties to decide what to show
+    // instead of the task ListView) — unlike Day, taskModel has no
+    // month/year/links-grouping concept of its own, these are purely local
+    // UI state. All four (Day/Month/Year/Links) are mutually exclusive (at
+    // most one active at a time); activating any one clears the other
+    // three, and the active one can be switched off entirely (clicking it
+    // again turns it off, nothing turns back on — back to the plain task
+    // list). Links' own toggle button lives in Toolbar.qml, not here (see
+    // Main.qml for how the two components are wired together), but the
+    // mutual-exclusivity state and logic stays centralized in this one
+    // function regardless of which component's button triggered it.
     property bool monthActive: false
     property bool yearActive: false
+    property bool linksActive: false
 
     function setGrouping(which, checked) {
         if (checked) {
             root.monthActive = (which === "month")
             root.yearActive = (which === "year")
+            root.linksActive = (which === "links")
             taskModel.setGroupByDay(which === "day")
         } else if (which === "day") {
             taskModel.setGroupByDay(false)
         } else if (which === "month") {
             root.monthActive = false
-        } else {
+        } else if (which === "year") {
             root.yearActive = false
+        } else {
+            root.linksActive = false
         }
     }
 

@@ -7,11 +7,23 @@ Item {
     id: root
     implicitHeight: row.implicitHeight + 8
 
-    // Sum of ADD/RELOAD/THEME's own widths plus the spacing between them —
-    // i.e. "the width of the upper toolbar buttons one after another",
-    // scaling with font zoom same as the buttons themselves. Used by
-    // Main.qml to set the window's minimumWidth.
-    readonly property real actionButtonsWidth: addButton.width + reloadButton.width + themeButton.width + row.spacing * 2
+    // Set externally by Main.qml (from FilterBar.linksActive) — Toolbar
+    // can't see FilterBar directly (separate QML documents, ids don't cross
+    // file boundaries), so Main.qml relays state both ways: this property
+    // drives the button's highlighted look, and linksToggled() below is how
+    // a click gets back out to Main.qml to actually flip it.
+    property bool linksActive: false
+    signal linksToggled()
+
+    // Relayed to LinksView by Main.qml while Links is active — see
+    // searchField below for why the same field drives both contexts.
+    readonly property string searchText: searchField.text
+
+    // Sum of ADD/RELOAD/THEME/LINKS's own widths plus the spacing between
+    // them — i.e. "the width of the upper toolbar buttons one after
+    // another", scaling with font zoom same as the buttons themselves. Used
+    // by Main.qml to set the window's minimumWidth.
+    readonly property real actionButtonsWidth: addButton.width + reloadButton.width + themeButton.width + linksButton.width + row.spacing * 3
 
     // Empty toolbar background doubles as a window drag handle, since the
     // window has no title bar. Buttons/fields declared below sit on top and
@@ -97,10 +109,39 @@ Item {
             }
         }
 
+        ToolButton {
+            id: linksButton
+            text: "Links"
+            ToolTip.visible: hovered
+            ToolTip.text: "Show all URLs mentioned in tasks"
+            onClicked: root.linksToggled()
+            background: Rectangle {
+                radius: 4
+                color: root.linksActive ? Theme.accentColor
+                       : (linksButton.hovered ? Theme.hoverColor : "transparent")
+                opacity: root.linksActive ? 0.5 : 1.0
+            }
+            contentItem: Text {
+                text: linksButton.text
+                color: Theme.textColor
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
+                font.capitalization: Font.AllUppercase
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+
         TextField {
             id: searchField
             Layout.fillWidth: true
-            placeholderText: "Search for task"
+            // One shared field for both contexts — its text always feeds
+            // taskModel's search (harmless while Links is active, since
+            // LinksView doesn't use taskModel._visible) and is separately
+            // relayed to LinksView for link-label/url filtering there; the
+            // placeholder is what actually tells the user which context
+            // they're currently searching.
+            placeholderText: root.linksActive ? "Search for link" : "Search for task"
             placeholderTextColor: Theme.mutedTextColor
             leftPadding: searchIcon.width + 12
             rightPadding: clearIcon.width + 14
