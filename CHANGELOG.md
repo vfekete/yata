@@ -7,6 +7,458 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.19.4] - 2026-07-30
+
+### Fixed
+- **The floating drag preview window was far wider than the (correctly
+  elided) text it showed** for long tasks — `DragGhost.qml` sized itself
+  from `label.implicitWidth` (the full, un-elided text's natural width),
+  while the label itself was already capped to 320px and elided beyond
+  that. Fixed by sizing off `label.width` (the actual, capped/possibly
+  elided on-screen width) instead.
+
+## [0.19.3] - 2026-07-30
+
+### Fixed
+- **Cross-window task drops still always landed at the top of the destination
+  window's list**, even though the placeholder correctly showed a specific
+  row. 0.19.2 only fixed *same-window* reordering — `WindowManager.
+  moveTaskToWindow()` handed the moved task to `TaskListModel.insert_task()`,
+  which unconditionally inserted at index 0 regardless of where the
+  placeholder was hovering in the target window. Fixed by having each
+  window's `Main.qml` report its own live placeholder row index back to
+  `WindowManager` (`setDragHoverIndex`) as it's computed, so
+  `moveTaskToWindow()` can read it back at drop time and land the task right
+  after that row — the same "insert after the target" semantics `moveTask()`
+  already uses for same-window drags.
+
+## [0.19.2] - 2026-07-30
+
+### Fixed
+- **A dropped task landed higher up the list than the placeholder showed**
+  — a semantic mismatch left over from 0.19.0's redesign: the drop
+  placeholder renders *below* the hovered row (meaning "insert right after
+  this one"), but `TaskListModel.moveTask()` still inserted *before* the
+  hovered row, a leftover from when the old thin-line marker sat at the
+  *top* of the hovered row instead. Every drop landed one position higher
+  than shown — most noticeably "at the top" when dropping just below the
+  first row. Fixed by inserting after the target task instead of at its
+  index.
+
+## [0.19.1] - 2026-07-30
+
+### Fixed
+- **0.19.0's drop placeholder cut through the middle of the row above it**
+  — `TaskDelegate.qml`'s row content (`mainRow`) was still vertically
+  centered in the whole delegate, so when the placeholder made a row taller
+  to reserve space below it, the centered content shifted *down* into that
+  reserved space instead of staying put, overlapping the placeholder.
+  `mainRow` is now top-anchored with a fixed margin instead, so its
+  position no longer depends on how much extra height the placeholder
+  adds. Confirmed visually via an offscreen render (with the height
+  animation given real time to settle, unlike a first, too-quick capture
+  that was misleadingly inconclusive) — the placeholder now sits cleanly
+  between the two rows with no overlap.
+
+## [0.19.0] - 2026-07-30
+
+### Added
+- **Task lists now reflow with a highlighted drop placeholder while
+  dragging**, instead of just a thin line — the row being dragged
+  collapses out of its original spot, and a row-shaped placeholder opens up
+  wherever it would land, pushing the rows after it down to make room. This
+  works identically for same-window reordering and for hovering a
+  *different* YATA window during a cross-window move — one mechanism drives
+  both, via `WindowManager.taskDragHoverChanged` now also broadcasting the
+  pointer's global position so whichever window is currently the target can
+  translate it into its own list's local coordinates. Placeholder color is
+  the same "cyan by default, tint's own accent color for CRT themes" rule
+  already used for every other active/hover glow in the app
+  (`Theme.filterGlowColor`) — the window-border drop-target highlight from
+  0.18.0 was switched to the same color for consistency.
+- **The list now auto-scrolls while dragging near its top or bottom edge**
+  (and stops correctly once already at the start/end) — works in whichever
+  window's list is currently the drop target, same as the placeholder.
+- `WindowManager.windowAt()` no longer excludes the caller's own window —
+  same-window and cross-window hovering are now just two cases of "which
+  window is currently under the pointer," rather than separate code paths.
+
+## [0.18.4] - 2026-07-30
+
+### Fixed
+- **0.18.3's drag preview broke drag-and-drop entirely** — the moment a
+  drag started, showing the `DragGhost` window silently cancelled the
+  `DragHandler`'s active pointer grab in the source window, since a newly
+  mapped window taking focus/activation on X11 can do that even when it's
+  otherwise click-through. `Qt.WindowTransparentForInput` alone stops it
+  from *receiving* clicks but not from taking window focus; added
+  `Qt.WindowDoesNotAcceptFocus` to `DragGhost.qml`'s window flags, which is
+  what actually prevents it.
+
+## [0.18.3] - 2026-07-30
+
+### Added
+- **A floating preview of the task now follows the cursor while dragging**,
+  visible even outside the source window's own bounds (e.g. while hovering
+  over a different YATA window mid cross-window move) — previously only the
+  mouse cursor itself was visible during a drag. New `DragGhost.qml`: a
+  single, app-wide, frameless, always-on-top, click-through window (built
+  once at startup, reused for every drag regardless of which window/row
+  started it) showing the dragged task's text and status, trailing just
+  past the cursor. `WindowManager` gained `showDragGhost`/`moveDragGhost`/
+  `hideDragGhost` slots, called from `TaskDelegate.qml`'s `DragHandler`
+  alongside the existing same-window/cross-window drag logic.
+
+## [0.18.2] - 2026-07-30
+
+### Changed
+- **Task drag-and-drop (same-window reorder and cross-window move) now
+  works by pressing anywhere on the row**, not just the small "⋮⋮" handle
+  glyph — that glyph is now a purely visual hint, still shown on hover while
+  reordering is possible. Replaced the handle's dedicated `MouseArea` with a
+  row-wide `DragHandler`, which only takes the exclusive grab once the
+  pointer actually crosses the platform's real drag threshold — a plain
+  click, double-click-to-edit, link tap, hover-button tap, or right-click
+  (context menu) never reaches that threshold, so every other gesture on
+  the row keeps working unchanged. This is the standard Qt Quick mechanism
+  for letting a tap and a drag coexist on the same item.
+
+## [0.18.1] - 2026-07-30
+
+### Fixed
+- **Cross-window task drag printed "windowManager is not defined" to the
+  console right after a successful drop.** Root cause: moving a task to
+  another window removes it from the source window's model, which
+  synchronously destroys the very `TaskDelegate` instance whose own
+  `MouseArea.onReleased` handler was still executing — the very next
+  statement's bare `windowManager` identifier could no longer be resolved
+  through that now-torn-down delegate's context. Fixed by capturing
+  `windowManager` (and reusing the already-captured `view`) into local JS
+  variables *before* the model-mutating call, so the rest of the handler
+  references already-resolved object references instead of re-doing a
+  scope lookup afterward. Reproduced and confirmed fixed in isolation with a
+  minimal throwaway QML harness before touching the real file, to be sure
+  the fix pattern (not just this specific line) was actually correct.
+
+## [0.18.0] - 2026-07-30
+
+### Added
+- **Drag a task from one YATA window and drop it onto another to move it
+  there.** Uses the task row's existing drag handle (the same "⋮⋮" gesture
+  already used for same-window reordering) — drag it past your window's own
+  edge onto a different YATA window and the target window's border glows
+  cyan; release to move the task there (text/status/created_at/completed_at
+  all preserved), or release back inside the source window to reorder as
+  before. Implemented as pure in-process coordinate math rather than real
+  platform drag-and-drop: `WindowManager.windowAt()` finds which open
+  window's on-screen geometry contains the pointer's global position
+  (computed in `TaskDelegate.qml` via each window's own `x`/`y`, no
+  `QQuickWindow.mapToGlobal` dependency), `moveTaskToWindow()` transfers the
+  task directly between the two windows' in-process `TaskListModel`
+  instances via new `take_task()`/`insert_task()` methods (also used to
+  simplify `deleteTask()`/`addTask()` internally). `WindowManager` gained a
+  `taskDragHoverChanged` signal so every window can light up its own border
+  only when it's the actual drop target.
+
+## [0.17.5] - 2026-07-30
+
+### Added
+- **New windows created via YATAS+ADD no longer duplicate an existing tag.**
+  If a window is already named e.g. "YATA", the next new one is named
+  "YATA - 2" instead of a second identical "YATA" — `n` is one more than the
+  highest number already in use for that base name (so "YATA - 2" and
+  "YATA - 5" both existing produces "YATA - 6" next, not "YATA - 3").
+  `WindowRegistry` gained `next_available_tag(base_tag)`; only
+  `WindowManager.createWindow()` uses it — `add()`/`renameWindow()` still
+  allow duplicate tags freely, since a manual rename is the user's own
+  explicit choice.
+
+## [0.17.4] - 2026-07-30
+
+### Added
+- **The SHOW eye icon hides itself on the last open window.** Closing it
+  would leave nothing on screen and no YatasView left to reopen anything
+  from, so `YatasRow.qml` now hides the button entirely (not just disables
+  it) when its own window is the only one currently open — a closed window's
+  row always keeps its button, since reopening is always safe.
+  `WindowManager.closeWindow()` enforces the same "at least one must stay
+  open" guard independently (silent no-op, same pattern as
+  `TaskListModel`'s visibility filters), so the invariant holds even if
+  something other than this button ever calls it.
+
+## [0.17.3] - 2026-07-30
+
+### Fixed
+- **YatasView's SHOW eye icon overshot after the 0.17.2 nudge** — the user
+  confirmed live it now sat too far below the trash/DELETE icon. Pulled back
+  up by a literal 15px (`Layout.topMargin: Math.round(Theme.taskFontPixelSize
+  * 0.2) - 15`), per direct pixel feedback rather than another proportional
+  guess.
+
+## [0.17.2] - 2026-07-30
+
+### Fixed
+- **YatasView's SHOW eye icon still sat too high relative to the trash/DELETE
+  icon** even after matching `Layout.alignment`, since the eye's tightly-
+  cropped SVG box and the trash emoji's own line-height box (which reserves
+  descender padding, pushing the visible glyph above its box's true center)
+  don't share an optical center. Nudged down via `Layout.topMargin:
+  Math.round(Theme.taskFontPixelSize * 0.2)` to match, per a side-by-side
+  before/after mockup from the user.
+
+## [0.17.1] - 2026-07-30
+
+### Fixed
+- **YatasView's new SHOW eye icon was too large and not vertically centered
+  with the trash/DELETE icon next to it** — shrunk to 65% of its previous
+  size (`IconIndicator`'s `sizeScale: 1.15 * 0.65`, height follows via its
+  own aspect-ratio sizing) and given an explicit `Layout.alignment:
+  Qt.AlignVCenter` to match.
+
+## [0.17.0] - 2026-07-30
+
+### Added
+- **SHOW toggle button in the YATAS window list**, next to DELETE, using the
+  same eye icon as the sub-toolbar's visibility-filter group. Tapping it
+  closes the corresponding window (hides it, keeping its tasks/settings and
+  registry entry intact) or reopens it, rebuilt fresh from its own persisted
+  data — same as at app startup. The button visually reflects the window's
+  current state: full brightness while shown, dimmed while closed. A
+  window's open/closed state is itself persisted immediately (`WindowRegistry`
+  gained an `open` field) and honored on the next app launch — a closed
+  window stays closed across a restart instead of reopening on its own,
+  unless every window was closed, in which case startup reopens everything
+  rather than launching with nothing on screen and no way to reach YATAS.
+  `WindowManager` gained `openWindow`/`closeWindow` slots and now reports
+  each window's *live* open state (not just the persisted one) through
+  `listWindows()`.
+
+## [0.16.3] - 2026-07-30
+
+### Fixed
+- **Settings (theme, geometry, filters — any window setting) could silently
+  fail to persist across a restart**, most visibly with "Switch zoom
+  direction": toggling it off worked correctly for the rest of the session,
+  but the app came back up with it checked again next launch. Root cause:
+  every setter in `AppSettings` and `TaskListModel` called
+  `QSettings.setValue()` but never `.sync()`, relying entirely on Qt's
+  deferred/implicit flush (a periodic auto-sync or a sync triggered by the
+  `QSettings` object's own destruction) to eventually get the value onto
+  disk. That flush depends on teardown ordering that isn't guaranteed —
+  confirmed directly: writing a value and letting the process exit without
+  an explicit `sync()` left the on-disk `.ini` file completely unwritten.
+  Fixed by calling `self._settings.sync()` immediately after every
+  `setValue()` (geometry writes batch into one `sync()` call rather than
+  one per field) — every setting is now written to disk the moment it
+  changes, matching the standing "remembers its settings immediately, per
+  window" requirement, rather than only when something else happens to
+  flush it later.
+
+## [0.16.2] - 2026-07-30
+
+### Changed
+- **Font zoom (Ctrl+=/Ctrl+Wheel) max raised from 2x to 200x** — per request,
+  "preferably indefinitely, even if it looks ugly and unreadable." Not
+  literally unbounded: `font.pixelSize` is still a real `int` under the
+  hood, and an astronomically large `fontScale` risks overflow there; 200x
+  (2800px base task text) is far past anything anyone would actually scroll
+  to while staying nowhere near that ceiling. `AppSettings` gained
+  `minFontScale`/`maxFontScale` read-only properties (mirroring the
+  existing `defaultFontScale`) so the 4 places in `Main.qml` that clamp
+  zoom (two keyboard shortcuts, two `Ctrl+Wheel` branches) read from one
+  source of truth instead of hardcoding the bounds themselves.
+
+## [0.16.1] - 2026-07-30
+
+### Fixed
+- **Zooming (Ctrl+=/Ctrl+-/Ctrl+Wheel) repeatedly logged "Binding loop
+  detected for property implicitWidth" for TaskDelegate's "Delete task?"
+  confirmation dialog.** That `Dialog` had no explicit `width`, so Qt Quick
+  Controls derived `implicitWidth` from its own font-scaled content —
+  circularly, on every font-size change. Gave it an explicit
+  `width: Math.max(260, Math.round(Theme.taskFontPixelSize * 20))`, the same
+  fix/formula already used for `DeleteWindowDialog.qml`.
+
+## [0.16.0] - 2026-07-30
+
+### Added
+- **Double-click a window's tag label (on its own top border) to rename it
+  in place** — previously the only way to rename was via a row in the
+  YATAS list. Swaps the label for an editable field styled like the
+  toolbar's search box (same rounded, subtly-tinted background), spanning
+  from the label's own start position to half the window's width. Enter or
+  clicking away commits the rename (empty/unchanged input is a no-op,
+  matching the YATAS list's own rename field); Escape cancels.
+
+## [0.15.7] - 2026-07-30
+
+### Fixed
+- **Windows created via YATAS+ADD never came back after restarting the
+  app.** `main()` only ever reopened the original/default window at
+  startup — any additional window was silently skipped forever after
+  (its tasks/settings stayed safely on disk, just never shown again,
+  with no way to reopen it since a plain click on its YATAS row is
+  intentionally a no-op). Fixed: startup now reopens every window in the
+  registry, each at its own persisted position/theme/content, falling back
+  to seeding one fresh window only if the registry is completely empty
+  (every window, including "default", was explicitly deleted). The
+  restore-list logic was pulled out into a small pure function
+  (`_windows_to_restore()`) specifically so this has real regression test
+  coverage (`tests/test_main.py`) without needing a live QML engine.
+
+### Notes
+- The `TypeError: Cannot read property ... of null` messages some users see
+  in the console right after pressing Ctrl+C are expected app-quit teardown
+  noise (bindings evaluating once more against already-torn-down context
+  properties) — not a bug, and predates this whole multi-window feature.
+
+## [0.15.6] - 2026-07-29
+
+### Fixed
+- **`Main.qml` logged "Binding loop detected for property width" on every
+  window.** Introduced by 0.15.4's `width: Math.max(appSettings.width,
+  minimumWidth)` fix — `width`'s own binding read `appSettings.width`,
+  which `onWidthChanged` (right below it) writes to on every `width`
+  change, a shape QML's binding-loop detector correctly flags even though
+  it happened to converge rather than truly infinite-loop. Fixed by moving
+  the "grow to at least minimumWidth" correction out of `width`'s
+  declarative binding entirely, into a plain imperative
+  `ensureMinimumWidth()` function called from `Component.onCompleted` and
+  `onMinimumWidthChanged` — `width: appSettings.width` stays a simple,
+  loop-free binding, exactly like before 0.15.4, and the imperative
+  assignment breaks/replaces it only when the floor actually needs
+  enforcing (same as a user's own resize already does), still persisting
+  correctly afterward via the existing `onWidthChanged` handler.
+
+## [0.15.5] - 2026-07-29
+
+### Fixed
+- **The window tag label was invisible (or only showed its bottom half) on
+  a real live window**, even though it rendered fully in every offscreen
+  test used to verify it. Root cause: it was positioned at `y:
+  -height / 2` to straddle the border line like a fieldset legend — but a
+  `QQuickWindow`'s actual drawable surface starts at `y=0`; content above
+  that is genuinely off-surface and isn't rendered on a real GPU-backed
+  window (the offscreen `grabWindow()` backend used for testing turned out
+  to be more forgiving of negative-`y` content than a live one, which is
+  why this was never caught before shipping). Fixed by reserving real space
+  instead: the border and background wash `Rectangle`s now start
+  `tagLabelBg.height / 2` down from the window's actual top edge (via
+  `anchors.topMargin`), and the label itself sits at `y: 0` — its vertical
+  center still lands exactly on the border's (now-inset) top edge, achieving
+  the same straddling look with nothing ever positioned off-surface.
+
+## [0.15.4] - 2026-07-29
+
+### Fixed
+- **Window could open narrower than its own toolbar needed**, clipping
+  toolbar buttons and the window's tag label at the window's own edge — a
+  window's *persisted* width from before the YATAS button existed (which
+  grew the real minimum needed) wasn't being raised back up to the new
+  `minimumWidth` on open; the `minimumWidth` hint alone isn't reliably
+  WM-enforced for this frameless window's explicitly-bound width. `width`
+  is now `Math.max(appSettings.width, minimumWidth)` instead of relying on
+  the hint alone. Also added elide-safety to the tag label itself (capped
+  and ellipsized against the window's actual width) so an unusually long
+  custom tag name can't overflow past the window edge either, independent
+  of the width fix above.
+
+## [0.15.3] - 2026-07-29
+
+### Fixed
+- **Delete-window dialog was undersized and its checkbox unreachable.** The
+  dialog's width was a fixed 360px that didn't scale with font zoom (unlike
+  everything else in the app), so at a larger zoom the text ran past the
+  dialog's edges — now `Theme.taskFontPixelSize`-scaled like `ThemeMenu`'s
+  width. The checkbox's label lived inside `CheckBox.contentItem` with a
+  manually-computed `leftPadding`, which fought the Basic style's own
+  indicator/content positioning — the indicator ended up rendered mid-
+  sentence in the label text, with its actual clickable area not matching
+  where it visually appeared. Replaced with a plain `CheckBox` (untouched
+  default indicator) next to a separate `Label` in a `RowLayout`, with the
+  label also tap-to-toggle for a larger hit target.
+
+## [0.15.2] - 2026-07-29
+
+### Fixed
+- **Theme changes stopped applying, and icons disappeared, after 0.15.0's
+  multi-window support.** Root cause: `Theme.qml`'s *filename* still defined
+  an implicitly-importable QML type named "Theme" (Qt's directory-import
+  convention maps filenames to types regardless of `pragma Singleton`),
+  which silently collided with the "Theme" context property every window
+  now injects. QML's compiled-bindings path resolved the (no-longer-
+  registered) type reference instead of falling back to the context
+  property, leaving every `Theme.*` binding in every other `.qml` file
+  permanently `undefined` — rendering as default Qt colors (black text,
+  white/opaque backgrounds instead of each theme's real colors) and, for
+  icons specifically, an invalid recolor tint that made them vanish
+  entirely. This is why it was easy to miss during 0.15.0's own testing:
+  reading a `Theme` property directly off the live Python object always
+  returned the correct value, and so did dynamically-evaluated QML
+  expressions — only *compiled* property bindings elsewhere in the app were
+  affected, which nothing in that testing checked. Fixed by renaming the
+  file to `yata-src/qml/ThemeImpl.qml` (content unchanged) — it's still
+  injected as the context property named "Theme", so no other `.qml` file
+  needed to change. Confirmed via a from-scratch reproduction isolating the
+  filename as the sole variable, and via a live check that both text color
+  and background now update correctly when the theme changes.
+
+## [0.15.1] - 2026-07-29
+
+### Fixed
+- **Clicking ADD while YATAS was active didn't create a window, and crashed
+  `WindowManager.createWindow()`** — it called `dict(caller_state)` directly
+  on the argument, but QML passes a JS object literal as a `QJSValue`, not
+  something Python's `dict()` can iterate (`TypeError: 'QJSValue' object is
+  not iterable`). The uncaught exception firing mid-callback appears to be
+  what caused the wave of "Unable to assign [undefined] to QColor" errors
+  and the "theme stopped working" symptom the user saw right after — a
+  live, QML-triggered reproduction confirms window creation and every
+  window's `Theme` both work correctly once the argument is unwrapped via
+  `QJSValue.toVariant()` before use.
+
+## [0.15.0] - 2026-07-29
+
+### Added
+- **Multi-window support** (`claude-docs/freq/r-3.md`): YATA can now run
+  several independent windows in one process, e.g. to keep work and personal
+  todos apart. Each window has its own tasks, theme, position/size, and a
+  "tag" (display name) shown on its own top border like a fieldset legend.
+  The original/pre-existing window keeps using its original data/settings
+  files unchanged (`tasks.json`, `~/.config/yata/yata.conf`) for full
+  backward compatibility; every window created afterward gets its own
+  dedicated files under `instances/<id>/`.
+  - New "YATAS" toolbar button switches the content area to a list of every
+    known window (mutually exclusive with DAY/MONTH/YEAR/LINKS, same as
+    those already were with each other). Double-click a row to rename its
+    tag; each row has a delete button that always asks for confirmation via
+    a themed (but not opacity-affected) dialog, with an unchecked-by-default
+    option to also delete that window's tasks/settings — closing the window
+    first if it's currently open, even if it's the one you're looking at.
+  - While YATAS is active, the toolbar's ADD button creates a new window
+    (cloning the current window's theme, auto-positioned to avoid
+    overlapping existing windows) instead of a new task, and the search
+    field filters window tags with a "Search for window" placeholder.
+  - Architecturally: `Theme.qml` is no longer a `pragma Singleton` (a
+    singleton is one instance per QQmlEngine, shared by every window —
+    incompatible with per-window theming), instead created fresh per window
+    and injected as a context property alongside a new `WindowManager`
+    (`yata-src/window_manager.py`) and `WindowRegistry`
+    (`yata-src/window_registry.py`, the persisted id+tag list). `main.py`
+    now builds every window (including the first) through one shared
+    `_make_window()` factory using `QQmlComponent`/`QQmlContext` instead of
+    `QQmlApplicationEngine.load()`.
+
+### Fixed (during the above)
+- A `QQmlComponent` object must itself stay alive for as long as anything
+  it created (via `.create()`) is in use — not just the created object or
+  its `QQmlContext` — or the created object's underlying C++ instance gets
+  torn down out from under a still-live Python reference (surfaced as
+  `libshiboken: Internal C++ object (QQuickWindow) already deleted` the
+  next time anything touched it). `_make_window()` and `WindowManager`
+  together keep every component/context/object alive for each window's
+  whole lifetime.
+
 ## [0.14.3] - 2026-07-24
 
 ### Changed

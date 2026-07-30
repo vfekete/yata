@@ -20,27 +20,30 @@ Item {
     id: root
     implicitHeight: flow.implicitHeight + 4
 
-    // Month/Year/Links switch the content area to MonthView/YearView/
-    // LinksView (Main.qml reads these properties to decide what to show
-    // instead of the task ListView) — unlike Day, taskModel has no
-    // month/year/links-grouping concept of its own, these are purely local
-    // UI state. All four (Day/Month/Year/Links) are mutually exclusive (at
-    // most one active at a time); activating any one clears the other
-    // three, and the active one can be switched off entirely (clicking it
-    // again turns it off, nothing turns back on — back to the plain task
-    // list). Links' own toggle button lives in Toolbar.qml, not here (see
-    // Main.qml for how the two components are wired together), but the
-    // mutual-exclusivity state and logic stays centralized in this one
-    // function regardless of which component's button triggered it.
+    // Month/Year/Links/Yatas switch the content area to MonthView/YearView/
+    // LinksView/YatasView (Main.qml reads these properties to decide what to
+    // show instead of the task ListView) — unlike Day, taskModel has no
+    // month/year/links/yatas-grouping concept of its own, these are purely
+    // local UI state. All five (Day/Month/Year/Links/Yatas) are mutually
+    // exclusive (at most one active at a time); activating any one clears
+    // the other four, and the active one can be switched off entirely
+    // (clicking it again turns it off, nothing turns back on — back to the
+    // plain task list). Links'/Yatas' own toggle buttons live in
+    // Toolbar.qml, not here (see Main.qml for how the components are wired
+    // together), but the mutual-exclusivity state and logic stays
+    // centralized in this one function regardless of which component's
+    // button triggered it.
     property bool monthActive: false
     property bool yearActive: false
     property bool linksActive: false
+    property bool yatasActive: false
 
     function setGrouping(which, checked) {
         if (checked) {
             root.monthActive = (which === "month")
             root.yearActive = (which === "year")
             root.linksActive = (which === "links")
+            root.yatasActive = (which === "yatas")
             taskModel.setGroupByDay(which === "day")
         } else if (which === "day") {
             taskModel.setGroupByDay(false)
@@ -48,8 +51,10 @@ Item {
             root.monthActive = false
         } else if (which === "year") {
             root.yearActive = false
-        } else {
+        } else if (which === "links") {
             root.linksActive = false
+        } else {
+            root.yatasActive = false
         }
     }
 

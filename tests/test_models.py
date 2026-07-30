@@ -102,8 +102,10 @@ def test_move_task_reorders_manual_list(model):
 
     model.moveTask(0, 2)
 
-    # C is dropped onto A's slot, landing immediately before it.
-    assert [role(model, i, "taskId") for i in range(3)] == [b, c, a]
+    # C is dropped after A's slot — the drop placeholder renders below the
+    # hovered row (see TaskDelegate.qml's showGapBelow), meaning "insert
+    # right after this one", not before it.
+    assert [role(model, i, "taskId") for i in range(3)] == [b, a, c]
 
 
 def test_move_task_ignored_when_not_reorderable(model):
@@ -187,7 +189,9 @@ def test_move_task_across_day_groups_reassigns_its_day_keeping_time_of_day(model
     moved_dt = datetime.fromisoformat(moved.created_at)
     assert moved_dt.date() == yesterday.date()
     assert moved_dt.time() == original_time
-    assert [t.id for t in model._tasks] == [a, b]
+    # Inserted after b (the hovered slot), not before it — see moveTask's
+    # own "insert after target_task" comment.
+    assert [t.id for t in model._tasks] == [b, a]
     assert role(model, 0, "dayLabel") == yesterday_label
     assert role(model, 1, "dayLabel") == yesterday_label
 
@@ -542,3 +546,101 @@ def test_index_for_task_returns_minus_one_when_not_visible(model):
     model.setShowCancelled(False)
 
     assert model.indexForTask(t) == -1
+
+
+def test_take_task_removes_and_returns_it(model):
+    t = model.addTask()
+    model.setText(t, "Take me")
+    model.setStatus(t, "done")
+
+    task = model.take_task(t)
+
+    assert task is not None
+    assert task.id == t
+    assert task.text == "Take me"
+    assert task.status == "done"
+    assert model.rowCount() == 0
+    assert model._find(t) is None
+
+
+def test_take_task_returns_none_for_unknown_id(model):
+    assert model.take_task("does-not-exist") is None
+
+
+def test_take_task_persists_removal(tmp_path):
+    model = _make_model(tmp_path)
+    t = model.addTask()
+    model.setText(t, "Persisted")
+
+    model.take_task(t)
+
+    reloaded = _make_model(tmp_path)
+    assert reloaded.rowCount() == 0
+
+
+def test_insert_task_adds_it_preserving_fields(model):
+    from storage import Task
+
+    task = Task(text="Imported", status="done", created_at="2026-01-02T03:04:05", id="fixed-id")
+
+    model.insert_task(task)
+
+    assert role(model, 0, "taskId") == "fixed-id"
+    assert role(model, 0, "text") == "Imported"
+    assert role(model, 0, "status") == "done"
+
+
+def test_insert_task_reassigns_id_on_collision(model):
+    from storage import Task
+
+    existing = model.addTask()
+    model.setText(existing, "Existing")
+    colliding = Task(text="Imported", id=existing)
+
+    model.insert_task(colliding)
+
+    assert colliding.id != existing
+    assert model.rowCount() == 2
+
+
+def test_take_and_insert_moves_a_task_between_two_models(tmp_path):
+    source = _make_model(tmp_path, name="source.json", settings_name="source.ini")
+    dest = _make_model(tmp_path, name="dest.json", settings_name="dest.ini")
+    t = source.addTask()
+    source.setText(t, "Move me")
+
+    task = source.take_task(t)
+    dest.insert_task(task)
+
+    assert source.rowCount() == 0
+    assert dest.rowCount() == 1
+    assert role(dest, 0, "text") == "Move me"
+
+
+def test_insert_task_at_target_index_lands_right_after_that_row(model):
+    from storage import Task
+
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    # Visible order (newest first): B, A.
+
+    incoming = Task(text="Dropped", status="active", id="dropped-id")
+    model.insert_task(incoming, target_index=1)  # hovering row 1 (A)
+
+    # Dropped right after A (the hovered row), matching moveTask()'s
+    # identical "insert after, not at" semantics for the same placeholder.
+    assert [role(model, i, "taskId") for i in range(3)] == [b, a, "dropped-id"]
+
+
+def test_insert_task_with_out_of_range_index_falls_back_to_top(model):
+    from storage import Task
+
+    a = model.addTask()
+    model.setText(a, "A")
+
+    incoming = Task(text="Dropped", status="active", id="dropped-id")
+    model.insert_task(incoming, target_index=-1)
+
+    assert role(model, 0, "taskId") == "dropped-id"

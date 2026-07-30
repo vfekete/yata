@@ -4,9 +4,9 @@ import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QFile, QIODevice, Qt, QTimer
+from PySide6.QtCore import QFile, QIODevice, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QFontDatabase, QGuiApplication, QIcon
-from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext, QQmlEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
 import resources_rc  # noqa: F401 — registers :/fonts/VT323-Regular.ttf and :/icon/icon.png
@@ -14,6 +14,13 @@ from icons import IconProvider
 from models import TaskListModel
 from settings import AppSettings
 from storage import TaskStore
+from window_manager import WindowManager
+from window_registry import (
+    DEFAULT_TAG,
+    WindowRegistry,
+    settings_path_for,
+    tasks_path_for,
+)
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
@@ -112,6 +119,122 @@ def _ensure_desktop_entry(
     )
 
 
+def _make_window(engine, icon_provider, window_manager, app_icon, window_id, task_store, app_settings):
+    """Builds one fully independent window: its own QQmlContext with its own
+    taskModel/appSettings/Theme (see window_manager.py's module docstring
+    and ThemeImpl.qml's own comment for why Theme can no longer be a
+    pragma-Singleton once multiple windows exist in one engine, and why that
+    file specifically isn't named Theme.qml). Used for both the very first
+    window and every window created later via YATAS.
+    """
+    task_model = TaskListModel(task_store)
+
+    context = QQmlContext(engine.rootContext())
+    context.setContextProperty("taskModel", task_model)
+    context.setContextProperty("appSettings", app_settings)
+    context.setContextProperty("iconProvider", icon_provider)
+    context.setContextProperty("windowManager", window_manager)
+    context.setContextProperty("windowId", window_id)
+
+    # Theme must be created (and set as a context property) before Main.qml,
+    # since Main.qml's whole tree references the bare "Theme" identifier
+    # from the moment it's constructed.
+    #
+    # IMPORTANT: the QQmlComponent objects themselves (theme_component,
+    # main_component below) must stay alive for as long as the objects they
+    # created (theme, window) are in use — not just the QQmlContext, and not
+    # just the created object with CppOwnership set. Empirically confirmed
+    # (via a minimal reproduction outside this codebase) that letting a
+    # QQmlComponent get Python-garbage-collected after create() tears down
+    # the object it created too, surfacing as "libshiboken: Internal C++
+    # object (QQuickWindow) already deleted" the next time anything touches
+    # it — even with the context and the created object both still
+    # referenced elsewhere. register_window() below is what keeps every one
+    # of these alive for the window's whole lifetime.
+    theme_component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "ThemeImpl.qml")))
+    theme = theme_component.create(context)
+    if theme is None:
+        raise RuntimeError(f"ThemeImpl.qml failed to load: {theme_component.errorString()}")
+    QQmlEngine.setObjectOwnership(theme, QQmlEngine.CppOwnership)
+    context.setContextProperty("Theme", theme)
+
+    main_component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "Main.qml")))
+    window = main_component.create(context)
+    if window is None:
+        raise RuntimeError(f"Main.qml failed to load: {main_component.errorString()}")
+    QQmlEngine.setObjectOwnership(window, QQmlEngine.CppOwnership)
+
+    # Deferred so the platform window is actually mapped before we touch WM
+    # properties. enable_always_below sends _NET_WM_STATE_BELOW; setIcon
+    # writes _NET_WM_ICON so GNOME's Alt+Tab switcher picks up the icon.
+    def _setup_window():
+        enable_always_below(window)
+        window.setIcon(app_icon)
+    QTimer.singleShot(0, _setup_window)
+
+    # register_window keeps Python references to everything above alive for
+    # the window's lifetime (nothing else holds them — see the comment above
+    # theme_component for why theme_component/main_component specifically
+    # must be included, not just context/theme/window) and lets
+    # WindowManager close this window again from deleteWindow(), including
+    # when it's the window that requested its own deletion.
+    window_manager.register_window(
+        window_id, window,
+        task_model=task_model, app_settings=app_settings, context=context, theme=theme,
+        theme_component=theme_component, main_component=main_component,
+    )
+    return window
+
+
+def _make_drag_ghost(engine):
+    """Builds the single, app-wide floating drag preview (DragGhost.qml) —
+    an independent top-level window, not parented under any one YATA
+    window's own context, since it isn't owned by any window in particular
+    (see that file's own comment on why it's deliberately theme-independent
+    for the same reason). Kept alive for the app's whole lifetime by main()
+    holding onto both return values, same reasoning as _make_window's own
+    theme_component/main_component comment.
+    """
+    component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "DragGhost.qml")))
+    ghost = component.create()
+    if ghost is None:
+        raise RuntimeError(f"DragGhost.qml failed to load: {component.errorString()}")
+    QQmlEngine.setObjectOwnership(ghost, QQmlEngine.CppOwnership)
+    return ghost, component
+
+
+def _open_settings(window_id: str) -> QSettings:
+    path = settings_path_for(window_id)
+    return QSettings(path, QSettings.IniFormat) if path else QSettings("yata", "yata")
+
+
+def _windows_to_restore(registry: WindowRegistry) -> list[dict]:
+    """Every window to (re)open at startup.
+
+    Every registry entry marked "open" gets reopened — not just the default
+    window — so a window created via YATAS is still there next time the app
+    starts, at its own persisted position/theme/content. One marked closed
+    (via YatasView's SHOW toggle) stays closed across a restart, same as the
+    user left it.
+
+    Falls back to seeding a fresh default entry if the registry is
+    completely empty (the user explicitly deleted every window, including
+    "default"), and falls back to reopening every entry if none are marked
+    open (the user closed every window individually) — either way, the app
+    never launches with nothing to show and no way to reach YATAS again.
+    """
+    entries = registry.list()
+    if not entries:
+        registry.add(DEFAULT_TAG)
+        entries = registry.list()
+    open_entries = [e for e in entries if e.get("open", True)]
+    if not open_entries:
+        for e in entries:
+            registry.set_open(e["id"], True)
+        open_entries = registry.list()
+    return open_entries
+
+
 def main() -> int:
     # Must be set before QGuiApplication is constructed. PassThrough keeps
     # pixel sizes matching each monitor's actual reported scale factor
@@ -129,30 +252,57 @@ def main() -> int:
 
     QFontDatabase.addApplicationFont(":/fonts/VT323-Regular.ttf")
 
-    task_model = TaskListModel(TaskStore())
-    app_settings = AppSettings()
     icon_provider = IconProvider()
+    app_icon = QIcon(":/icon/icon.png")
 
     engine = QQmlApplicationEngine()
     engine.addImportPath(QML_DIR)
-    engine.rootContext().setContextProperty("taskModel", task_model)
-    engine.rootContext().setContextProperty("appSettings", app_settings)
-    engine.rootContext().setContextProperty("iconProvider", icon_provider)
-    engine.load(os.path.join(QML_DIR, "Main.qml"))
 
-    if not engine.rootObjects():
+    registry = WindowRegistry()
+
+    def window_factory(window_id, caller_state):
+        # Used for windows created via the YATAS view's ADD button — clones
+        # the creating window's theme (explicit requirement: "new window has
+        # same theme as the actual window") and a non-overlapping position
+        # WindowManager already computed into caller_state's x/y.
+        task_store = TaskStore(tasks_path_for(window_id))
+        app_settings = AppSettings(_open_settings(window_id))
+        app_settings.themeMode = caller_state["themeMode"]
+        app_settings.themeTint = caller_state["themeTint"]
+        app_settings.opacityPercent = int(caller_state["opacityPercent"])
+        app_settings.fontScale = float(caller_state["fontScale"])
+        app_settings.wheelZoomInverted = bool(caller_state["wheelZoomInverted"])
+        app_settings.width = int(caller_state["width"])
+        app_settings.height = int(caller_state["height"])
+        app_settings.x = int(caller_state["x"])
+        app_settings.y = int(caller_state["y"])
+        return _make_window(
+            engine, icon_provider, window_manager, app_icon,
+            window_id, task_store, app_settings,
+        )
+
+    def restore_factory(window_id):
+        # No theme/geometry cloning here (that's only for windows created
+        # live via YATAS, in window_factory above) — a restored window
+        # already has its own persisted position/theme/content. Used both
+        # for every window at startup and for WindowManager.openWindow()
+        # (YatasView's SHOW toggle, on) reopening one later in the session.
+        task_store = TaskStore(tasks_path_for(window_id))
+        app_settings = AppSettings(_open_settings(window_id))
+        _make_window(
+            engine, icon_provider, window_manager, app_icon,
+            window_id, task_store, app_settings,
+        )
+
+    drag_ghost, drag_ghost_component = _make_drag_ghost(engine)
+    window_manager = WindowManager(registry, window_factory, restore_factory, drag_ghost=drag_ghost)
+
+    try:
+        for entry in _windows_to_restore(registry):
+            restore_factory(entry["id"])
+    except RuntimeError as exc:
+        print(exc, file=sys.stderr)
         return 1
-
-    window = engine.rootObjects()[0]
-    app_icon = QIcon(":/icon/icon.png")
-    # Deferred so the platform window is actually mapped before we touch WM
-    # properties. enable_always_below sends _NET_WM_STATE_BELOW; setIcon
-    # writes _NET_WM_ICON so GNOME's Alt+Tab switcher picks up the icon.
-
-    def _setup_window():
-        enable_always_below(window)
-        window.setIcon(app_icon)
-    QTimer.singleShot(0, _setup_window)
 
     # Qt's event loop runs entirely in C++ and never hands control back to
     # the Python interpreter, so Python's own SIGINT handler (installed
@@ -167,10 +317,11 @@ def main() -> int:
     exit_code = app.exec()
 
     # Explicitly tear down the QML engine (and everything it owns: windows,
-    # bindings, the Theme singleton) now, while task_model/app_settings are
-    # still alive. Without this, Python's own cleanup at function return can
-    # collect task_model/app_settings first, and the QML engine's teardown
-    # then trips over bindings reading now-dead context properties, printing
+    # bindings, every window's Theme instance) now, while window_manager
+    # (and the task_model/app_settings/... it's keeping alive for every
+    # window) is still alive. Without this, Python's own cleanup at function
+    # return can collect those first, and the QML engine's teardown then
+    # trips over bindings reading now-dead context properties, printing
     # "TypeError: Cannot read property ... of null" on quit.
     del engine
 

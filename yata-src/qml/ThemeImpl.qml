@@ -1,6 +1,35 @@
-pragma Singleton
 import QtQuick
 
+// Filename is deliberately NOT Theme.qml, even though every other .qml file
+// still refers to it as the bare identifier "Theme" — see main.py's
+// _make_window, which loads this file but injects the result as a context
+// property literally named "Theme".
+//
+// NOT a pragma Singleton: multi-window support (r-3.md) needs one Theme
+// instance per window, each bound to that window's own appSettings (a
+// singleton is one instance for the whole QQmlEngine, shared by every
+// window — incompatible with "every window remembers its... settings
+// separately"). Instead each window's context gets its own Theme instance
+// created explicitly and exposed as that "Theme" context property.
+//
+// The filename must stay off "Theme.qml" specifically because Qt's
+// implicit-directory-import still registers a TYPE named "Theme" for any
+// sibling file called Theme.qml regardless of pragma Singleton — so once
+// the singleton declaration was removed, "Theme.qml" left behind a
+// same-named, no-longer-registered TYPE that collided with the "Theme"
+// CONTEXT PROPERTY. QML's compiled-bindings path resolved the (broken) type
+// reference instead of falling back to the context property, silently
+// leaving every Theme.* binding undefined — while dynamically-evaluated
+// expressions (e.g. via QQmlExpression) resolved correctly, which is what
+// made this so confusing to track down: reading a Theme property directly
+// off the live Python object always worked, but any QML binding elsewhere
+// in the app reading the exact same property through the identifier
+// "Theme" silently got `undefined` and rendered with default Qt colors
+// (black text, transparent-turned-white backgrounds) instead. Renaming the
+// file (content otherwise unchanged) removes the type/property name clash
+// entirely. Confirmed via a from-scratch reproduction: same context, same
+// context-property wiring, only the loaded file's name changed.
+//
 // Each named tint recreates the look of a specific old CRT/terminal display
 // (green/amber phosphor, paperwhite monitor, teletype paper) and colors
 // task status, backgrounds, buttons and fields to match. "none" is the safe

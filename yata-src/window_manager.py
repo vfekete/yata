@@ -1,0 +1,307 @@
+"""QML-facing manager for multiple YATA windows (r-3.md "Multi instance application").
+
+Owns the persisted WindowRegistry (id + tag) and, for windows currently
+running in this process, a live QQuickWindow reference — the latter is what
+lets deleteWindow() close an open window directly (no IPC needed, since
+every window lives in this one process) and lets createWindow() avoid
+overlapping any of them.
+
+Actually creating a window (QQmlComponent + per-window QQmlContext, see
+main.py) is injected as `window_factory` rather than done here, so this
+class stays Qt-QML-plumbing-agnostic and easy to unit test without a real
+QQmlEngine.
+"""
+from __future__ import annotations
+
+from typing import Callable
+
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtQml import QJSValue
+
+from window_registry import (
+    DEFAULT_TAG,
+    WindowRegistry,
+    settings_path_for,
+    tasks_path_for,
+)
+
+
+def _rects_overlap(ax, ay, aw, ah, bx, by, bw, bh) -> bool:
+    return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
+
+
+class WindowManager(QObject):
+    windowsChanged = Signal()
+    # Emits the window_id currently under the pointer while a task drag is
+    # in progress (see TaskDelegate.qml's drag handle), plus the pointer's
+    # own global/screen position, or "" (with x=y=0) once it isn't over any
+    # window / the drag ended. Every window's Main.qml listens: it
+    # highlights its own border iff it's the target, AND — being the only
+    # one that actually knows its own ListView's contentY/row layout —
+    # converts the given global position into its own local list coordinates
+    # to drive that list's reflow-placeholder and edge auto-scroll. This is
+    # what lets one window's drag show a placeholder in a *different*
+    # window's list without a per-window DropArea or any direct reference
+    # between the two windows' QML trees.
+    taskDragHoverChanged = Signal(str, int, int)
+
+    def __init__(
+        self,
+        registry: WindowRegistry,
+        window_factory: Callable,
+        restore_factory: Callable | None = None,
+        drag_ghost=None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._registry = registry
+        self._window_factory = window_factory
+        # Rebuilds a window from its own persisted tasks/settings (no
+        # caller_state cloning, unlike window_factory) — used by openWindow()
+        # to bring a closed window back. Optional/None in tests that never
+        # exercise openWindow().
+        self._restore_factory = restore_factory
+        # A single app-wide DragGhost.qml instance (built once in main.py,
+        # reused for every drag) — see showDragGhost/moveDragGhost/
+        # hideDragGhost. Optional/None in tests that never exercise it; a
+        # plain QObject with QML dynamic properties (taskText/status/
+        # visible/x/y), driven via setProperty() rather than typed Python
+        # attributes since it's created from QML, not a Python class.
+        self._drag_ghost = drag_ghost
+        # Row index (within the current drop target window's own _visible
+        # list) the drag is hovering over right now, or -1 for "no specific
+        # row" — reported live by whichever window's Main.qml is the current
+        # target (see setDragHoverIndex below), since only that window's own
+        # QML layout actually knows it. Read back by moveTaskToWindow() at
+        # drop time so a cross-window move lands where its placeholder was
+        # shown, instead of always at the top.
+        self._drag_hover_index = -1
+        # window_id -> {"window": QQuickWindow, ...keepalive refs...}
+        self._windows: dict[str, dict] = {}
+
+    def register_window(self, window_id: str, window, **extra) -> None:
+        """Called by main.py right after a window is actually created."""
+        self._windows[window_id] = {"window": window, **extra}
+        window.visibleChanged.connect(
+            lambda visible, wid=window_id: (not visible) and self._on_window_closed(wid)
+        )
+
+    def _on_window_closed(self, window_id: str) -> None:
+        if window_id in self._windows:
+            del self._windows[window_id]
+            self.windowsChanged.emit()
+
+    def is_open(self, window_id: str) -> bool:
+        return window_id in self._windows
+
+    @Slot(result="QVariant")
+    def listWindows(self):
+        # "open" here is the *live* state (is it actually running right now,
+        # via is_open()) — not the persisted registry field of the same name
+        # (which only matters at next startup) — so the SHOW toggle in
+        # YatasView always reflects reality, including for a window closed
+        # or opened moments ago in this same session.
+        return [dict(e, open=self.is_open(e["id"])) for e in self._registry.list()]
+
+    @Slot(str, result=str)
+    def tagFor(self, window_id: str) -> str:
+        return self._registry.get_tag(window_id)
+
+    @Slot(str)
+    def closeWindow(self, window_id: str) -> None:
+        """Hides a window (YatasView's SHOW toggle, off) without touching its
+        registry entry or data files — unlike deleteWindow, it can be
+        reopened later via openWindow().
+
+        No-op if this is the only window currently open — same "at least one
+        must stay" guard as TaskListModel's visibility filters, and for the
+        same reason: closing the last one would leave nothing on screen and
+        no YatasView left to reach to reopen anything.
+        """
+        if window_id in self._windows and len(self._windows) <= 1:
+            return
+        entry = self._windows.pop(window_id, None)
+        if entry is not None:
+            entry["window"].close()
+        self._registry.set_open(window_id, False)
+        self.windowsChanged.emit()
+
+    @Slot(str)
+    def openWindow(self, window_id: str) -> None:
+        """Reopens a window previously closed via closeWindow() (YatasView's
+        SHOW toggle, on), rebuilt fresh from its own persisted tasks/settings
+        — same as at app startup."""
+        if self.is_open(window_id) or self._restore_factory is None:
+            return
+        self._restore_factory(window_id)
+        self._registry.set_open(window_id, True)
+        self.windowsChanged.emit()
+
+    @Slot(str, str)
+    def renameWindow(self, window_id: str, new_tag: str) -> None:
+        new_tag = new_tag.strip()
+        if not new_tag:
+            return
+        self._registry.rename(window_id, new_tag)
+        self.windowsChanged.emit()
+
+    @Slot(str, bool)
+    def deleteWindow(self, window_id: str, delete_data: bool) -> None:
+        entry = self._windows.pop(window_id, None)
+        if entry is not None:
+            entry["window"].close()
+
+        self._registry.remove(window_id)
+
+        if delete_data:
+            for path in (tasks_path_for(window_id), settings_path_for(window_id)):
+                if path:
+                    _remove_file(path)
+
+        self.windowsChanged.emit()
+
+    def _find_free_position(self, width: int, height: int, start_x: int, start_y: int):
+        occupied = [
+            (w["window"].x(), w["window"].y(), w["window"].width(), w["window"].height())
+            for w in self._windows.values()
+        ]
+        screen = QGuiApplication.primaryScreen().geometry()
+        step = 40
+        x, y = start_x + step, start_y + step
+        for _ in range(200):
+            if x + width > screen.x() + screen.width():
+                x = screen.x() + step
+            if y + height > screen.y() + screen.height():
+                y = screen.y() + step
+            if not any(_rects_overlap(x, y, width, height, *r) for r in occupied):
+                return x, y
+            x += step
+            y += step
+        return x, y
+
+    @Slot("QVariant", result=str)
+    def createWindow(self, caller_state) -> str:
+        # QML calls this with a JS object literal, which PySide hands over
+        # as a QJSValue (not auto-converted to a Python dict) — must be
+        # unwrapped via toVariant() first. Direct Python callers (tests)
+        # already pass a plain dict, so only convert when needed.
+        if isinstance(caller_state, QJSValue):
+            caller_state = caller_state.toVariant()
+        caller_state = dict(caller_state)
+        window_id = self._registry.add(self._registry.next_available_tag(DEFAULT_TAG))
+        width, height = int(caller_state["width"]), int(caller_state["height"])
+        x, y = self._find_free_position(width, height, int(caller_state["x"]), int(caller_state["y"]))
+        # The factory (main.py) is responsible for actually constructing the
+        # window and calling register_window() on it — this class stays
+        # agnostic of QQmlComponent/context mechanics.
+        self._window_factory(window_id, dict(caller_state, x=x, y=y))
+        self.windowsChanged.emit()
+        return window_id
+
+    @Slot(str, str)
+    def showDragGhost(self, text: str, status: str) -> None:
+        """Shows the app-wide floating drag preview (DragGhost.qml) — called
+        once a task's drag gesture actually starts, so the user can see what
+        they're moving even once the pointer leaves the source window's own
+        bounds (an ordinary QML Item can't render outside its own window)."""
+        if self._drag_ghost is None:
+            return
+        self._drag_ghost.setProperty("taskText", text)
+        self._drag_ghost.setProperty("status", status)
+        self._drag_ghost.setProperty("visible", True)
+
+    @Slot(int, int)
+    def moveDragGhost(self, global_x: int, global_y: int) -> None:
+        """Repositions the drag preview to track the pointer — small offset
+        so it trails just past the cursor rather than sitting exactly under
+        it (and, incidentally, never itself gets in the way of the
+        windowAt() hit-test, which uses the raw un-offset pointer position)."""
+        if self._drag_ghost is None:
+            return
+        self._drag_ghost.setProperty("x", global_x + 12)
+        self._drag_ghost.setProperty("y", global_y + 12)
+
+    @Slot()
+    def hideDragGhost(self) -> None:
+        if self._drag_ghost is None:
+            return
+        self._drag_ghost.setProperty("visible", False)
+
+    @Slot(int, int, result=str)
+    def windowAt(self, global_x: int, global_y: int) -> str:
+        """window_id of the open window (including the caller's own, if
+        that's genuinely where the point is — no exclusion, unlike earlier
+        versions of this method: same-window reorder and cross-window move
+        are now just two cases of "which window is currently under the
+        pointer") whose on-screen geometry contains the given point in
+        global/screen coordinates, or "" if none. Called on every pointer
+        move while dragging a task's handle (TaskDelegate.qml) to find the
+        drop target. Also broadcasts taskDragHoverChanged (with this same
+        point) so every window can update its own drop-target highlight and
+        placeholder, sparing the caller a second round trip just for that.
+        """
+        target = ""
+        for window_id, entry in self._windows.items():
+            if entry["window"].geometry().contains(global_x, global_y):
+                target = window_id
+                break
+        if target == "":
+            self._drag_hover_index = -1
+        self.taskDragHoverChanged.emit(target, global_x, global_y)
+        return target
+
+    @Slot(int)
+    def setDragHoverIndex(self, index: int) -> None:
+        """Called by whichever window's Main.qml is the current drop target,
+        right after it computes its own listView.dragHoverIndex from the
+        taskDragHoverChanged broadcast above — the connection is a direct,
+        same-thread Qt signal, so this always lands before windowAt() (which
+        triggered it) returns to its caller. moveTaskToWindow() reads this
+        back at drop time; nothing else needs it."""
+        self._drag_hover_index = index
+
+    @Slot()
+    def clearDragHover(self) -> None:
+        """Called once a task drag ends (drop or cancel) so no window is left
+        showing a stale drop-target highlight or placeholder."""
+        self._drag_hover_index = -1
+        self.taskDragHoverChanged.emit("", 0, 0)
+
+    @Slot(str, str, str, result=bool)
+    def moveTaskToWindow(self, source_window_id: str, task_id: str, target_window_id: str) -> bool:
+        """Moves one task from one open window's model/store to another's —
+        TaskDelegate.qml's drag handle, dropped on a different window
+        (detected via windowAt()) instead of a row in the same list. Lands
+        it at self._drag_hover_index (see setDragHoverIndex), i.e. wherever
+        the target window's own placeholder was last shown, not always at
+        the top."""
+        if source_window_id == target_window_id:
+            return False
+        source_entry = self._windows.get(source_window_id)
+        target_entry = self._windows.get(target_window_id)
+        if source_entry is None or target_entry is None:
+            return False
+        task = source_entry["task_model"].take_task(task_id)
+        if task is None:
+            return False
+        target_entry["task_model"].insert_task(task, self._drag_hover_index)
+        return True
+
+
+def _remove_file(path: str) -> None:
+    import os
+
+    if os.path.isfile(path):
+        os.remove(path)
+    # tasks_path_for() gives each instance its own directory
+    # (instances/<id>/tasks.json) — remove it if now empty, so deleted
+    # instances don't leave litter behind. settings_path_for()'s directory
+    # (instances/) is shared across instances and won't be empty in the
+    # common case; harmless to also try here (no-op if not empty).
+    parent = os.path.dirname(path)
+    try:
+        if os.path.isdir(parent) and not os.listdir(parent):
+            os.rmdir(parent)
+    except OSError:
+        pass

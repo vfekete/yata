@@ -9,7 +9,7 @@ import sys
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
@@ -45,21 +45,33 @@ def engine_and_model(qml_app, tmp_path, monkeypatch):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "yata-src"))
     import resources_rc  # noqa: F401,PLC0415 — registers qrc:/icons/*.svg etc.
     from icons import IconProvider  # noqa: PLC0415
-    from models import TaskListModel  # noqa: PLC0415
+    from main import _make_window  # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
     from storage import TaskStore  # noqa: PLC0415
+    from window_manager import WindowManager  # noqa: PLC0415
+    from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
 
-    task_model = TaskListModel(TaskStore())
     app_settings = AppSettings()
     icon_provider = IconProvider()
+    # Reuses main.py's real window-construction path (not a hand-rolled
+    # equivalent) specifically because it's the one already proven to build
+    # Theme/Main.qml correctly for r-3.md's multi-window support — a
+    # near-identical but not-quite-matching setup (e.g. creating Theme
+    # directly against engine.rootContext() instead of a per-window child
+    # QQmlContext, as an earlier version of this fixture did) reproduced
+    # "Unable to assign [undefined] to QColor" for every Theme.* consumer.
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    window_manager = WindowManager(registry, window_factory=lambda *a: None)
 
     engine = QQmlApplicationEngine()
     qml_dir = os.path.join(os.path.dirname(__file__), "..", "yata-src", "qml")
     engine.addImportPath(qml_dir)
-    engine.rootContext().setContextProperty("taskModel", task_model)
-    engine.rootContext().setContextProperty("appSettings", app_settings)
-    engine.rootContext().setContextProperty("iconProvider", icon_provider)
-    engine.load(os.path.join(qml_dir, "Main.qml"))
+
+    window = _make_window(
+        engine, icon_provider, window_manager, QIcon(),
+        DEFAULT_WINDOW_ID, TaskStore(), app_settings,
+    )
+    task_model = window_manager._windows[DEFAULT_WINDOW_ID]["task_model"]
 
     qml_app.processEvents()
     qml_app.processEvents()

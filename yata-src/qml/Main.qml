@@ -26,13 +26,73 @@ Window {
     property int calMonth: new Date().getMonth() + 1
     property int calYearPage: new Date().getFullYear()
 
+    // This window's own display tag (r-3.md multi-window support) — shown
+    // in the top border label below. windowId is a per-window context
+    // property (set once at creation in main.py, never changes); the tag
+    // itself is mutable (rename via YatasView, possibly from a *different*
+    // window if it's renaming this one from its own window list), so it's
+    // re-read from windowManager whenever ANY window's tag changes rather
+    // than cached as a one-shot value.
+    property string windowTag: windowManager.tagFor(windowId)
+    Connections {
+        target: windowManager
+        function onWindowsChanged() { root.windowTag = windowManager.tagFor(windowId) }
+    }
+    // Double-click the tag label (below) to rename it in place — swaps the
+    // label for tagEditField while true.
+    property bool editingTag: false
+
+    // True while another window's task drag is hovering over THIS window —
+    // drives the border highlight below. windowManager broadcasts one
+    // shared signal for every window rather than each polling its own
+    // geometry against the pointer. The same broadcast also carries the
+    // pointer's global position, which — only once translated into this
+    // window's own local coordinates below — drives listView's reflow
+    // placeholder and edge auto-scroll (see listView's own dragHoverActive/
+    // dragHoverIndex/lastDragLocalY, and TaskDelegate.qml's dragSource/
+    // showGapBelow, which key off exactly those two properties whether the
+    // hover target is this window's own list during a same-window drag or
+    // a different window's list during a cross-window one — one mechanism,
+    // not two).
+    property bool dragHoverActive: false
+    Connections {
+        target: windowManager
+        function onTaskDragHoverChanged(targetWindowId, globalX, globalY) {
+            root.dragHoverActive = targetWindowId === windowId
+            if (targetWindowId !== windowId) {
+                listView.dragHoverActive = false
+                listView.dragHoverIndex = -1
+                return
+            }
+            // mapFromItem(null, ...) is the inverse of the mapToItem(null,
+            // ...) technique TaskDelegate.qml uses to go the other
+            // direction — both convert between a window's own local
+            // (scene) coordinates and some other coordinate system, here
+            // going from "this window's local point" to "listView's own
+            // local point".
+            var posInWindow = Qt.point(globalX - root.x, globalY - root.y)
+            var posInListView = listView.mapFromItem(null, posInWindow.x, posInWindow.y)
+            listView.dragHoverActive = true
+            var idx = listView.indexAt(1, posInListView.y + listView.contentY)
+            if (idx >= 0)
+                listView.dragHoverIndex = idx
+            listView.lastDragLocalY = posInListView.y
+            // Reported back so a cross-window drop (TaskDelegate.qml calling
+            // windowManager.moveTaskToWindow, in the SOURCE window) knows
+            // where THIS (target) window's placeholder actually is — only
+            // this window's own layout can compute it, so it can't be
+            // derived from the source window's side of the drag.
+            windowManager.setDragHoverIndex(listView.dragHoverIndex)
+        }
+    }
+
     Shortcut {
         sequences: [StandardKey.ZoomIn]
-        onActivated: appSettings.fontScale = Math.min(appSettings.fontScale + 0.1, 2.0)
+        onActivated: appSettings.fontScale = Math.min(appSettings.fontScale + 0.1, appSettings.maxFontScale)
     }
     Shortcut {
         sequences: [StandardKey.ZoomOut]
-        onActivated: appSettings.fontScale = Math.max(appSettings.fontScale - 0.1, 0.5)
+        onActivated: appSettings.fontScale = Math.max(appSettings.fontScale - 0.1, appSettings.minFontScale)
     }
     Shortcut {
         sequence: "Ctrl+0"
@@ -43,7 +103,7 @@ Window {
     y: appSettings.y
     width: appSettings.width
     height: appSettings.height
-    // Twice the combined width of the ADD/RELOAD/THEME/LINKS toolbar
+    // Twice the combined width of the ADD/RELOAD/THEME/LINKS/YATAS toolbar
     // buttons, scaling with font zoom same as they do
     // (toolbar.actionButtonsWidth is itself font-scale-dependent) — below
     // this, FilterBar's groups have nowhere reasonable left to wrap into.
@@ -53,6 +113,28 @@ Window {
     onYChanged: appSettings.y = y
     onWidthChanged: appSettings.width = width
     onHeightChanged: appSettings.height = height
+
+    // Grows width up to minimumWidth when needed (e.g. a persisted width
+    // from before a toolbar button existed, now narrower than the real
+    // minimum — see CHANGELOG 0.15.4) — done as a plain imperative
+    // assignment, NOT folded into width's own binding above
+    // (width: Math.max(appSettings.width, minimumWidth)), because that
+    // shape is a genuine QML binding loop: width's binding would depend on
+    // appSettings.width, which onWidthChanged right above writes to on
+    // every width change, and the engine's binding-loop detector correctly
+    // flags that pattern (logged "Binding loop detected for property
+    // width" on every startup/window creation, even though it happens to
+    // converge rather than truly infinite-loop). An imperative assignment
+    // here breaks/replaces the `width: appSettings.width` binding the
+    // moment it actually needs to fire, exactly like a user's own resize
+    // already does — width keeps persisting correctly afterward via
+    // onWidthChanged either way.
+    function ensureMinimumWidth() {
+        if (width < minimumWidth)
+            width = minimumWidth
+    }
+    Component.onCompleted: ensureMinimumWidth()
+    onMinimumWidthChanged: ensureMinimumWidth()
 
     // Right-click anywhere on the background for theme + quit. Placed first so
     // real controls (declared later / painted on top) get first refusal at clicks.
@@ -83,9 +165,9 @@ Window {
                 // Default (not inverted): scroll up → zoom in, scroll down → zoom out.
                 var zoomIn = appSettings.wheelZoomInverted ? !scrollingUp : scrollingUp
                 if (zoomIn)
-                    appSettings.fontScale = Math.min(appSettings.fontScale + 0.1, 2.0)
+                    appSettings.fontScale = Math.min(appSettings.fontScale + 0.1, appSettings.maxFontScale)
                 else
-                    appSettings.fontScale = Math.max(appSettings.fontScale - 0.1, 0.5)
+                    appSettings.fontScale = Math.max(appSettings.fontScale - 0.1, appSettings.minFontScale)
             }
         }
     }
@@ -99,8 +181,18 @@ Window {
         // The window itself stays fully transparent (per spec); this wash is
         // what actually paints each tint's background, translucent so the
         // window still reads as "transparent" rather than opaque.
+        //
+        // topMargin reserves room for the tag label below to straddle this
+        // Rectangle's top edge (half above it, half below — see tagLabelBg)
+        // — the label can't be positioned with a negative y to achieve that
+        // the usual way: a QQuickWindow's real drawable surface starts at
+        // y=0, so any content above that is genuinely not rendered on a
+        // live composited window (confirmed live; this was invisible in
+        // offscreen grabWindow() testing, which is apparently more
+        // forgiving of negative-y content than a real GPU-backed surface).
         Rectangle {
             anchors.fill: parent
+            anchors.topMargin: tagLabelBg.height / 2
             radius: 6
             color: Theme.contentBackground
         }
@@ -108,6 +200,11 @@ Window {
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 6
+            // Extra headroom so the toolbar doesn't collide with the tag
+            // label sitting on the border line above it (see tagLabelBg
+            // near the bottom of this file) — scales with the label's own
+            // (font-zoom-dependent) height rather than a fixed guess.
+            anchors.topMargin: 6 + tagLabelBg.height / 2 + 4
             spacing: 2
 
             Toolbar {
@@ -115,6 +212,19 @@ Window {
                 Layout.fillWidth: true
                 linksActive: filterBar.linksActive
                 onLinksToggled: filterBar.setGrouping("links", !filterBar.linksActive)
+                yatasActive: filterBar.yatasActive
+                onYatasToggled: filterBar.setGrouping("yatas", !filterBar.yatasActive)
+                onAddWindowRequested: windowManager.createWindow({
+                    themeMode: appSettings.themeMode,
+                    themeTint: appSettings.themeTint,
+                    opacityPercent: appSettings.opacityPercent,
+                    fontScale: appSettings.fontScale,
+                    wheelZoomInverted: appSettings.wheelZoomInverted,
+                    x: root.x,
+                    y: root.y,
+                    width: root.width,
+                    height: root.height
+                })
             }
 
             FilterBar {
@@ -129,7 +239,7 @@ Window {
                 ListView {
                     id: listView
                     anchors.fill: parent
-                    visible: !filterBar.monthActive && !filterBar.yearActive && !filterBar.linksActive
+                    visible: !filterBar.monthActive && !filterBar.yearActive && !filterBar.linksActive && !filterBar.yatasActive
                     clip: true
                     spacing: 0
                     model: taskModel
@@ -140,9 +250,57 @@ Window {
                     section.delegate: sectionHeader
 
                     // Drag-to-reorder state, read by TaskDelegate instances.
+                    // dragActive/dragFromIndex are only ever set by THIS
+                    // window's own row when IT is the one being dragged
+                    // (they mean "I am the drag's origin", regardless of
+                    // where the pointer currently is).
                     property bool dragActive: false
                     property int dragFromIndex: -1
+                    // dragHoverActive/dragHoverIndex mean "I am the drag's
+                    // CURRENT target right now" — driven for whichever
+                    // window that is (this one, mid-reorder, or a different
+                    // one during a cross-window move) by the root Window's
+                    // Connections on windowManager.taskDragHoverChanged
+                    // above, not computed locally here.
+                    property bool dragHoverActive: false
                     property int dragHoverIndex: -1
+                    // Set (to another window's id, or this window's own —
+                    // windowAt() no longer excludes the caller) while a
+                    // task's drag handle is hovering any window, computed by
+                    // TaskDelegate.qml via windowManager.windowAt() — ""
+                    // means not currently over any window at all.
+                    property string dragTargetWindowId: ""
+                    // Last local Y (within listView's own viewport, not
+                    // content coordinates) the drag hovered at, whether via
+                    // this window's own DragHandler or the cross-window
+                    // Connections handler — drives edgeScrollTimer below.
+                    property real lastDragLocalY: -1
+
+                    // Auto-scrolls the list while a drag hovers near its top
+                    // or bottom edge — same "if possible" clamping a manual
+                    // scrollbar drag already gets for free from Flickable,
+                    // done manually here since this isn't a real scrollbar
+                    // drag. Runs continuously (not re-armed per pointer move)
+                    // so holding near an edge keeps scrolling smoothly.
+                    Timer {
+                        id: edgeScrollTimer
+                        interval: 16
+                        repeat: true
+                        running: listView.dragHoverActive
+                        onTriggered: {
+                            if (listView.lastDragLocalY < 0)
+                                return
+                            var edge = 40
+                            var step = 8
+                            var maxContentY = Math.max(0, listView.contentHeight - listView.height)
+                            if (listView.lastDragLocalY < edge && listView.contentY > 0) {
+                                listView.contentY = Math.max(0, listView.contentY - step)
+                            } else if (listView.lastDragLocalY > listView.height - edge
+                                       && listView.contentY < maxContentY) {
+                                listView.contentY = Math.min(maxContentY, listView.contentY + step)
+                            }
+                        }
+                    }
 
                     // Briefly tints the row a "to task" navigation lands on,
                     // standing in for the hover highlight the real mouse
@@ -260,6 +418,17 @@ Window {
                         })
                     }
                 }
+
+                // Replaces the task list entirely while active, same as
+                // Links/Month/Year (r-3.md). Row click intentionally does
+                // nothing beyond rename (double-click) and delete (trash
+                // icon) — there's no "switch to that window" affordance,
+                // by explicit design choice.
+                YatasView {
+                    anchors.fill: parent
+                    visible: filterBar.yatasActive
+                    searchText: toolbar.searchText
+                }
             }
         }
 
@@ -317,10 +486,97 @@ Window {
 
         Rectangle {
             anchors.fill: parent
+            anchors.topMargin: tagLabelBg.height / 2
             color: "transparent"
             radius: 6
-            border.color: Theme.borderColor
-            border.width: 1
+            // Drop-target affordance for cross-window task drag (see
+            // TaskDelegate.qml's drag handle / windowManager.windowAt()) —
+            // filterGlowColor is the default cyan for "none", or the
+            // selected tint's own accent color, same rule as every other
+            // on/active glow in this app (FilterBar's toggle buttons, and
+            // now TaskDelegate's drop placeholder too).
+            border.color: root.dragHoverActive ? Theme.filterGlowColor : Theme.borderColor
+            border.width: root.dragHoverActive ? 2 : 1
+        }
+
+        // This window's tag, drawn "cutting into" the top border line like
+        // a fieldset legend (r-3.md's ASCII mockup: "+--[ TAG NAME ]---+").
+        // Double-click to rename in place (also possible via YatasView's
+        // row, unchanged) — editingTag swaps this label out for
+        // tagEditField below, matching the read/edit-field-swap convention
+        // used throughout this app (TaskDelegate, YatasRow).
+        //
+        // y is 0, not -height/2 — the two Rectangles above reserve exactly
+        // height/2 of real space for it via their own topMargin, so its
+        // vertical center still lands exactly on their (now inset) top
+        // edge, without any part of the label needing a negative,
+        // off-surface y (see the wash Rectangle's comment above for why
+        // that doesn't render on a live window).
+        Rectangle {
+            id: tagLabelBg
+            x: 14
+            y: 0
+            visible: !root.editingTag
+            radius: 3
+            color: Theme.tintName === "none"
+                   ? (Theme.dark ? "#111827" : "#f9fafb")
+                   : Theme.contentBackground
+            // Capped so a long custom tag (or a large font zoom) can never
+            // push this label past the window's own right edge, where it'd
+            // just get clipped by the window itself — elide instead.
+            width: Math.min(tagLabelText.implicitWidth, root.width - x - 14) + 12
+            height: tagLabelText.implicitHeight + 4
+
+            Text {
+                id: tagLabelText
+                anchors.centerIn: parent
+                width: parent.width - 12
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
+                text: root.windowTag
+                color: Theme.textColor
+                font.bold: true
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.8)
+            }
+
+            TapHandler {
+                onDoubleTapped: root.editingTag = true
+            }
+        }
+
+        // Edit-mode swap-in for the tag label above, styled like the
+        // toolbar search field (same rounded Theme.fieldColor background)
+        // per explicit request. Spans from the label's own start x to half
+        // the window's width, rather than matching tagLabelBg's own
+        // (much narrower, elide-capped) width.
+        TextField {
+            id: tagEditField
+            x: tagLabelBg.x
+            y: 0
+            width: root.width / 2 - x
+            visible: root.editingTag
+            text: root.windowTag
+            color: Theme.textColor
+            font.bold: true
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.8)
+            background: Rectangle {
+                radius: 4
+                color: Theme.fieldColor
+            }
+
+            onVisibleChanged: if (visible) { selectAll(); forceActiveFocus() }
+
+            function commit() {
+                root.editingTag = false
+                var trimmed = text.trim()
+                if (trimmed.length > 0 && trimmed !== root.windowTag)
+                    windowManager.renameWindow(windowId, trimmed)
+            }
+            onEditingFinished: commit()
+            Keys.onReturnPressed: commit()
+            Keys.onEscapePressed: root.editingTag = false
         }
     }
 }

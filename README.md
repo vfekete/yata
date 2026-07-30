@@ -61,6 +61,16 @@ sticky note.
   status or filters, each showing its status and a button that scrolls back
   to that task; the search field searches link labels/URLs while this view
   is active instead of task text
+- **Multiple windows**, for separating e.g. work from personal todos: each
+  window has its own tasks, theme and position, shown as a tag label on the
+  window's own top border (double-click a row in the YATAS list, below, to
+  rename it — default tag is "YATA"). The "YATAS" toolbar button switches to
+  a list of every window; ADD there opens a new window (cloning the current
+  window's theme, positioned so it doesn't overlap existing ones) instead of
+  adding a task, and the search field searches window tags. Each row has a
+  delete button; deleting always asks for confirmation, with an (unchecked
+  by default) option to also delete that window's tasks and settings —
+  closing it first if it's currently open.
 
 ## Usage notes
 

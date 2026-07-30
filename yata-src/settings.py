@@ -8,10 +8,29 @@ ASPECT_WIDTH = 9
 ASPECT_HEIGHT = 16
 FIRST_RUN_WIDTH_RATIO = 0.20
 
+
+def _read_bool(s: QSettings, key: str, default: bool) -> bool:
+    """Read a boolean from QSettings, correctly handling stored 'false' strings.
+
+    QSettings' native/INI backend round-trips bools as the literal text
+    "true"/"false" — reading one back without a type hint can hand you the
+    *string* "false", and `bool("false")` is True (any non-empty string is
+    truthy in Python). Same helper as models.py's `_read_bool`, duplicated
+    here rather than imported to avoid a settings.py -> models.py
+    dependency for one 6-line utility.
+    """
+    v = s.value(key, default)
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.lower() not in ("false", "0", "no")
+    return bool(v)
+
 THEME_MODES = ("light", "dark")
 # "none" is the safe default: it keeps the plain look. The rest recreate old
 # CRT/terminal displays (green/amber phosphor, paperwhite monitor, teletype
-# paper) and are handled entirely in Theme.qml.
+# paper) and are handled entirely in qml/ThemeImpl.qml (exposed to the rest
+# of the QML tree as the context property "Theme" — see main.py).
 THEME_TINTS = ("none", "green", "goldenrod", "white", "black")
 
 DEFAULT_OPACITY_PERCENT = 65
@@ -20,7 +39,13 @@ MAX_OPACITY_PERCENT = 100
 
 DEFAULT_FONT_SCALE = 1.0
 MIN_FONT_SCALE = 0.5
-MAX_FONT_SCALE = 2.0
+# Not literally unbounded — Qt's font.pixelSize is still a real int under
+# the hood, and an astronomically large value risks overflow/undefined
+# behavior there. 200x (2800px base task text at the default 14px) is
+# effectively "as far as you'd ever actually zoom" while staying nowhere
+# near that ceiling — picked over true infinity per explicit user request
+# ("preferably indefinitely, even if it looks ugly and unreadable").
+MAX_FONT_SCALE = 200.0
 
 
 def monitor_signature() -> str:
@@ -69,9 +94,7 @@ class AppSettings(QObject):
         self._font_scale = self._clamp_font_scale(
             self._settings.value("theme/fontScale", DEFAULT_FONT_SCALE)
         )
-        self._wheel_zoom_inverted = bool(
-            self._settings.value("theme/wheelZoomInverted", False)
-        )
+        self._wheel_zoom_inverted = _read_bool(self._settings, "theme/wheelZoomInverted", False)
 
     @staticmethod
     def _clamp_opacity(value) -> int:
@@ -93,6 +116,7 @@ class AppSettings(QObject):
             )
         x, y, width, height = first_run_geometry()
         self._settings.setValue("window/monitorSignature", current_signature)
+        self._settings.sync()
         return x, y, width, height
 
     def _save_geometry(self):
@@ -101,6 +125,7 @@ class AppSettings(QObject):
         self._settings.setValue("window/y", self._y)
         self._settings.setValue("window/width", self._width)
         self._settings.setValue("window/height", self._height)
+        self._settings.sync()
 
     def _get_x(self) -> int:
         return self._x
@@ -162,6 +187,7 @@ class AppSettings(QObject):
             return
         self._theme_mode = value
         self._settings.setValue("theme/mode", value)
+        self._settings.sync()
         self.themeModeChanged.emit()
 
     themeMode = Property(str, _get_theme_mode, _set_theme_mode, notify=themeModeChanged)
@@ -174,6 +200,7 @@ class AppSettings(QObject):
             return
         self._theme_tint = value
         self._settings.setValue("theme/tint", value)
+        self._settings.sync()
         self.themeTintChanged.emit()
 
     themeTint = Property(str, _get_theme_tint, _set_theme_tint, notify=themeTintChanged)
@@ -187,6 +214,7 @@ class AppSettings(QObject):
             return
         self._opacity_percent = value
         self._settings.setValue("theme/opacityPercent", value)
+        self._settings.sync()
         self.opacityPercentChanged.emit()
 
     opacityPercent = Property(
@@ -202,6 +230,7 @@ class AppSettings(QObject):
             return
         self._font_scale = value
         self._settings.setValue("theme/fontScale", value)
+        self._settings.sync()
         self.fontScaleChanged.emit()
 
     fontScale = Property(float, _get_font_scale, _set_font_scale, notify=fontScaleChanged)
@@ -215,6 +244,7 @@ class AppSettings(QObject):
             return
         self._wheel_zoom_inverted = value
         self._settings.setValue("theme/wheelZoomInverted", value)
+        self._settings.sync()
         self.wheelZoomInvertedChanged.emit()
 
     wheelZoomInverted = Property(
@@ -226,3 +256,5 @@ class AppSettings(QObject):
     # shortcut both need them).
     defaultOpacityPercent = Property(int, lambda self: DEFAULT_OPACITY_PERCENT, constant=True)
     defaultFontScale = Property(float, lambda self: DEFAULT_FONT_SCALE, constant=True)
+    minFontScale = Property(float, lambda self: MIN_FONT_SCALE, constant=True)
+    maxFontScale = Property(float, lambda self: MAX_FONT_SCALE, constant=True)

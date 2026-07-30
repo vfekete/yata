@@ -3,6 +3,8 @@ from PySide6.QtCore import QSettings
 from settings import (
     DEFAULT_FONT_SCALE,
     DEFAULT_OPACITY_PERCENT,
+    MAX_FONT_SCALE,
+    MIN_FONT_SCALE,
     AppSettings,
     first_run_geometry,
     monitor_signature,
@@ -122,14 +124,17 @@ def test_opacity_percent_clamps_to_5_100_and_is_integer(tmp_path):
     assert isinstance(settings.opacityPercent, int)
 
 
-def test_font_scale_clamps_to_0_5_2_0(tmp_path):
+def test_font_scale_clamps_to_min_and_max(tmp_path):
     settings = AppSettings(settings=ini_settings(tmp_path))
 
-    settings.fontScale = 10.0
-    assert settings.fontScale == 2.0
+    settings.fontScale = MAX_FONT_SCALE + 100.0
+    assert settings.fontScale == MAX_FONT_SCALE
 
-    settings.fontScale = 0.01
-    assert settings.fontScale == 0.5
+    settings.fontScale = MIN_FONT_SCALE - 0.1
+    assert settings.fontScale == MIN_FONT_SCALE
+
+    assert settings.minFontScale == MIN_FONT_SCALE
+    assert settings.maxFontScale == MAX_FONT_SCALE
 
 
 def test_wheel_zoom_inverted_defaults_false_and_persists(tmp_path):
@@ -143,3 +148,29 @@ def test_wheel_zoom_inverted_defaults_false_and_persists(tmp_path):
 
     s2 = AppSettings(settings=backing)
     assert s2.wheelZoomInverted is True
+
+
+def test_settings_persist_to_disk_without_explicit_caller_sync(tmp_path):
+    """Regression test: every AppSettings setter used to call setValue()
+    without ever calling sync() itself, relying entirely on QSettings'
+    deferred/implicit flush (periodic auto-sync or sync-on-destruction).
+    That flush depends on teardown ordering that isn't guaranteed —
+    Python's GC order, a killed session, or the process exiting before the
+    delayed write fires can all lose the change.
+
+    Deliberately reads the *raw file bytes* from disk rather than via a
+    second QSettings pointed at the same path: Qt caches an open file's
+    QConfFile process-wide, so a second QSettings instance in the same
+    process sees the unsynced in-memory value regardless of whether it was
+    ever actually flushed to disk — which is exactly why the previous
+    version of this test (constructing a fresh AppSettings against the same
+    path, with an explicit backing.sync() the setter didn't need) passed
+    even against the unfixed code. Confirmed via a stash A/B: this version
+    fails without the .sync() calls in AppSettings' setters and passes with
+    them."""
+    ini_path = tmp_path / "settings.ini"
+    s = AppSettings(settings=QSettings(str(ini_path), QSettings.IniFormat))
+    s.wheelZoomInverted = True
+
+    assert ini_path.exists()
+    assert "wheelZoomInverted=true" in ini_path.read_text()

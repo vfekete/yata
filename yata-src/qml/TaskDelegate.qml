@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
+import QtQuick.Window
 
 Item {
     id: root
@@ -32,13 +33,40 @@ Item {
         editField.forceActiveFocus()
     }
 
+    // True for the whole duration of a drag this row is the source of —
+    // its own slot collapses to nothing (below) so the rest of the list
+    // steps up to fill the gap, matching what the list will actually look
+    // like once dropped, rather than leaving a static faded placeholder
+    // behind in its original spot.
+    readonly property bool dragSource: root.ListView.view.dragActive
+                                        && root.index === root.ListView.view.dragFromIndex
+    // True when THIS row is where the drop would land right now — driven
+    // by dragHoverActive/dragHoverIndex, which Main.qml's Connections on
+    // windowManager.taskDragHoverChanged keeps updated for whichever
+    // window is currently the hover target (this window itself while
+    // reordering in place, or a different window's list during a
+    // cross-window drag — same mechanism, same properties, either way).
+    readonly property bool showGapBelow: root.ListView.view.dragHoverActive
+                                          && root.ListView.view.dragHoverIndex === root.index
+                                          && !(root.ListView.view.dragActive
+                                               && root.ListView.view.dragFromIndex === root.index)
+    // A single-line-height approximation of "how tall the dropped item
+    // would look here" — not the dragged task's own actual (possibly
+    // multi-line) height, which would need broadcasting a third value
+    // alongside DragGhost's text/status; the shaped, highlighted box
+    // conveys "it goes here" without needing to be pixel-exact.
+    readonly property int gapHeight: Math.max(30, Theme.taskFontPixelSize + 16)
+
     width: ListView.view.width
-    height: Math.max(30, mainRow.implicitHeight + 12)
+    height: (dragSource ? 0 : Math.max(30, mainRow.implicitHeight + 12)) + (showGapBelow ? gapHeight : 0)
     // Hovering toggles taskText between wrapped/elided, which changes
     // mainRow.implicitHeight and thus this row's height. Without animating
     // that change, the instant resize shifts every row below it under the
     // pointer in the same frame, so the mouse ends up over a different row
     // than the one it was just on ("jumping" — see claude-docs/freq/r-1.md).
+    // The same animation now also covers dragSource's collapse-to-0 and
+    // showGapBelow's placeholder growing in, so the whole list reflows
+    // smoothly rather than snapping.
     Behavior on height {
         NumberAnimation { duration: 120; easing.type: Easing.InOutQuad }
     }
@@ -71,6 +99,92 @@ Item {
     TapHandler {
         acceptedButtons: Qt.RightButton
         onTapped: itemMenu.popup()
+    }
+
+    // Press-and-drag from anywhere on the row (not just the "⋮⋮" handle
+    // glyph below, which is now purely a visual hint) — a DragHandler
+    // rather than a MouseArea specifically because it only takes the
+    // exclusive grab once the pointer crosses the platform's real drag
+    // threshold. A plain click/double-click (edit), a link tap, a
+    // hover-button tap, or a right-click (context menu) never reaches that
+    // threshold, so this handler simply never activates for those and every
+    // other gesture on this row keeps working exactly as before — the
+    // standard Qt Quick pattern for letting a tap and a drag coexist on the
+    // same item without one stealing the other's events.
+    DragHandler {
+        id: rowDrag
+        target: null
+        enabled: !root.editing && taskModel.canReorder
+        acceptedButtons: Qt.LeftButton
+
+        onActiveChanged: {
+            var view = root.ListView.view
+            if (active) {
+                view.dragActive = true
+                view.dragFromIndex = root.index
+                view.dragHoverIndex = root.index
+                // Floating preview of the row being dragged (DragGhost.qml,
+                // one app-wide instance) — stays visible even once the
+                // pointer leaves this window's own bounds, unlike anything
+                // drawn as a normal Item here.
+                windowManager.showDragGhost(root.text, root.status)
+                return
+            }
+            // Captured up front, before any model-mutating call below:
+            // moving the task to another window removes it from THIS
+            // window's model, which synchronously destroys this exact
+            // delegate (unlike same-window reorder, where the row still
+            // exists afterward, just repositioned, so the delegate
+            // survives) — see 0.18.1's fix for the same reasoning, `view`
+            // above already followed it too.
+            var wm = windowManager
+            if (view.dragActive) {
+                if (view.dragTargetWindowId !== "" && view.dragTargetWindowId !== windowId) {
+                    wm.moveTaskToWindow(windowId, root.taskId, view.dragTargetWindowId)
+                } else if (view.dragTargetWindowId === windowId
+                           && view.dragHoverIndex >= 0 && view.dragHoverIndex !== view.dragFromIndex) {
+                    taskModel.moveTask(view.dragFromIndex, view.dragHoverIndex)
+                }
+                // else: dropped outside every window, or back on its own
+                // original slot — cancel, nothing to do, the row's own
+                // collapsed height (see dragSource below) springs back on
+                // its own once dragActive/dragFromIndex reset below.
+            }
+            wm.hideDragGhost()
+            wm.clearDragHover()
+            view.dragActive = false
+            view.dragFromIndex = -1
+            view.dragHoverIndex = -1
+            view.dragTargetWindowId = ""
+        }
+
+        onCentroidChanged: {
+            var view = root.ListView.view
+            if (!view.dragActive)
+                return
+            // Also check whether the pointer is over a *different* YATA
+            // window (multi-window drag) — mapToItem(null, ...) gives
+            // window-local content coords (this window has no decorations
+            // to offset by), and every top-level QWindow's own x/y is
+            // already in global/screen space, so adding them together is
+            // the pointer's true global position without needing
+            // QQuickWindow.mapToGlobal.
+            //
+            // windowAt() no longer excludes this window — dragging within
+            // the source window is now just "the pointer happens to be over
+            // the same window's geometry", the same case as any other
+            // window, so ITS OWN row-reflow/placeholder/auto-scroll is
+            // driven the identical way, via windowManager's broadcast (see
+            // Main.qml's Connections on taskDragHoverChanged) rather than
+            // computed locally here — one single code path for both
+            // same-window and cross-window hovering, not two.
+            var win = root.Window.window
+            var posInWindow = root.mapToItem(null, centroid.position.x, centroid.position.y)
+            var globalX = win.x + posInWindow.x
+            var globalY = win.y + posInWindow.y
+            view.dragTargetWindowId = windowManager.windowAt(globalX, globalY)
+            windowManager.moveDragGhost(globalX, globalY)
+        }
     }
 
     // When the user clicks on a non-editing task row, take focus from whatever
@@ -127,24 +241,49 @@ Item {
         }
     }
 
-    // Marks the current drop target while a drag is in progress.
+    // Row-shaped drop-target placeholder — reserved via showGapBelow's
+    // contribution to height above, so it's real reflowed space (every row
+    // after this one visibly steps down to make room), not just an overlay
+    // painted on top of existing content. Bottom-anchored so it occupies
+    // exactly the newly-added extra space at the bottom — this only works
+    // cleanly because mainRow below is now top-anchored with a fixed
+    // margin (not vertically centered in the whole, now-taller, box): a
+    // centered mainRow would recentre *downward* into the placeholder's
+    // own space as height grew, visibly overlapping/cutting through its
+    // own content — that's exactly what this fixes, mainRow's on-screen
+    // position no longer depends on how tall the placeholder makes the row.
+    // filterGlowColor is the same "default cyan glow / tint's own accent
+    // for CRT themes" rule already used for every other on/active glow in
+    // this app (FilterBar's toggle buttons).
     Rectangle {
-        visible: root.ListView.view.dragActive
-                 && root.ListView.view.dragHoverIndex === root.index
-                 && root.index !== root.ListView.view.dragFromIndex
-        anchors.top: parent.top
-        width: parent.width
-        height: 2
-        color: Theme.accentColor
+        id: dropPlaceholder
+        visible: root.showGapBelow
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: root.gapHeight
+        radius: 4
+        color: Qt.rgba(Theme.filterGlowColor.r, Theme.filterGlowColor.g, Theme.filterGlowColor.b, 0.15)
+        border.color: Theme.filterGlowColor
+        border.width: 2
     }
 
-    opacity: root.ListView.view.dragActive && root.ListView.view.dragFromIndex === root.index ? 0.4 : 1.0
+    opacity: root.dragSource ? 0.4 : 1.0
 
     RowLayout {
         id: mainRow
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
+        // Top-anchored with a fixed margin, NOT vertically centered — this
+        // row's own height is Math.max(30, mainRow.implicitHeight + 12), so
+        // a 6px top margin reproduces the same look as centering did for a
+        // normal row (12px split evenly), but — unlike centering — keeps
+        // mainRow's position fixed even when extra height gets appended
+        // below it for the drop placeholder (see dropPlaceholder above);
+        // centering would otherwise shift mainRow down into that reserved
+        // space as the row grows taller, visibly overlapping it.
+        anchors.top: parent.top
+        anchors.topMargin: 6
         // Day-grouped view gets extra left indent so rows read as nested
         // under their day header rather than flush with it.
         anchors.leftMargin: taskModel.groupByDay ? 24 : 4
@@ -156,39 +295,12 @@ Item {
             text: "⋮⋮"
             color: Theme.mutedTextColor
             font.family: Theme.fontFamily
+            // Purely a visual hint now — the actual drag gesture (rowDrag
+            // above) works from anywhere on the row, not just this glyph.
             visible: root.hovered && taskModel.canReorder
             Layout.alignment: Qt.AlignVCenter
 
-            MouseArea {
-                anchors.fill: parent
-                anchors.margins: -4
-                cursorShape: Qt.SizeVerCursor
-                preventStealing: true
-
-                onPressed: {
-                    var view = root.ListView.view
-                    view.dragActive = true
-                    view.dragFromIndex = root.index
-                    view.dragHoverIndex = root.index
-                }
-                onPositionChanged: (mouse) => {
-                    var view = root.ListView.view
-                    if (!view.dragActive)
-                        return
-                    var posInView = mapToItem(view, mouse.x, mouse.y)
-                    var idx = view.indexAt(1, posInView.y + view.contentY)
-                    if (idx >= 0)
-                        view.dragHoverIndex = idx
-                }
-                onReleased: {
-                    var view = root.ListView.view
-                    if (view.dragActive && view.dragHoverIndex >= 0 && view.dragHoverIndex !== view.dragFromIndex)
-                        taskModel.moveTask(view.dragFromIndex, view.dragHoverIndex)
-                    view.dragActive = false
-                    view.dragFromIndex = -1
-                    view.dragHoverIndex = -1
-                }
-            }
+            HoverHandler { cursorShape: Qt.SizeVerCursor }
         }
 
         Column {
@@ -437,6 +549,14 @@ Item {
         modal: true
         title: "Delete task?"
         font.pixelSize: Theme.taskFontPixelSize
+        // Explicit width so implicitWidth doesn't have to be derived from
+        // font-scaled content — without this, changing font.pixelSize
+        // above (e.g. on every Ctrl+=/Ctrl+- zoom step) fed back into this
+        // Dialog's own implicitWidth calculation and Qt Quick Controls'
+        // Basic style logged "Binding loop detected for property
+        // implicitWidth" repeatedly. Same fix/formula as
+        // DeleteWindowDialog.qml's width.
+        width: Math.max(260, Math.round(Theme.taskFontPixelSize * 20))
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAccepted: taskModel.deleteTask(root.taskId)
 

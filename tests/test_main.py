@@ -1,0 +1,79 @@
+"""Regression tests for main.py's startup logic (not the full app entry
+point, which needs a real QGuiApplication/QML engine — just the pure
+window-selection logic factored out into _windows_to_restore())."""
+import pytest
+
+from main import _windows_to_restore
+from window_registry import DEFAULT_TAG, DEFAULT_WINDOW_ID, WindowRegistry
+
+
+@pytest.fixture(autouse=True)
+def isolated_xdg(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+
+def test_restores_every_window_not_just_default(tmp_path):
+    """Regression test for the bug where restarting the app only ever
+    reopened the original/default window — any additional window created
+    via YATAS+ADD was silently never shown again after a restart, even
+    though its data was still safely on disk."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    second_id = registry.add("Personal")
+    third_id = registry.add("Work")
+
+    restored_ids = {e["id"] for e in _windows_to_restore(registry)}
+
+    assert restored_ids == {DEFAULT_WINDOW_ID, second_id, third_id}
+
+
+def test_restores_default_only_on_first_run(tmp_path):
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+
+    restored = _windows_to_restore(registry)
+
+    assert [e["id"] for e in restored] == [DEFAULT_WINDOW_ID]
+
+
+def test_closed_windows_are_not_restored(tmp_path):
+    """A window closed via YatasView's SHOW toggle stays closed across a
+    restart, same as the user left it."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    kept_open = registry.add("Personal")
+    closed = registry.add("Work")
+    registry.set_open(closed, False)
+
+    restored_ids = {e["id"] for e in _windows_to_restore(registry)}
+
+    assert restored_ids == {DEFAULT_WINDOW_ID, kept_open}
+
+
+def test_reopens_everything_if_every_window_was_closed(tmp_path):
+    """Edge case: every window was individually closed — startup must still
+    show something rather than launch with zero windows and no way to reach
+    YATAS to reopen one."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    registry.set_open(DEFAULT_WINDOW_ID, False)
+
+    restored = _windows_to_restore(registry)
+
+    assert [e["id"] for e in restored] == [DEFAULT_WINDOW_ID]
+    # And it's actually persisted, not just returned in-memory.
+    assert registry.list() == restored
+
+
+def test_seeds_a_fresh_window_if_registry_is_completely_empty(tmp_path):
+    """Edge case: the user deleted every window, including "default" —
+    startup should still show something rather than launch with zero
+    windows and nothing to interact with."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    registry.remove(DEFAULT_WINDOW_ID)
+    assert registry.list() == []
+
+    restored = _windows_to_restore(registry)
+
+    assert len(restored) == 1
+    assert restored[0]["tag"] == DEFAULT_TAG
+    assert restored[0]["id"] != DEFAULT_WINDOW_ID  # never resurrects the reserved id
+    # And it's actually persisted, not just returned in-memory.
+    assert registry.list() == restored

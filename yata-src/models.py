@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import datetime
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QSettings, Qt, Signal, Slot, Property
@@ -162,20 +163,60 @@ class TaskListModel(QAbstractListModel):
     def _save(self):
         self._store.save(self._tasks)
 
-    @Slot(result=str)
-    def addTask(self) -> str:
-        # Drop any empty tasks left over from a previous ADD that was
-        # abandoned without typing anything (click-away without Enter/Esc).
-        self._tasks = [t for t in self._tasks if t.text]
-        task = Task(text="", status=STATUS_ACTIVE)
-        self._tasks.insert(0, task)
+    def _insert(self, task: Task, at: int = 0) -> None:
+        self._tasks.insert(at, task)
         was_reorderable = self._get_can_reorder()
         self._recompute()
         if was_reorderable != self._get_can_reorder():
             self.canReorderChanged.emit()
         self._save()
         self.taskAdded.emit(task.id)
+
+    @Slot(result=str)
+    def addTask(self) -> str:
+        # Drop any empty tasks left over from a previous ADD that was
+        # abandoned without typing anything (click-away without Enter/Esc).
+        self._tasks = [t for t in self._tasks if t.text]
+        task = Task(text="", status=STATUS_ACTIVE)
+        self._insert(task)
         return task.id
+
+    def insert_task(self, task: Task, target_index: int = -1) -> None:
+        """Inserts a Task moved in from another window's model (see
+        WindowManager.moveTaskToWindow) — not a QML-facing Slot, only called
+        Python-to-Python between two TaskListModel instances WindowManager
+        already holds references to. Reassigns a fresh id on the (astronomically
+        unlikely, uuid4) chance it collides with an existing task in this
+        store, keeping "ids are unique per store" airtight.
+
+        target_index is the row (in this model's current _visible list) the
+        drop was hovering over, as tracked by WindowManager from the target
+        window's own live placeholder position — lands the task right after
+        that row, matching moveTask()'s identical "insert after, not at"
+        semantics for TaskDelegate.qml's drop placeholder. -1 (no specific
+        row hovered — dropped below the last item, or onto an empty list)
+        falls back to inserting at the top, same as every other "new task"
+        entry point in this app."""
+        if self._find(task.id) is not None:
+            task.id = uuid.uuid4().hex
+        if 0 <= target_index < len(self._visible):
+            target_task = self._visible[target_index]
+            self._insert(task, at=self._tasks.index(target_task) + 1)
+        else:
+            self._insert(task)
+
+    def take_task(self, task_id: str) -> Task | None:
+        """Removes and returns a task, or None if not found — the shared
+        implementation behind both deleteTask() (which discards it) and
+        WindowManager.moveTaskToWindow() (which hands it to another
+        window's model via insert_task())."""
+        task = self._find(task_id)
+        if task is None:
+            return None
+        self._tasks.remove(task)
+        self._recompute()
+        self._save()
+        return task
 
     def _find(self, task_id: str) -> Task | None:
         for task in self._tasks:
@@ -207,12 +248,7 @@ class TaskListModel(QAbstractListModel):
 
     @Slot(str)
     def deleteTask(self, task_id: str):
-        task = self._find(task_id)
-        if task is None:
-            return
-        self._tasks.remove(task)
-        self._recompute()
-        self._save()
+        self.take_task(task_id)
 
     @Slot(int, int)
     def moveTask(self, from_index: int, to_index: int):
@@ -237,9 +273,13 @@ class TaskListModel(QAbstractListModel):
                 ).isoformat()
 
         # Reposition within the manual-order source list too, so plain
-        # (non-grouped, non-sorted) view reflects the same drag.
+        # (non-grouped, non-sorted) view reflects the same drag. Inserted
+        # AFTER target_task, not at its index (i.e. before it) — matches
+        # TaskDelegate.qml's drop placeholder, which renders *below* the
+        # hovered row (see its showGapBelow), meaning "drop it right after
+        # this one".
         self._tasks.remove(moved_task)
-        self._tasks.insert(self._tasks.index(target_task), moved_task)
+        self._tasks.insert(self._tasks.index(target_task) + 1, moved_task)
 
         self._recompute()
         self._save()
@@ -262,6 +302,7 @@ class TaskListModel(QAbstractListModel):
         was_reorderable = self._get_can_reorder()
         self._status_sort = mode
         self._settings.setValue("filters/statusSortMode", mode)
+        self._settings.sync()
         self._recompute()
         self.statusSortModeChanged.emit()
         if was_reorderable != self._get_can_reorder():
@@ -274,6 +315,7 @@ class TaskListModel(QAbstractListModel):
         was_reorderable = self._get_can_reorder()
         self._group_by_day = flag
         self._settings.setValue("filters/groupByDay", flag)
+        self._settings.sync()
         self._recompute()
         self.groupByDayChanged.emit()
         if was_reorderable != self._get_can_reorder():
@@ -287,6 +329,7 @@ class TaskListModel(QAbstractListModel):
             return  # at least one of Active/Done/Cancelled must stay visible
         self._show_active = flag
         self._settings.setValue("filters/showActive", flag)
+        self._settings.sync()
         self._recompute()
         self.showActiveChanged.emit()
 
@@ -298,6 +341,7 @@ class TaskListModel(QAbstractListModel):
             return  # at least one of Active/Done/Cancelled must stay visible
         self._show_done = flag
         self._settings.setValue("filters/showDone", flag)
+        self._settings.sync()
         self._recompute()
         self.showDoneChanged.emit()
 
@@ -309,6 +353,7 @@ class TaskListModel(QAbstractListModel):
             return  # at least one of Active/Done/Cancelled must stay visible
         self._show_cancelled = flag
         self._settings.setValue("filters/showCancelled", flag)
+        self._settings.sync()
         self._recompute()
         self.showCancelledChanged.emit()
 
