@@ -7,6 +7,19 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.21.5] - 2026-07-31
+
+### Changed
+- **README grid cell corrected**: the multi-window YATAS screenshot
+  belonged at 0-indexed grid position (1,1) — second row, second column,
+  previously `main-yata.png`'s ("Teletype-paper theme with day grouping")
+  cell — not (0,0), the top-left cell, which was mistakenly replaced
+  earlier and has been restored to the original green-theme screenshot it
+  always showed. `main-yata.png` is no longer referenced from the README
+  (removed from `docs/screenshots/`, same treatment the green screenshot
+  got when it was first displaced) since a 3×2 grid can only show one
+  image per cell.
+
 ## [0.21.4] - 2026-07-31
 
 ### Fixed

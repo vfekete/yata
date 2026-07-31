@@ -4,12 +4,12 @@
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/main-yatas-multiwindow.png" alt="YATAS multi-window management — one window listing both open windows, another showing its own task list" width="100%"/></td>
+    <td><img src="docs/screenshots/main-green.png" alt="Green phosphor CRT theme" width="100%"/></td>
     <td><img src="docs/screenshots/main-goldenrod.png" alt="Amber phosphor CRT theme — Month calendar view" width="100%"/></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/main-dark.png" alt="Dark theme — Markdown rendering, long task wrapping, hover delete glow" width="100%"/></td>
-    <td><img src="docs/screenshots/main-yata.png" alt="Teletype-paper theme with day grouping and hover actions" width="100%"/></td>
+    <td><img src="docs/screenshots/main-yatas-multiwindow.png" alt="YATAS multi-window management — one window listing both open windows, another showing its own task list" width="100%"/></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/main_settings.png" alt="Theme menu — opacity slider, tints, dark/light" width="100%"/></td>
