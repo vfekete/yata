@@ -51,11 +51,11 @@ Item {
 
         ToolButton {
             id: addButton
-            text: "Add"
+            text: qsTr("Add")
             font.bold: true
             focusPolicy: Qt.NoFocus
             ToolTip.visible: hovered
-            ToolTip.text: root.yatasActive ? "Add window" : "Add task"
+            ToolTip.text: root.yatasActive ? qsTr("Add window") : qsTr("Add task")
             onClicked: root.yatasActive ? root.addWindowRequested() : taskModel.addTask()
             background: Rectangle {
                 radius: 4
@@ -75,9 +75,9 @@ Item {
 
         ToolButton {
             id: reloadButton
-            text: "Reload"
+            text: qsTr("Reload")
             ToolTip.visible: hovered
-            ToolTip.text: "Reload tasks from disk"
+            ToolTip.text: qsTr("Reload tasks from disk")
             onClicked: taskModel.reloadTasks()
             background: Rectangle {
                 radius: 4
@@ -96,9 +96,9 @@ Item {
 
         ToolButton {
             id: themeButton
-            text: "Theme"
+            text: qsTr("Theme")
             ToolTip.visible: hovered
-            ToolTip.text: "Change theme"
+            ToolTip.text: qsTr("Change theme")
             onClicked: themeMenu.popup()
             background: Rectangle {
                 radius: 4
@@ -121,9 +121,9 @@ Item {
 
         ToolButton {
             id: linksButton
-            text: "Links"
+            text: qsTr("Links")
             ToolTip.visible: hovered
-            ToolTip.text: "Show all URLs mentioned in tasks"
+            ToolTip.text: qsTr("Show all URLs mentioned in tasks")
             onClicked: root.linksToggled()
             background: Rectangle {
                 radius: 4
@@ -144,9 +144,9 @@ Item {
 
         ToolButton {
             id: yatasButton
-            text: "Yatas"
+            text: qsTr("Yatas")
             ToolTip.visible: hovered
-            ToolTip.text: "Manage YATA windows"
+            ToolTip.text: qsTr("Manage YATA windows")
             onClicked: root.yatasToggled()
             background: Rectangle {
                 radius: 4
@@ -174,8 +174,8 @@ Item {
             // separately relayed to LinksView/YatasView for their own
             // filtering there; the placeholder is what actually tells the
             // user which context they're currently searching.
-            placeholderText: root.yatasActive ? "Search for window"
-                             : (root.linksActive ? "Search for link" : "Search for task")
+            placeholderText: root.yatasActive ? qsTr("Search for window")
+                             : (root.linksActive ? qsTr("Search for link") : qsTr("Search for task"))
             placeholderTextColor: Theme.mutedTextColor
             leftPadding: searchIcon.width + 12
             rightPadding: clearIcon.width + 14

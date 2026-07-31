@@ -86,7 +86,7 @@ Item {
     Text {
         anchors.centerIn: parent
         visible: root.filteredWindows.length === 0
-        text: root.allWindows.length === 0 ? "No windows" : "No windows match your search or filters"
+        text: root.allWindows.length === 0 ? qsTr("No windows") : qsTr("No windows match your search or filters")
         color: Theme.mutedTextColor
         font.family: Theme.fontFamily
         font.pixelSize: Theme.taskFontPixelSize

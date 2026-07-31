@@ -132,6 +132,7 @@ class TaskListModel(QAbstractListModel):
     searchText = Property(str, _get_search_text, notify=searchTextChanged)
 
     def _recompute(self):
+        old_ids = [t.id for t in self._visible]
         items = self._tasks
         if self._search:
             needle = self._search.lower()
@@ -154,9 +155,27 @@ class TaskListModel(QAbstractListModel):
             items = sorted(items, key=day_sort_key)
         elif self._status_sort:
             items = sorted(items, key=lambda t: t.status != self._status_sort)
-        self.beginResetModel()
-        self._visible = items
-        self.endResetModel()
+
+        # Which set/order of tasks is visible is unchanged for plenty of
+        # mutations (e.g. editing one task's text while no search/sort is
+        # narrowing or reordering the list) — for those, a plain
+        # dataChanged() lets every existing delegate update in place instead
+        # of beginResetModel()/endResetModel() destroying and recreating
+        # all of them (see TaskDelegate.qml's forceEditing/suppressAutoSave/
+        # committedViaEnter, which exists specifically to survive a reset
+        # firing mid-edit-commit — this avoids triggering that in the first
+        # place for the common case, rather than papering over it further).
+        # Only genuinely structural changes (search, sort, grouping,
+        # reordering, visibility filters adding/removing rows) still reset.
+        new_ids = [t.id for t in items]
+        if new_ids == old_ids:
+            self._visible = items
+            if items:
+                self.dataChanged.emit(self.index(0), self.index(len(items) - 1), [])
+        else:
+            self.beginResetModel()
+            self._visible = items
+            self.endResetModel()
 
     # --- mutation slots, callable from QML ---------------------------------
 

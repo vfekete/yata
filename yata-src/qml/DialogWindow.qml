@@ -29,8 +29,8 @@ Window {
 
     property string title: ""
     property real contentWidth: Math.max(300, Math.round(Theme.taskFontPixelSize * 26))
-    property string okText: "OK"
-    property string cancelText: "Cancel"
+    property string okText: qsTr("OK")
+    property string cancelText: qsTr("Cancel")
     property bool showCancel: true
     default property alias content: contentColumn.data
 

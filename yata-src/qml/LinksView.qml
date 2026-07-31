@@ -61,7 +61,7 @@ Item {
     Text {
         anchors.centerIn: parent
         visible: root.filteredTasks.length === 0
-        text: root.linkedTasks.length === 0 ? "No links found in any task" : "No links match your search"
+        text: root.linkedTasks.length === 0 ? qsTr("No links found in any task") : qsTr("No links match your search")
         color: Theme.mutedTextColor
         font.family: Theme.fontFamily
         font.pixelSize: Theme.taskFontPixelSize

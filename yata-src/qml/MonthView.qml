@@ -16,9 +16,11 @@ Item {
     signal prevMonth()
     signal nextMonth()
 
-    readonly property var monthNames: ["January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"]
-    readonly property var weekdayLabels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    readonly property var monthNames: [qsTr("January"), qsTr("February"), qsTr("March"), qsTr("April"),
+        qsTr("May"), qsTr("June"), qsTr("July"), qsTr("August"), qsTr("September"), qsTr("October"),
+        qsTr("November"), qsTr("December")]
+    readonly property var weekdayLabels: [qsTr("Mon"), qsTr("Tue"), qsTr("Wed"), qsTr("Thu"),
+        qsTr("Fri"), qsTr("Sat"), qsTr("Sun")]
 
     function daysInMonth(y, m) {
         return new Date(y, m, 0).getDate()
@@ -73,7 +75,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: root.monthNames[root.month - 1] + " " + root.year
+                text: qsTr("%1 %2").arg(root.monthNames[root.month - 1]).arg(root.year)
                 font.bold: true
                 font.family: Theme.fontFamily
                 font.pixelSize: Math.round(Theme.taskFontPixelSize * 1.3)

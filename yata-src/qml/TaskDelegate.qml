@@ -233,7 +233,7 @@ Item {
 
     Menu {
         id: itemMenu
-        MenuItem { text: "Delete task"; onTriggered: taskModel.deleteTask(root.taskId); padding: 10 }
+        MenuItem { text: qsTr("Delete task"); onTriggered: taskModel.deleteTask(root.taskId); padding: 10 }
     }
 
     Rectangle {
@@ -374,7 +374,7 @@ Item {
                 Text {
                     id: completedStatus
                     textFormat: Text.PlainText
-                    text: root.status === "done" ? "DONE" : "CANCELED"
+                    text: root.status === "done" ? qsTr("DONE") : qsTr("CANCELED")
                     font.family: Theme.fontFamily
                     font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.75)
                     readonly property color labelColor: root.status === "done" ? Theme.completedDoneLabelColor : Theme.completedCancelledLabelColor
@@ -415,7 +415,7 @@ Item {
             Layout.fillWidth: true
             visible: root.editing
             text: root.text
-            placeholderText: "Task name"
+            placeholderText: qsTr("Task name")
             color: Theme.textColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize
@@ -462,7 +462,7 @@ Item {
                 if (text.length > 0) {
                     taskModel.setText(root.taskId, text)
                 } else if (root.text.length === 0) {
-                    taskModel.setText(root.taskId, "Task name")
+                    taskModel.setText(root.taskId, qsTr("Task name"))
                 }
                 // else: existing task, user cleared all text → cancel edit silently
             }
@@ -573,7 +573,7 @@ Item {
 
     DialogWindow {
         id: deleteConfirm
-        title: "Delete task?"
+        title: qsTr("Delete task?")
         // Explicit width so implicitWidth doesn't have to be derived from
         // font-scaled content — without this, changing font.pixelSize
         // above (e.g. on every Ctrl+=/Ctrl+- zoom step) fed back into this
@@ -585,7 +585,7 @@ Item {
         onAccepted: taskModel.deleteTask(root.taskId)
 
         Label {
-            text: "This action cannot be undone."
+            text: qsTr("This action cannot be undone.")
             color: Theme.textColor
             font.pixelSize: Theme.taskFontPixelSize
         }

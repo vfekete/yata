@@ -7,6 +7,40 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.22.0] - 2026-07-31
+
+### Changed
+- **QML brought into compliance with Qt Quick Best Practices**
+  (https://doc.qt.io/qt-6/qtquick-bestpractices.html), following an audit
+  against the doc. Two real gaps found and fixed; everything else the doc
+  covers was already followed (platform-agnostic style, bundled resources,
+  SVG icons, scalable sizing, `onMoved` over `onValueChanged`, business
+  logic kept out of QML).
+  - **Every user-facing string wrapped in `qsTr()`** across all of
+    `yata-src/qml/` — button labels, dialog titles/bodies, tooltips,
+    placeholders, status/empty-state text, and the Month/Year calendar's
+    month-name/weekday-abbreviation arrays. Concatenated strings (e.g. "Are
+    you sure you want to delete “X”?") use `qsTr("...%1...").arg(...)`
+    rather than wrapping fragments, so a translator gets the whole sentence
+    in context. Icon-button glyphs (🗑, ↺, ✓, ✕, ⋮⋮) are deliberately left
+    unwrapped — they're iconography, not language text. No `.ts`/`.qm`
+    files or language switcher were added; this only makes the strings
+    translatable, per the doc's own framing.
+  - **`TaskListModel._recompute()` no longer destroys every delegate on
+    every mutation.** It previously called `beginResetModel()`/
+    `endResetModel()` unconditionally on all 13 of its call sites,
+    including plain `setText()`/`setStatus()` — exactly the "state lives
+    in the delegate, gets lost" problem the doc warns about (and the
+    reason `TaskDelegate.qml` needed its `suppressAutoSave`/
+    `committedViaEnter` workaround for a reset firing mid-edit-commit).
+    Now compares the visible task ID order before/after recomputing: if
+    unchanged (the common case for an edit with no active search/sort),
+    emits a plain `dataChanged()` instead, letting existing delegates
+    update in place. Falls back to the full reset exactly as before for
+    anything genuinely structural (search, sort, grouping, reordering,
+    visibility filters). The existing workaround is left in place as a
+    safety net for the cases that still reset.
+
 ## [0.21.5] - 2026-07-31
 
 ### Changed

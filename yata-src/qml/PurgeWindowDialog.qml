@@ -10,7 +10,7 @@ import QtQuick.Layouts
 // offer — purge always removes it.
 DialogWindow {
     id: root
-    title: "Purge window?"
+    title: qsTr("Purge window?")
     contentWidth: Math.max(300, Math.round(Theme.taskFontPixelSize * 26))
 
     property string targetId: ""
@@ -28,13 +28,13 @@ DialogWindow {
     Label {
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        text: "Are you sure you want to permanently purge “" + root.targetTag + "”?"
+        text: qsTr("Are you sure you want to permanently purge “%1”?").arg(root.targetTag)
         color: Theme.textColor
         font.pixelSize: Theme.taskFontPixelSize
     }
 
     Label {
-        text: "Its tasks and settings are deleted for good. This action cannot be undone."
+        text: qsTr("Its tasks and settings are deleted for good. This action cannot be undone.")
         color: Theme.mutedTextColor
         wrapMode: Text.Wrap
         Layout.fillWidth: true

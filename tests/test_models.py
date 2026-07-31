@@ -50,6 +50,63 @@ def test_set_status(model):
     assert role(model, 0, "status") == "active"
 
 
+# --- dataChanged vs. full reset (Qt Quick best practices: avoid destroying
+# delegates for non-structural mutations) --------------------------------
+
+def _signal_counters(model):
+    resets, changes = [], []
+    model.modelReset.connect(lambda: resets.append(True))
+    model.dataChanged.connect(lambda *a: changes.append(True))
+    return resets, changes
+
+
+def test_edit_without_search_or_sort_emits_data_changed_not_reset(model):
+    task_id = model.addTask()
+    model.setText(task_id, "Initial")
+    resets, changes = _signal_counters(model)
+
+    model.setText(task_id, "Edited")
+
+    assert changes
+    assert not resets
+    assert role(model, 0, "text") == "Edited"
+
+
+def test_status_change_without_sort_active_emits_data_changed_not_reset(model):
+    task_id = model.addTask()
+    model.setText(task_id, "Task")
+    resets, changes = _signal_counters(model)
+
+    model.setStatus(task_id, "done")
+
+    assert changes
+    assert not resets
+    assert role(model, 0, "status") == "done"
+
+
+def test_search_narrowing_visibility_still_emits_reset(model):
+    a = model.addTask()
+    model.setText(a, "Buy milk")
+    resets, _ = _signal_counters(model)
+
+    model.setSearchText("nonexistent")
+
+    assert resets
+
+
+def test_status_sort_reordering_edit_still_emits_reset(model):
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    model.setStatusSortMode("done")
+    resets, _ = _signal_counters(model)
+
+    model.setStatus(a, "done")  # now sorts first, reordering the visible list
+
+    assert resets
+
+
 def test_delete_task(model):
     task_id = model.addTask()
     model.deleteTask(task_id)

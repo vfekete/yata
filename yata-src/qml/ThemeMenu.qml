@@ -31,7 +31,7 @@ Menu {
             id: opacityLabel
             y: 4
             width: parent.width
-            text: "Opacity: " + appSettings.opacityPercent + "%"
+            text: qsTr("Opacity: %1%").arg(appSettings.opacityPercent)
             color: Theme.textColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize
@@ -51,7 +51,7 @@ Menu {
     }
 
     MenuItem {
-        text: "Reset"
+        text: qsTr("Reset")
         font.capitalization: Font.AllUppercase
         onTriggered: {
             appSettings.opacityPercent = appSettings.defaultOpacityPercent
@@ -60,7 +60,7 @@ Menu {
         padding: 10
     }
     MenuItem {
-        text: "Switch zoom direction"
+        text: qsTr("Switch zoom direction")
         checkable: true
         checked: appSettings.wheelZoomInverted
         onTriggered: appSettings.wheelZoomInverted = checked
@@ -70,7 +70,7 @@ Menu {
     MenuSeparator {}
 
     MenuItem {
-        text: "Dark theme"
+        text: qsTr("Dark theme")
         checkable: true
         // "Dark"/"Light" are also the way back to the plain look: picking
         // either forces the tint to "none" (the Tint submenu no longer has
@@ -83,7 +83,7 @@ Menu {
         padding: 10
     }
     MenuItem {
-        text: "Light theme"
+        text: qsTr("Light theme")
         checkable: true
         checked: appSettings.themeMode === "light" && appSettings.themeTint === "none"
         onTriggered: {
@@ -96,14 +96,14 @@ Menu {
     MenuSeparator {}
 
     Menu {
-        title: "Tint"
+        title: qsTr("Tint")
         font.pixelSize: Theme.taskFontPixelSize
         // CRT tints ignore theme mode entirely; "None" was removed here
         // since Dark/Light theme above now cover that look directly.
-        MenuItem { text: "Green"; onTriggered: appSettings.themeTint = "green"; padding: 10 }
-        MenuItem { text: "Goldenrod"; onTriggered: appSettings.themeTint = "goldenrod"; padding: 10 }
-        MenuItem { text: "White"; onTriggered: appSettings.themeTint = "white"; padding: 10 }
-        MenuItem { text: "Black"; onTriggered: appSettings.themeTint = "black"; padding: 10 }
+        MenuItem { text: qsTr("Green"); onTriggered: appSettings.themeTint = "green"; padding: 10 }
+        MenuItem { text: qsTr("Goldenrod"); onTriggered: appSettings.themeTint = "goldenrod"; padding: 10 }
+        MenuItem { text: qsTr("White"); onTriggered: appSettings.themeTint = "white"; padding: 10 }
+        MenuItem { text: qsTr("Black"); onTriggered: appSettings.themeTint = "black"; padding: 10 }
     }
 
     MenuSeparator {
@@ -113,7 +113,7 @@ Menu {
     MenuItem {
         visible: root.showQuit
         height: root.showQuit ? implicitHeight : 0
-        text: "Quit"
+        text: qsTr("Quit")
         onTriggered: Qt.quit()
         padding: 10
     }

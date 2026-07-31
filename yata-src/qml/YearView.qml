@@ -12,8 +12,9 @@ Item {
     signal prevYear()
     signal nextYear()
 
-    readonly property var monthNames: ["January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"]
+    readonly property var monthNames: [qsTr("January"), qsTr("February"), qsTr("March"), qsTr("April"),
+        qsTr("May"), qsTr("June"), qsTr("July"), qsTr("August"), qsTr("September"), qsTr("October"),
+        qsTr("November"), qsTr("December")]
 
     property var countsByMonth: {
         var raw = taskModel.yearCounts(root.year)

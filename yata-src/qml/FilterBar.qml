@@ -107,17 +107,17 @@ Item {
             spacing: root.buttonSpacing
             IconIndicator { iconName: "calendar"; sizeScale: 0.9 }
             FilterButton {
-                label: "Day"
+                label: qsTr("Day")
                 active: taskModel.groupByDay
                 onToggled: (checked) => root.setGrouping("day", checked)
             }
             FilterButton {
-                label: "Month"
+                label: qsTr("Month")
                 active: root.monthActive
                 onToggled: (checked) => root.setGrouping("month", checked)
             }
             FilterButton {
-                label: "Year"
+                label: qsTr("Year")
                 active: root.yearActive
                 onToggled: (checked) => root.setGrouping("year", checked)
             }
@@ -129,17 +129,17 @@ Item {
             spacing: root.buttonSpacing
             IconIndicator { iconName: "visibility"; sizeScale: 0.9 }
             FilterButton {
-                label: "Active"
+                label: qsTr("Active")
                 active: taskModel.showActive
                 onToggled: (checked) => taskModel.setShowActive(checked)
             }
             FilterButton {
-                label: "Done"
+                label: qsTr("Done")
                 active: taskModel.showDone
                 onToggled: (checked) => taskModel.setShowDone(checked)
             }
             FilterButton {
-                label: "Cancel"
+                label: qsTr("Cancel")
                 active: taskModel.showCancelled
                 onToggled: (checked) => taskModel.setShowCancelled(checked)
             }
@@ -155,12 +155,12 @@ Item {
             spacing: root.buttonSpacing
             IconIndicator { iconName: "visibility"; sizeScale: 0.9 }
             FilterButton {
-                label: "Active"
+                label: qsTr("Active")
                 active: root.yatasShowActive
                 onToggled: (checked) => root.yatasShowActive = checked
             }
             FilterButton {
-                label: "Deleted"
+                label: qsTr("Deleted")
                 active: root.yatasShowDeleted
                 onToggled: (checked) => root.yatasShowDeleted = checked
             }
@@ -175,22 +175,22 @@ Item {
             spacing: root.buttonSpacing
             IconIndicator { iconName: "order"; sizeScale: 0.9 }
             FilterButton {
-                label: "Manual"
+                label: qsTr("Manual")
                 active: taskModel.statusSortMode === ""
                 onToggled: taskModel.setStatusSortMode("")
             }
             FilterButton {
-                label: "Active"
+                label: qsTr("Active")
                 active: taskModel.statusSortMode === "active"
                 onToggled: taskModel.setStatusSortMode("active")
             }
             FilterButton {
-                label: "Done"
+                label: qsTr("Done")
                 active: taskModel.statusSortMode === "done"
                 onToggled: taskModel.setStatusSortMode("done")
             }
             FilterButton {
-                label: "Cancel"
+                label: qsTr("Cancel")
                 active: taskModel.statusSortMode === "cancelled"
                 onToggled: taskModel.setStatusSortMode("cancelled")
             }
@@ -208,12 +208,12 @@ Item {
             spacing: root.buttonSpacing
             IconIndicator { iconName: "order"; sizeScale: 0.9 }
             FilterButton {
-                label: "Active"
+                label: qsTr("Active")
                 active: root.yatasSortMode === "active"
                 onToggled: (checked) => root.yatasSortMode = checked ? "active" : ""
             }
             FilterButton {
-                label: "Deleted"
+                label: qsTr("Deleted")
                 active: root.yatasSortMode === "deleted"
                 onToggled: (checked) => root.yatasSortMode = checked ? "deleted" : ""
             }

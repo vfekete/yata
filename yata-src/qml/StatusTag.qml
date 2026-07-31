@@ -22,7 +22,7 @@ Row {
     Text {
         id: statusText
         textFormat: Text.PlainText
-        text: root.status === "done" ? "DONE" : root.status === "cancelled" ? "CANCELED" : "ACTIVE"
+        text: root.status === "done" ? qsTr("DONE") : root.status === "cancelled" ? qsTr("CANCELED") : qsTr("ACTIVE")
         font.family: Theme.fontFamily
         font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.75)
         color: root.tagColor

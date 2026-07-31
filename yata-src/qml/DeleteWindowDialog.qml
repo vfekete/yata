@@ -12,7 +12,7 @@ import QtQuick.Layouts
 // reasoning ThemeMenu's popups relied on for the old in-window Dialog).
 DialogWindow {
     id: root
-    title: "Delete window?"
+    title: qsTr("Delete window?")
     // Scales with font zoom like every other sized-by-font element in this
     // app (e.g. ThemeMenu's width) — a fixed pixel width didn't grow with
     // Ctrl+=/Ctrl+- zoom, so at a larger zoom the text ran right up to (and
@@ -34,7 +34,7 @@ DialogWindow {
     Label {
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        text: "Are you sure you want to delete “" + root.targetTag + "”?"
+        text: qsTr("Are you sure you want to delete “%1”?").arg(root.targetTag)
         color: Theme.textColor
         font.pixelSize: Theme.taskFontPixelSize
     }
@@ -42,7 +42,7 @@ DialogWindow {
     Label {
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        text: "It moves to the Deleted list — its tasks and settings are kept, and you can Re-create it from there, or Purge it to remove them for good."
+        text: qsTr("It moves to the Deleted list — its tasks and settings are kept, and you can Re-create it from there, or Purge it to remove them for good.")
         color: Theme.mutedTextColor
         font.pixelSize: Theme.taskFontPixelSize
     }
