@@ -9,6 +9,16 @@ Item {
     id: root
     property string searchText: ""
 
+    // Driven by FilterBar's own ACTIVE/DELETED visibility+order buttons
+    // (relayed down via Main.qml, same pattern as searchText above) —
+    // mirrors taskModel's showActive/showDone/showCancelled + statusSortMode
+    // shape: showActive/showDeleted are independent toggles (both can be on
+    // at once, showing both categories together in one list), sortMode
+    // picks which category sorts to the top when both are visible.
+    property bool showActive: true
+    property bool showDeleted: false
+    property string sortMode: ""
+
     property var allWindows: []
     function refresh() { root.allWindows = windowManager.listWindows() }
 
@@ -27,11 +37,26 @@ Item {
 
     readonly property var filteredWindows: {
         var needle = root.searchText.trim().toLowerCase()
-        if (needle.length === 0)
-            return root.allWindows
-        return root.allWindows.filter(function(w) {
-            return String(w.tag).toLowerCase().indexOf(needle) !== -1
+        var items = root.allWindows.filter(function(w) {
+            if (w.deleted ? !root.showDeleted : !root.showActive)
+                return false
+            if (needle.length > 0 && String(w.tag).toLowerCase().indexOf(needle) === -1)
+                return false
+            return true
         })
+        // Stable sort (Array.prototype.sort is spec-guaranteed stable) —
+        // brings the selected category to the top while leaving each
+        // category's own relative order (registry order) unchanged
+        // otherwise, same "insert after" instinct as taskModel's own
+        // statusSortMode, just with an explicit wantDeleted flag instead of
+        // a status string.
+        if (root.sortMode === "active" || root.sortMode === "deleted") {
+            var wantDeleted = root.sortMode === "deleted"
+            items = items.slice().sort(function(a, b) {
+                return (a.deleted === wantDeleted ? 0 : 1) - (b.deleted === wantDeleted ? 0 : 1)
+            })
+        }
+        return items
     }
 
     ListView {
@@ -48,17 +73,20 @@ Item {
             windowId: modelData.id
             tag: modelData.tag
             open: modelData.open
+            deleted: modelData.deleted
             openWindowCount: root.openWindowCount
             onRenamed: (id, newTag) => windowManager.renameWindow(id, newTag)
             onDeleteRequested: (id, tag) => deleteDialog.openFor(id, tag)
             onShowToggled: (id, show) => show ? windowManager.openWindow(id) : windowManager.closeWindow(id)
+            onRecreateRequested: (id) => windowManager.recreateWindow(id)
+            onPurgeRequested: (id, tag) => purgeDialog.openFor(id, tag)
         }
     }
 
     Text {
         anchors.centerIn: parent
         visible: root.filteredWindows.length === 0
-        text: root.allWindows.length === 0 ? "No windows" : "No windows match your search"
+        text: root.allWindows.length === 0 ? "No windows" : "No windows match your search or filters"
         color: Theme.mutedTextColor
         font.family: Theme.fontFamily
         font.pixelSize: Theme.taskFontPixelSize
@@ -66,6 +94,11 @@ Item {
 
     DeleteWindowDialog {
         id: deleteDialog
-        onConfirmed: (id, deleteData) => windowManager.deleteWindow(id, deleteData)
+        onConfirmed: (id) => windowManager.deleteWindow(id)
+    }
+
+    PurgeWindowDialog {
+        id: purgeDialog
+        onConfirmed: (id) => windowManager.purgeWindow(id)
     }
 }

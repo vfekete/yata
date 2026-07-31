@@ -79,7 +79,7 @@ def make_manager(tmp_path):
 def test_list_windows_starts_with_default(tmp_path):
     manager = make_manager(tmp_path)
     windows = manager.listWindows()
-    assert windows == [{"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": False}]
+    assert windows == [{"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": False, "deleted": False}]
 
 
 def test_create_window_appends_registry_entry(tmp_path):
@@ -145,22 +145,27 @@ def test_rename_window_ignores_blank_tag(tmp_path):
     assert manager.tagFor(DEFAULT_WINDOW_ID) == DEFAULT_TAG
 
 
-def test_delete_window_closes_it_if_open_and_removes_registry_entry(tmp_path):
+def test_delete_window_closes_it_if_open_and_marks_it_deleted(tmp_path):
+    """deleteWindow() is a soft delete (YatasView's DELETED category) — the
+    registry entry and its data both survive; only purgeWindow() actually
+    discards them (see below)."""
     manager = make_manager(tmp_path)
     window = FakeWindow(0, 0, 400, 600)
     manager.register_window(DEFAULT_WINDOW_ID, window)
 
-    manager.deleteWindow(DEFAULT_WINDOW_ID, False)
+    manager.deleteWindow(DEFAULT_WINDOW_ID)
 
     assert window.closed
-    assert manager.tagFor(DEFAULT_WINDOW_ID) == ""
     assert not manager.is_open(DEFAULT_WINDOW_ID)
+    assert manager.tagFor(DEFAULT_WINDOW_ID) == DEFAULT_TAG  # entry still there
+    persisted = next(e for e in manager._registry.list() if e["id"] == DEFAULT_WINDOW_ID)
+    assert persisted["deleted"] is True
+    assert persisted["open"] is False
 
 
-def test_delete_window_without_data_flag_keeps_files(tmp_path):
+def test_delete_window_keeps_data_files(tmp_path):
     manager = make_manager(tmp_path)
     new_id = manager.createWindow({"x": 0, "y": 0, "width": 400, "height": 600})
-    _, caller_state = [e for e in manager._created_log if e[0] == new_id][0]
 
     from window_registry import tasks_path_for
     tasks_path = tasks_path_for(new_id)
@@ -168,8 +173,54 @@ def test_delete_window_without_data_flag_keeps_files(tmp_path):
     with open(tasks_path, "w") as f:
         f.write("[]")
 
-    manager.deleteWindow(new_id, False)
+    manager.deleteWindow(new_id)
     assert os.path.exists(tasks_path)
+
+
+def test_recreate_window_undeletes_and_reopens_it(tmp_path):
+    manager = make_manager(tmp_path)
+    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600))
+    manager.deleteWindow(DEFAULT_WINDOW_ID)
+
+    manager.recreateWindow(DEFAULT_WINDOW_ID)
+
+    assert manager.is_open(DEFAULT_WINDOW_ID)
+    assert DEFAULT_WINDOW_ID in manager._restored_log
+    persisted = next(e for e in manager._registry.list() if e["id"] == DEFAULT_WINDOW_ID)
+    assert persisted["deleted"] is False
+    assert persisted["open"] is True
+
+
+def test_purge_window_removes_registry_entry_and_deletes_files(tmp_path):
+    manager = make_manager(tmp_path)
+    new_id = manager.createWindow({"x": 0, "y": 0, "width": 400, "height": 600})
+
+    from window_registry import tasks_path_for
+    tasks_path = tasks_path_for(new_id)
+    os.makedirs(os.path.dirname(tasks_path), exist_ok=True)
+    with open(tasks_path, "w") as f:
+        f.write("[]")
+
+    manager.deleteWindow(new_id)
+    manager.purgeWindow(new_id)
+
+    assert manager.tagFor(new_id) == ""
+    assert all(e["id"] != new_id for e in manager._registry.list())
+    assert not os.path.exists(tasks_path)
+
+
+def test_purge_window_closes_it_first_if_still_open(tmp_path):
+    """Defensive: purging should never normally see an open window (delete
+    always closes first), but must not leave a live one dangling if it does."""
+    manager = make_manager(tmp_path)
+    window = FakeWindow(0, 0, 400, 600)
+    manager.register_window(DEFAULT_WINDOW_ID, window)
+
+    manager.purgeWindow(DEFAULT_WINDOW_ID)
+
+    assert window.closed
+    assert not manager.is_open(DEFAULT_WINDOW_ID)
+    assert all(e["id"] != DEFAULT_WINDOW_ID for e in manager._registry.list())
 
 
 def test_close_window_hides_it_but_keeps_registry_entry_and_data(tmp_path):
@@ -242,20 +293,6 @@ def test_open_window_is_a_no_op_if_already_open(tmp_path):
     manager.openWindow(DEFAULT_WINDOW_ID)
 
     assert manager._restored_log == []
-
-
-def test_delete_window_with_data_flag_removes_files(tmp_path):
-    manager = make_manager(tmp_path)
-    new_id = manager.createWindow({"x": 0, "y": 0, "width": 400, "height": 600})
-
-    from window_registry import tasks_path_for
-    tasks_path = tasks_path_for(new_id)
-    os.makedirs(os.path.dirname(tasks_path), exist_ok=True)
-    with open(tasks_path, "w") as f:
-        f.write("[]")
-
-    manager.deleteWindow(new_id, True)
-    assert not os.path.exists(tasks_path)
 
 
 def _make_task_model(tmp_path, name):

@@ -1,6 +1,6 @@
 [project]
 name = "yata"
-version = "0.19.4"
+version = "0.21.1"
 description = "Yet Another Todo Application"
 requires-python = ">=3.10"
 dependencies = [

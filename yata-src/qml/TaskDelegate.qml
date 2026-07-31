@@ -117,6 +117,23 @@ Item {
         enabled: !root.editing && taskModel.canReorder
         acceptedButtons: Qt.LeftButton
 
+        // Latest known pointer position in global/screen coordinates, updated
+        // by onCentroidChanged below on every raw pointer-move event (which
+        // can fire far more often than the screen actually redraws). The
+        // expensive per-move work — windowManager.windowAt()'s Python round
+        // trip + cross-window broadcast, and moveDragGhost()'s real native
+        // OS window reposition — used to run directly inside
+        // onCentroidChanged, once per raw event. A fast mouse move delivers
+        // many more of those than there are frames to show them in, so that
+        // saturated the event loop with (comparatively costly) native window
+        // moves; the cross-window placeholder update depends on that same
+        // single-threaded loop finding a free moment, so it visibly lagged
+        // behind the always-locally-smooth same-window case. dragUpdateTimer
+        // below now does that expensive work at a capped, steady ~60fps
+        // instead, reading whatever the latest position happens to be.
+        property real lastGlobalX: 0
+        property real lastGlobalY: 0
+
         onActiveChanged: {
             var view = root.ListView.view
             if (active) {
@@ -159,31 +176,41 @@ Item {
         }
 
         onCentroidChanged: {
-            var view = root.ListView.view
-            if (!view.dragActive)
+            if (!root.ListView.view.dragActive)
                 return
-            // Also check whether the pointer is over a *different* YATA
-            // window (multi-window drag) — mapToItem(null, ...) gives
-            // window-local content coords (this window has no decorations
-            // to offset by), and every top-level QWindow's own x/y is
-            // already in global/screen space, so adding them together is
-            // the pointer's true global position without needing
-            // QQuickWindow.mapToGlobal.
-            //
-            // windowAt() no longer excludes this window — dragging within
-            // the source window is now just "the pointer happens to be over
-            // the same window's geometry", the same case as any other
-            // window, so ITS OWN row-reflow/placeholder/auto-scroll is
-            // driven the identical way, via windowManager's broadcast (see
-            // Main.qml's Connections on taskDragHoverChanged) rather than
-            // computed locally here — one single code path for both
-            // same-window and cross-window hovering, not two.
+            // Cheap and local only — just records where the pointer is right
+            // now. mapToItem(null, ...) gives window-local content coords
+            // (this window has no decorations to offset by), and every
+            // top-level QWindow's own x/y is already in global/screen space,
+            // so adding them together is the pointer's true global position
+            // without needing QQuickWindow.mapToGlobal. The actual expensive
+            // work (windowAt()/moveDragGhost()) happens in dragUpdateTimer
+            // below, not here — see rowDrag's own comment on why.
             var win = root.Window.window
             var posInWindow = root.mapToItem(null, centroid.position.x, centroid.position.y)
-            var globalX = win.x + posInWindow.x
-            var globalY = win.y + posInWindow.y
-            view.dragTargetWindowId = windowManager.windowAt(globalX, globalY)
-            windowManager.moveDragGhost(globalX, globalY)
+            rowDrag.lastGlobalX = win.x + posInWindow.x
+            rowDrag.lastGlobalY = win.y + posInWindow.y
+        }
+    }
+
+    // Drives the expensive per-move drag work at a capped, steady rate
+    // instead of on every raw pointer event — see rowDrag.lastGlobalX's own
+    // comment for why. windowAt() no longer excludes this row's own window —
+    // dragging within the source window is just "the pointer happens to be
+    // over the same window's geometry", the same case as any other window,
+    // so ITS OWN row-reflow/placeholder/auto-scroll is driven the identical
+    // way, via windowManager's broadcast (see Main.qml's Connections on
+    // taskDragHoverChanged) rather than computed locally here — one single
+    // code path for both same-window and cross-window hovering, not two.
+    Timer {
+        id: dragUpdateTimer
+        interval: 16
+        repeat: true
+        running: rowDrag.active
+        onTriggered: {
+            root.ListView.view.dragTargetWindowId =
+                windowManager.windowAt(rowDrag.lastGlobalX, rowDrag.lastGlobalY)
+            windowManager.moveDragGhost(rowDrag.lastGlobalX, rowDrag.lastGlobalY)
         }
     }
 
@@ -544,24 +571,22 @@ Item {
         }
     }
 
-    Dialog {
+    DialogWindow {
         id: deleteConfirm
-        modal: true
         title: "Delete task?"
-        font.pixelSize: Theme.taskFontPixelSize
         // Explicit width so implicitWidth doesn't have to be derived from
         // font-scaled content — without this, changing font.pixelSize
         // above (e.g. on every Ctrl+=/Ctrl+- zoom step) fed back into this
-        // Dialog's own implicitWidth calculation and Qt Quick Controls'
+        // dialog's own implicitWidth calculation and Qt Quick Controls'
         // Basic style logged "Binding loop detected for property
         // implicitWidth" repeatedly. Same fix/formula as
         // DeleteWindowDialog.qml's width.
-        width: Math.max(260, Math.round(Theme.taskFontPixelSize * 20))
-        standardButtons: Dialog.Ok | Dialog.Cancel
+        contentWidth: Math.max(260, Math.round(Theme.taskFontPixelSize * 20))
         onAccepted: taskModel.deleteTask(root.taskId)
 
         Label {
             text: "This action cannot be undone."
+            color: Theme.textColor
             font.pixelSize: Theme.taskFontPixelSize
         }
     }

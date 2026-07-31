@@ -211,27 +211,34 @@ def _open_settings(window_id: str) -> QSettings:
 def _windows_to_restore(registry: WindowRegistry) -> list[dict]:
     """Every window to (re)open at startup.
 
-    Every registry entry marked "open" gets reopened — not just the default
-    window — so a window created via YATAS is still there next time the app
-    starts, at its own persisted position/theme/content. One marked closed
-    (via YatasView's SHOW toggle) stays closed across a restart, same as the
-    user left it.
+    Every non-deleted registry entry marked "open" gets reopened — not just
+    the default window — so a window created via YATAS is still there next
+    time the app starts, at its own persisted position/theme/content. One
+    marked closed (via YatasView's SHOW toggle) stays closed across a
+    restart, same as the user left it. A soft-deleted one (YatasView's
+    DELETED category — see WindowManager.deleteWindow) never gets restored
+    here regardless of its "open" field — it stays hidden until explicitly
+    recreated or purged.
 
-    Falls back to seeding a fresh default entry if the registry is
-    completely empty (the user explicitly deleted every window, including
-    "default"), and falls back to reopening every entry if none are marked
-    open (the user closed every window individually) — either way, the app
-    never launches with nothing to show and no way to reach YATAS again.
+    Falls back to seeding a fresh default entry if there are no non-deleted
+    entries at all (the registry is completely empty, or the user soft-
+    deleted every window including "default"), and falls back to reopening
+    every non-deleted entry if none of them are marked open (the user closed
+    every window individually) — either way, the app never launches with
+    nothing to show and no way to reach YATAS again.
     """
-    entries = registry.list()
+    def live(entries: list[dict]) -> list[dict]:
+        return [e for e in entries if not e.get("deleted", False)]
+
+    entries = live(registry.list())
     if not entries:
         registry.add(DEFAULT_TAG)
-        entries = registry.list()
+        entries = live(registry.list())
     open_entries = [e for e in entries if e.get("open", True)]
     if not open_entries:
         for e in entries:
             registry.set_open(e["id"], True)
-        open_entries = registry.list()
+        open_entries = live(registry.list())
     return open_entries
 
 

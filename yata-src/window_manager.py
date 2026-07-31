@@ -146,19 +146,47 @@ class WindowManager(QObject):
         self._registry.rename(window_id, new_tag)
         self.windowsChanged.emit()
 
-    @Slot(str, bool)
-    def deleteWindow(self, window_id: str, delete_data: bool) -> None:
+    @Slot(str)
+    def deleteWindow(self, window_id: str) -> None:
+        """Soft-deletes a window (YatasView's DELETED category, the trash
+        icon on an ACTIVE row): closes it if currently open and marks it
+        deleted in the registry, WITHOUT touching its data files — the
+        registry entry and its on-disk tasks/settings both stay put.
+        Recoverable later via recreateWindow(), or permanently discarded via
+        purgeWindow()."""
         entry = self._windows.pop(window_id, None)
         if entry is not None:
             entry["window"].close()
+        self._registry.set_open(window_id, False)
+        self._registry.set_deleted(window_id, True)
+        self.windowsChanged.emit()
 
+    @Slot(str)
+    def recreateWindow(self, window_id: str) -> None:
+        """Un-deletes and reopens a window previously soft-deleted via
+        deleteWindow() (YatasView's DELETED category, 'Re-create') —
+        rebuilt fresh from its own still-on-disk tasks/settings, same as
+        openWindow() (which this delegates to once the deleted flag is
+        cleared)."""
+        self._registry.set_deleted(window_id, False)
+        self.openWindow(window_id)
+
+    @Slot(str)
+    def purgeWindow(self, window_id: str) -> None:
+        """Permanently discards a soft-deleted window: removes its registry
+        entry entirely and deletes its on-disk tasks/settings (YatasView's
+        DELETED category, 'Purge' — the only way any of this data actually
+        gets removed; deleteWindow() above never does). Closes it first if
+        somehow still open — shouldn't normally happen, since deleteWindow()
+        always closes before marking deleted, but harmless/defensive either
+        way (same close-then-discard shape deleteWindow itself uses)."""
+        entry = self._windows.pop(window_id, None)
+        if entry is not None:
+            entry["window"].close()
         self._registry.remove(window_id)
-
-        if delete_data:
-            for path in (tasks_path_for(window_id), settings_path_for(window_id)):
-                if path:
-                    _remove_file(path)
-
+        for path in (tasks_path_for(window_id), settings_path_for(window_id)):
+            if path:
+                _remove_file(path)
         self.windowsChanged.emit()
 
     def _find_free_position(self, width: int, height: int, start_x: int, start_y: int):

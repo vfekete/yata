@@ -19,7 +19,9 @@ def isolated_xdg(tmp_path, monkeypatch):
 
 def test_first_run_seeds_default_window(tmp_path):
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
-    assert registry.list() == [{"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": True}]
+    assert registry.list() == [
+        {"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": True, "deleted": False}
+    ]
 
 
 def test_add_creates_unique_ids_with_given_tag(tmp_path):
@@ -114,16 +116,39 @@ def test_set_open_persists_across_instances(tmp_path):
 
 
 def test_entries_written_before_open_field_existed_default_to_open(tmp_path):
-    """Regression guard: upgrading users' windows.json predates the "open"
-    field entirely — those windows must still show up as open, not silently
-    vanish from restart just because the key is missing."""
+    """Regression guard: upgrading users' windows.json predates the "open"/
+    "deleted" fields entirely — those windows must still show up as open and
+    not-deleted, not silently vanish from restart just because the keys are
+    missing."""
     import json
 
     path = tmp_path / "windows.json"
     path.write_text(json.dumps([{"id": "legacy-id", "tag": "Legacy"}]))
 
     registry = WindowRegistry(path=str(path))
-    assert registry.list() == [{"id": "legacy-id", "tag": "Legacy", "open": True}]
+    assert registry.list() == [
+        {"id": "legacy-id", "tag": "Legacy", "open": True, "deleted": False}
+    ]
+
+
+def test_set_deleted_persists_across_instances(tmp_path):
+    path = str(tmp_path / "windows.json")
+    registry = WindowRegistry(path=path)
+    window_id = registry.add("Work")
+
+    registry.set_deleted(window_id, True)
+
+    restarted = WindowRegistry(path=path)
+    assert next(e for e in restarted.list() if e["id"] == window_id)["deleted"] is True
+
+
+def test_next_available_tag_ignores_deleted_entries(tmp_path):
+    """A deleted window isn't currently visible, so it shouldn't force a
+    freshly-created ACTIVE window into an "- 2" name."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    registry.set_deleted(DEFAULT_WINDOW_ID, True)
+
+    assert registry.next_available_tag(DEFAULT_TAG) == DEFAULT_TAG
 
 
 def test_other_windows_get_dedicated_paths(tmp_path):

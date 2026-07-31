@@ -56,7 +56,7 @@ class WindowRegistry:
             # Seed with the legacy/default window only on a true first run —
             # never re-add it just because it's later missing, or an
             # explicit delete of it would silently undo itself on restart.
-            self._entries = [{"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": True}]
+            self._entries = [{"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": True, "deleted": False}]
             self._save()
 
     def _load(self) -> list[dict]:
@@ -64,11 +64,13 @@ class WindowRegistry:
             return []
         with open(self.path, "r", encoding="utf-8") as f:
             entries = json.load(f)
-        # "open" is newer than this file format — entries written before it
-        # existed default to open, so upgrading users see every window they
-        # already had, exactly as before this field existed.
+        # "open"/"deleted" are newer than this file format — entries written
+        # before they existed default to open and not-deleted, so upgrading
+        # users see every window they already had, exactly as before these
+        # fields existed.
         for e in entries:
             e.setdefault("open", True)
+            e.setdefault("deleted", False)
         return entries
 
     def _save(self) -> None:
@@ -86,23 +88,28 @@ class WindowRegistry:
 
     def add(self, tag: str = DEFAULT_TAG) -> str:
         window_id = uuid.uuid4().hex
-        self._entries.append({"id": window_id, "tag": tag, "open": True})
+        self._entries.append({"id": window_id, "tag": tag, "open": True, "deleted": False})
         self._save()
         return window_id
 
     def next_available_tag(self, base_tag: str) -> str:
-        """base_tag unchanged if no window already has it, otherwise
-        "<base_tag> - <n>" where n is one more than the highest number
-        already in use for this base (the bare tag itself counts as 1) —
-        used by WindowManager.createWindow() so ADDing a new window while
-        one is already named "YATA" doesn't produce two identically-tagged
-        windows. Only applies there — add()/rename() themselves still allow
-        duplicate tags freely, since a manual rename is the user's own
-        explicit choice.
+        """base_tag unchanged if no non-deleted window already has it,
+        otherwise "<base_tag> - <n>" where n is one more than the highest
+        number already in use for this base (the bare tag itself counts as
+        1) — used by WindowManager.createWindow() so ADDing a new window
+        while one is already named "YATA" doesn't produce two identically-
+        tagged windows. Deleted entries are ignored: they aren't currently
+        visible, so they shouldn't force a new window into an "- 2" name.
+        Only applies here — add()/rename() themselves still allow duplicate
+        tags freely, since a manual rename is the user's own explicit
+        choice, and re-creating a deleted entry can still produce a
+        duplicate alongside a same-named active window either way.
         """
         highest = 0
         prefix = base_tag + " - "
         for e in self._entries:
+            if e.get("deleted", False):
+                continue
             t = e["tag"]
             if t == base_tag:
                 highest = max(highest, 1)
@@ -124,6 +131,18 @@ class WindowRegistry:
         for e in self._entries:
             if e["id"] == window_id:
                 e["open"] = open_
+                self._save()
+                return
+
+    def set_deleted(self, window_id: str, deleted: bool) -> None:
+        """Persists the soft-delete state driving YatasView's ACTIVE/DELETED
+        categories — set True by WindowManager.deleteWindow() (data kept),
+        cleared by recreateWindow(). A deleted-but-not-purged entry keeps
+        its registry row and on-disk tasks/settings; only purgeWindow()
+        (remove() below, plus deleting its files) actually discards them."""
+        for e in self._entries:
+            if e["id"] == window_id:
+                e["deleted"] = deleted
                 self._save()
                 return
 

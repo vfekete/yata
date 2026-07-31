@@ -62,6 +62,49 @@ def test_reopens_everything_if_every_window_was_closed(tmp_path):
     assert registry.list() == restored
 
 
+def test_deleted_windows_are_never_restored(tmp_path):
+    """A soft-deleted window (YatasView's DELETED category — see
+    WindowManager.deleteWindow) never gets restored at startup, even if its
+    "open" field somehow still says True."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    kept = registry.add("Personal")
+    deleted = registry.add("Work")
+    registry.set_deleted(deleted, True)
+
+    restored_ids = {e["id"] for e in _windows_to_restore(registry)}
+
+    assert restored_ids == {DEFAULT_WINDOW_ID, kept}
+
+
+def test_reopen_everything_fallback_excludes_deleted_windows(tmp_path):
+    """Every non-deleted window was individually closed, and one other
+    window is soft-deleted — the "reopen everything" fallback must restore
+    the closed-but-live one without resurrecting the deleted one."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    registry.set_open(DEFAULT_WINDOW_ID, False)
+    deleted = registry.add("Work")
+    registry.set_deleted(deleted, True)
+
+    restored = _windows_to_restore(registry)
+
+    assert [e["id"] for e in restored] == [DEFAULT_WINDOW_ID]
+
+
+def test_seeds_a_fresh_window_if_every_entry_is_deleted(tmp_path):
+    """Edge case: the user soft-deleted every window, including "default" —
+    startup should seed and show a fresh one rather than resurrecting a
+    deleted entry or launching with zero windows."""
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    registry.set_deleted(DEFAULT_WINDOW_ID, True)
+
+    restored = _windows_to_restore(registry)
+
+    assert len(restored) == 1
+    assert restored[0]["tag"] == DEFAULT_TAG
+    assert restored[0]["id"] != DEFAULT_WINDOW_ID  # never resurrects the deleted one
+    assert restored[0]["deleted"] is False
+
+
 def test_seeds_a_fresh_window_if_registry_is_completely_empty(tmp_path):
     """Edge case: the user deleted every window, including "default" —
     startup should still show something rather than launch with zero

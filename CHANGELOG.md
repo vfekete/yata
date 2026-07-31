@@ -7,6 +7,66 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.21.1] - 2026-07-30
+
+### Fixed
+- **Cross-window drag placeholder animation lagged noticeably**, more so
+  than the same-window reorder case. `TaskDelegate.qml`'s `onCentroidChanged`
+  ran the expensive per-move work — `windowManager.windowAt()`'s Python
+  round trip + cross-window broadcast, and `moveDragGhost()`'s real native
+  OS window reposition — directly on every raw pointer-move event, which
+  can fire far more often than the screen redraws. That saturated the event
+  loop with comparatively costly native window moves; the cross-window
+  placeholder update depends on that same single-threaded loop, so it
+  visibly lagged behind the always-locally-smooth same-window case. Fixed
+  by decoupling: `onCentroidChanged` now only records the latest pointer
+  position (cheap, local), while a new 16ms-interval `Timer` drives the
+  actual `windowAt()`/`moveDragGhost()` work at a capped, steady ~60fps.
+
+## [0.21.0] - 2026-07-30
+
+### Added
+- **YATAS soft-delete/recreate/purge lifecycle.** Deleting a window from the
+  YATAS list no longer immediately discards it: `WindowManager.deleteWindow`
+  now closes it and marks it "deleted" in the registry, keeping its
+  registry entry and on-disk tasks/settings intact. Two new actions handle
+  what happens next, both only ever shown on a DELETED row: **Re-create**
+  (same icon as a task's "re-active" — `WindowManager.recreateWindow`)
+  restores it to ACTIVE and reopens it from its still-on-disk data; **Purge**
+  (`WindowManager.purgeWindow`, always confirmed via new
+  `PurgeWindowDialog.qml`) permanently removes its registry entry and
+  deletes its data — the only way any of it actually gets discarded now.
+  Soft-deleted windows are never restored at app startup regardless of
+  their "open" field (`main.py`'s `_windows_to_restore`), and never count
+  against `next_available_tag`'s dedup check (they aren't currently
+  visible).
+- **YATAS sub-toolbar reworked to match**, only while the Yatas view is
+  active (reverts to the normal task sub-toolbar otherwise): the Day/Month/
+  Year calendar group hides entirely (a window list has no date concept),
+  the visibility group becomes ACTIVE/DELETED (independent toggles, both
+  can be shown together), and the order group mirrors the same two options
+  (single-select, brings whichever category is picked to the top when both
+  are visible) — new `yatasShowActive`/`yatasShowDeleted`/`yatasSortMode`
+  properties on `FilterBar.qml`, relayed into `YatasView.qml` via
+  `Main.qml`, same pattern as `toolbar.searchText`'s existing relay.
+
+## [0.20.0] - 2026-07-30
+
+### Changed
+- **Every confirmation dialog is now a real top-level window**, not a
+  QtQuick.Controls `Dialog`/`Popup` rendered inside its parent YATA window's
+  own Overlay layer. Concretely fixes the "Delete window?" and "Delete
+  task?" dialogs being part of the exact same X11 window as their parent —
+  which has `_NET_WM_STATE_BELOW` set on it (see `x11_stacking.py`) so YATA
+  stays beneath other apps on the desktop, meaning a confirmation dialog
+  could pop up hidden behind whatever else was on screen. New shared
+  `DialogWindow.qml` base (a nested `Window {}`, auto-`transientParent`-ed
+  to its enclosing YATA window by Qt Quick, never itself passed to
+  `enable_always_below()`) replaces both `DeleteWindowDialog.qml`'s and
+  `TaskDelegate.qml`'s inline `Dialog`s — same external API (`open()`,
+  `accepted`/`rejected`, centered over its parent, `Qt.WindowModal`,
+  Escape/Enter handling), zero `Dialog {` usages remain anywhere in the app.
+
 ## [0.19.4] - 2026-07-30
 
 ### Fixed

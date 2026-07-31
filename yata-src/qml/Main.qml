@@ -427,6 +427,9 @@ Window {
                 YatasView {
                     anchors.fill: parent
                     visible: filterBar.yatasActive
+                    showActive: filterBar.yatasShowActive
+                    showDeleted: filterBar.yatasShowDeleted
+                    sortMode: filterBar.yatasSortMode
                     searchText: toolbar.searchText
                 }
             }
