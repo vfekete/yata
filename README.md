@@ -4,7 +4,7 @@
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/main-green.png" alt="Green phosphor CRT theme" width="100%"/></td>
+    <td><img src="docs/screenshots/main-yatas-multiwindow.png" alt="YATAS multi-window management — one window listing both open windows, another showing its own task list" width="100%"/></td>
     <td><img src="docs/screenshots/main-goldenrod.png" alt="Amber phosphor CRT theme — Month calendar view" width="100%"/></td>
   </tr>
   <tr>
@@ -64,13 +64,17 @@ sticky note.
 - **Multiple windows**, for separating e.g. work from personal todos: each
   window has its own tasks, theme and position, shown as a tag label on the
   window's own top border (double-click a row in the YATAS list, below, to
-  rename it — default tag is "YATA"). The "YATAS" toolbar button switches to
-  a list of every window; ADD there opens a new window (cloning the current
-  window's theme, positioned so it doesn't overlap existing ones) instead of
-  adding a task, and the search field searches window tags. Each row has a
-  delete button; deleting always asks for confirmation, with an (unchecked
-  by default) option to also delete that window's tasks and settings —
-  closing it first if it's currently open.
+  rename it — default tag is "YATA"). Drag a task from one window onto
+  another to move it there, with a live placeholder showing where it'll
+  land. The "YATAS" toolbar button switches to a list of every window; ADD
+  there opens a new window (cloning the current window's theme, positioned
+  so it doesn't overlap existing ones) instead of adding a task, and the
+  search field searches window tags. Each row has a SHOW toggle (closes/
+  reopens that window without touching its data) and a delete button, which
+  always asks for confirmation — deleting moves a window to the DELETED
+  category (its tasks/settings are kept), switchable via YATAS's own
+  ACTIVE/DELETED sub-toolbar; from there, Re-create restores it, and Purge
+  permanently discards it.
 
 ## Usage notes
 

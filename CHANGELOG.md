@@ -7,6 +7,69 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.21.4] - 2026-07-31
+
+### Fixed
+- **The multi-window YATAS screenshot's two windows visibly overlapped**,
+  covering part of the back window's task list. Root cause: the requested
+  geometry for the back window (552px wide) was narrower than `Main.qml`'s
+  own `minimumWidth: toolbar.actionButtonsWidth * 2`, which silently
+  clamped it to ~760px on actual render — wide enough to push its right
+  edge past the front window's left edge. The *requested* rectangles never
+  overlapped; only the *rendered* ones did, so nothing caught it until the
+  image itself was inspected. Fixed with real geometry picked live (both
+  windows dragged/resized directly by hand until neither overlapped, then
+  read back via `xdotool getwindowgeometry` against the already-rendered
+  windows — not fed back in as a new request, so this specific clamping
+  can't recur for these values) and a new sanity check in
+  `run_yatas_multiwindow_scenario` that compares each window's requested
+  size against its actually-rendered size and raises immediately if
+  `Main.qml` clamped it, instead of only surfacing as a bad final image.
+
+## [0.21.3] - 2026-07-31
+
+### Fixed
+- **The multi-window YATAS screenshot had a visible seam and transparent
+  gaps** between the two windows — 0.21.2 captured each window separately
+  (`import -window <id>`) and glued them together with ImageMagick, but
+  each window's own translucent areas already bake in whatever was really
+  behind *that* window during *its own* separate capture, so gluing two
+  such captures together breaks background continuity between them
+  (exactly what the user's carefully-chosen real desktop position was
+  meant to preserve). Fixed by replacing the two-capture-then-composite
+  step with a single live `import -window root -crop <geometry>` grab of
+  the real, composited desktop region spanning both windows — safe now
+  that `enable_always_below()` is neutralized for screenshot windows
+  (0.21.2), so stacking is deterministic and `root` genuinely shows the
+  front window on top.
+
+## [0.21.2] - 2026-07-31
+
+### Changed
+- **README screenshots regenerated** for the current app version (multi-
+  window YATAS, drag-and-drop, real-window dialogs, and all the other
+  changes since the last capture). `scripts/capture_screenshots.py`'s
+  `run_scenario()` predated the multi-window feature and never set the
+  `windowManager`/`windowId` context properties `Main.qml` has required
+  since — every scenario now builds its window via `main._make_window()`
+  (the same construction path a real launch uses) instead of loading
+  `Main.qml` by hand, fixing that. Also patches `enable_always_below()` to
+  a no-op for screenshot windows only (it was silently breaking real
+  `xdotool`-driven hover-glow capture) and lengthens the settle delays
+  before each interaction (the heavier window construction needed more
+  time to finish laying out than the old direct `engine.load()` did).
+- **New top-left grid cell**: two real windows in one screenshot
+  (`main-yatas-multiwindow.png`), demonstrating multi-window management —
+  a Goldenrod-themed window with YATAS open (listing both windows) in
+  front of a Black-themed window showing its own task list, replacing the
+  old plain green-theme screenshot. Composited from two individually
+  captured windows (not a single live screen-region grab — each window's
+  own translucent areas already bake in whatever was really behind them at
+  capture time, which would look wrong pasted over a different
+  background). Position/size for both windows picked interactively by the
+  user on the real desktop, same procedure as the existing single-window
+  capture geometry.
+
 ## [0.21.1] - 2026-07-30
 
 ### Fixed
