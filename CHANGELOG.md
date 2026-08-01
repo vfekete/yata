@@ -7,6 +7,18 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.24.2] - 2026-08-01
+
+### Fixed
+- **README's screenshot grid had unequal column widths** — the
+  `main-yatas-multiwindow.png` image (1535px wide, two windows side by
+  side) is nearly double the width of every other screenshot (991px), so
+  its column stretched wider than its neighbor across the whole table
+  (each `<td>`'s only sizing came from `<img width="100%"/>`, which
+  collapses to the image's own intrinsic width when the cell itself is
+  unconstrained). Fixed by adding `width="50%"` to every `<td>` directly,
+  pinning both columns equal regardless of each image's own size.
+
 ## [0.24.1] - 2026-08-01
 
 ### Changed
