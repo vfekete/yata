@@ -80,6 +80,7 @@ Item {
             onShowToggled: (id, show) => show ? windowManager.openWindow(id) : windowManager.closeWindow(id)
             onRecreateRequested: (id) => windowManager.recreateWindow(id)
             onPurgeRequested: (id, tag) => purgeDialog.openFor(id, tag)
+            onBorderColorPicked: (id, color) => windowManager.setBorderColor(id, color)
         }
     }
 

@@ -417,6 +417,71 @@ def test_move_task_to_window_falls_back_to_top_with_no_reported_hover_index(tmp_
     assert [t.id for t in dest_model._tasks] == [task_id, dest_existing]
 
 
+def _make_app_settings(tmp_path, name):
+    from PySide6.QtCore import QSettings
+
+    from settings import AppSettings
+
+    settings = QSettings(str(tmp_path / f"{name}.ini"), QSettings.IniFormat)
+    return AppSettings(settings=settings)
+
+
+def test_get_border_color_defaults_to_empty_for_open_window(tmp_path):
+    manager = make_manager(tmp_path)
+    app_settings = _make_app_settings(tmp_path, "win")
+    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), app_settings=app_settings)
+
+    assert manager.getBorderColor(DEFAULT_WINDOW_ID) == ""
+
+
+def test_set_border_color_updates_live_app_settings_for_open_window(tmp_path):
+    """The whole point (r-4.md): an open window's border/tag color updates
+    instantly because this writes the exact same AppSettings object
+    Main.qml's own bindings already read from — no extra signal plumbing."""
+    manager = make_manager(tmp_path)
+    app_settings = _make_app_settings(tmp_path, "win")
+    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), app_settings=app_settings)
+
+    manager.setBorderColor(DEFAULT_WINDOW_ID, "#ff8800")
+
+    assert app_settings.borderColor == "#ff8800"
+    assert manager.getBorderColor(DEFAULT_WINDOW_ID) == "#ff8800"
+
+
+def test_border_color_works_for_a_closed_window_via_its_settings_file(tmp_path):
+    """YatasView lists closed windows too — picking a color for one must
+    still persist, even with no live AppSettings object to write through."""
+    manager = make_manager(tmp_path)
+    window_id = manager._registry.add("Closed Window")
+
+    assert manager.getBorderColor(window_id) == ""
+
+    manager.setBorderColor(window_id, "#00ff88")
+
+    assert manager.getBorderColor(window_id) == "#00ff88"
+
+
+def test_border_color_set_while_closed_survives_reopening(tmp_path):
+    from PySide6.QtCore import QSettings
+
+    from settings import AppSettings
+    from window_registry import settings_path_for
+
+    manager = make_manager(tmp_path)
+    window_id = manager._registry.add("Later Opened")
+    manager.setBorderColor(window_id, "#123456")
+
+    # Simulate actually opening it afterward: a real AppSettings backed by
+    # the exact same on-disk file setBorderColor() wrote to (settings_path_for,
+    # not a made-up path — same lookup WindowManager._open_settings_for uses).
+    path = settings_path_for(window_id)
+    reopened_settings = AppSettings(settings=QSettings(path, QSettings.IniFormat))
+    manager.register_window(window_id, FakeWindow(0, 0, 400, 600), app_settings=reopened_settings)
+
+    assert manager.getBorderColor(window_id) == "#123456"
+    assert reopened_settings.borderColor == "#123456"
+
+
 def test_window_at_resets_drag_hover_index_when_no_window_is_under_the_point(tmp_path):
     manager = make_manager(tmp_path)
     manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600))

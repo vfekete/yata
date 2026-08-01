@@ -146,6 +146,43 @@ class WindowManager(QObject):
         self._registry.rename(window_id, new_tag)
         self.windowsChanged.emit()
 
+    def _open_settings_for(self, window_id: str):
+        """Same shape as main.py's own _open_settings() — reimplemented
+        here rather than imported to avoid a window_manager -> main
+        circular import (main.py already imports WindowManager)."""
+        from PySide6.QtCore import QSettings
+
+        from window_registry import settings_path_for
+
+        path = settings_path_for(window_id)
+        return QSettings(path, QSettings.IniFormat) if path else QSettings("yata", "yata")
+
+    @Slot(str, result=str)
+    def getBorderColor(self, window_id: str) -> str:
+        """"" means "no custom color, follow the theme" (r-4.md). Reads the
+        live AppSettings if the window is open (matches what's actually on
+        screen right now), else opens its settings file directly — YatasView
+        lists closed windows too, so this needs to work either way."""
+        entry = self._windows.get(window_id)
+        if entry is not None:
+            return entry["app_settings"].borderColor
+        return str(self._open_settings_for(window_id).value("theme/borderColor", ""))
+
+    @Slot(str, str)
+    def setBorderColor(self, window_id: str, color: str) -> None:
+        """Sets window_id's custom border/tag-name color (see getBorderColor).
+        For an open window this goes through its live AppSettings object —
+        the same one Main.qml's border/tag bindings already read from, so
+        the change applies and previews instantly with no extra signal
+        plumbing needed here."""
+        entry = self._windows.get(window_id)
+        if entry is not None:
+            entry["app_settings"].borderColor = color
+            return
+        settings = self._open_settings_for(window_id)
+        settings.setValue("theme/borderColor", color)
+        settings.sync()
+
     @Slot(str)
     def deleteWindow(self, window_id: str) -> None:
         """Soft-deletes a window (YatasView's DELETED category, the trash

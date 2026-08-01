@@ -9,7 +9,7 @@
   </tr>
   <tr>
     <td><img src="docs/screenshots/main-dark.png" alt="Dark theme — Markdown rendering, long task wrapping, hover delete glow" width="100%"/></td>
-    <td><img src="docs/screenshots/main-yatas-multiwindow.png" alt="YATAS multi-window management — one window listing both open windows, another showing its own task list" width="100%"/></td>
+    <td><img src="docs/screenshots/main-yatas-multiwindow.png" alt="YATAS multi-window management — one window listing both open windows, another showing its own task list, each with a distinct custom glowing border color" width="100%"/></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/main_settings.png" alt="Theme menu — opacity slider, tints, dark/light" width="100%"/></td>
@@ -115,6 +115,7 @@ required by the Noun Project's license), licensed under
 - "Arrow Up Down" by Nursila — `resources/assets/noun-arrow-up-down-5553937.svg`
 - "Search" by Lyhn — `resources/assets/noun-search-2353120.svg`
 - "Link" by Design Queen — `resources/assets/noun-link-7985857.svg`
+- "Paint Bucket" by Arthur Shlain — `resources/assets/noun-paint-bucket-104334.svg`
 
 ## Known limitation
 

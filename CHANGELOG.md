@@ -7,6 +7,123 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.24.1] - 2026-08-01
+
+### Changed
+- **README screenshots regenerated** to reflect the border/tag glow now
+  being on by default (0.24.0): `main-green`, `main-goldenrod`, `main-dark`,
+  `main_settings`, `main-links` all recaptured via
+  `scripts/capture_screenshots.py`.
+- The `main-yatas-multiwindow.png` screenshot's two windows now each have a
+  distinct, contrasting custom border color (`#FF3DB2` / `#39FF14`) to
+  demonstrate the colorized-border feature (r-4.md) directly — real
+  geometry re-derived live (both windows now genuinely need 760px width at
+  the current `minimumWidth`, up from the stale 599px/610px baked into the
+  script) rather than reusing old constants.
+
+### Fixed
+- `scripts/capture_screenshots.py`'s `main-green` scenario, which
+  regenerates `docs/screenshots/main-green.png`, had been accidentally
+  deleted from `SCENARIOS` in an earlier commit (1155ace) even though
+  README still references that file — restored.
+
+## [0.24.0] - 2026-08-01
+
+### Changed
+- **The border + tag-name glow (r-4.md) is now on by default for every
+  window**, not just when a custom border color is picked — it uses the
+  theme's own default border/text color as the glow color instead. The
+  border's glow width (4px) is likewise now permanent rather than
+  custom-color-only. Confirmed live: subtle on the default theme color,
+  same vivid look as before when a custom color is set.
+- Content margin from the border tuned down from 30px (0.23.5) to 15px —
+  30 read as too much empty space around the content.
+
+## [0.23.5] - 2026-08-01
+
+### Changed
+- **Window content felt cramped against the border**, especially after
+  0.23.4 thickened the border to 4px for the colorized-border glow — the
+  content area's margin from the border went from 6px to 30px (5x) on all
+  sides. Confirmed live.
+
+## [0.23.4] - 2026-08-01
+
+### Fixed
+- **The colorized border's glow was still noticeably fainter than the rest
+  of the app's glow effects**, even after 0.23.3's 2px stroke fix — an
+  isolated side-by-side comparison against `TaskDelegate.qml`'s own
+  `deleteBtn` hover glow (the exact reference the user pointed to) showed
+  2px still reading as a thin haze, while a much bigger `blurMax` made
+  almost no difference. `border.width` for the custom-color case now goes
+  to 4px (drag-hover's own highlight keeps its existing, unrelated 2px),
+  which reads as a proper neon-tube glow matching the reference intensity.
+  Confirmed live.
+
+## [0.23.3] - 2026-08-01
+
+### Fixed
+- **The colorized border's glow was barely visible**, even after 0.23.2
+  fixed its positioning — a 1px stroke doesn't give `MultiEffect`'s blur
+  enough alpha "mass" to build a visible halo from, unlike the task item
+  buttons' glyphs (solid filled shapes) or the tag-name text, which don't
+  have this problem. `border.width` now goes to 2px (same width the
+  existing drag-hover highlight already uses) whenever a custom color is
+  active, giving the glow a visibly comparable presence to the rest of the
+  app's glow effects. Confirmed live.
+
+## [0.23.2] - 2026-08-01
+
+### Fixed
+- **The colorized border's glow rendered as a separate, displaced rounded
+  box instead of hugging the actual border line** — 0.23.1's fix
+  (`shadowScale: 0.9`, inward) did make a glow appear, but a nonzero
+  `shadowScale` makes `MultiEffect` draw an entirely separate, differently-
+  sized *copy* of the whole shape; for a small icon that copy is close
+  enough to read as a tight halo, but for this window-filling `Rectangle`
+  even a 10% scale is tens of pixels of absolute displacement — visibly a
+  second, disconnected box floating inside the window, not a glow on the
+  border. Fixed with `shadowScale: 1.0` (no scale change at all) — draws
+  the shadow at the exact same geometry as the source, so `shadowBlur`
+  alone softens it into a halo that hugs the real line and bleeds inward,
+  with zero displacement.
+
+## [0.23.1] - 2026-08-01
+
+### Fixed
+- **The colorized window border had no glow** — only the tag-name text did.
+  Root cause: the border `Rectangle` is `anchors.fill: parent` of the whole
+  window, flush against the real window edges on 3 sides, and the glow
+  used `MultiEffect`'s usual outward `shadowScale` (>1.0) — but a real
+  window surface has zero pixels to render into past its own true
+  boundary, on any platform, so the outward bleed had nowhere to go and
+  was invisible (confirmed empirically: even a 40px margin barely made it
+  appear, an unacceptable layout change just to make room). Fixed by
+  scaling the shadow copy *inward* (`shadowScale: 0.9`) instead — bleeds
+  toward the window's own interior, where there's always room, with zero
+  change to the border's actual on-screen position. The tag text was
+  already fine (has a few pixels of natural inset from its own label
+  background) and is unchanged.
+
+## [0.23.0] - 2026-08-01
+
+### Added
+- **Colorized window border + tag name** (`claude-docs/freq/r-4.md`): each
+  window can now be given its own custom color, an additional way to tell
+  windows apart beyond tag name and theme. New paint-bucket button on each
+  ACTIVE row in the YATAS list opens the system's native color picker (GTK
+  color chooser on GNOME, confirmed live); picking a color tints that
+  window's border outline and tag-name text, with the same glow treatment
+  already used for the task list's hover icons — kept even under CRT
+  tints, still respects the opacity slider. Works for windows that aren't
+  currently open too (persists to that window's settings file directly).
+  `THEME > RESET` clears a window back to following its theme's own border
+  color, same as it already resets opacity/zoom. New `AppSettings.
+  borderColor` (empty string = no override), `WindowManager.
+  getBorderColor`/`setBorderColor(window_id, ...)`. New icon: `resources/
+  assets/noun-paint-bucket-104334.svg` (Arthur Shlain, Noun Project,
+  attribution added to README).
+
 ## [0.22.0] - 2026-07-31
 
 ### Changed

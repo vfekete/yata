@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Effects
 
@@ -24,6 +25,11 @@ Item {
     signal showToggled(string windowId, bool show)
     signal recreateRequested(string windowId)
     signal purgeRequested(string windowId, string tag)
+    // r-4.md: a custom border/tag-name color for this window, picked via
+    // colorBtn below — fires once the ColorDialog is accepted (confirm-to-
+    // apply; QtQuick.Dialogs' ColorDialog only reports a final selection,
+    // not a continuous live one — see colorBtn's own comment).
+    signal borderColorPicked(string windowId, color newColor)
 
     property bool editing: false
     readonly property bool hovered: hoverHandler.hovered
@@ -129,6 +135,52 @@ Item {
             }
             HoverHandler { id: showHover; cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: root.showToggled(root.windowId, !root.open) }
+        }
+
+        // Custom border/tag-name color picker (r-4.md) — same "ACTIVE row
+        // only" visibility as showBtn/deleteBtn above; a deleted window
+        // isn't rendered, so there's nothing to preview a color change on.
+        // Tinted/glowed the same neutral way as every other icon here
+        // (hover-only cyan), not by whatever color is currently picked —
+        // that flourish wasn't asked for.
+        IconIndicator {
+            id: colorBtn
+            visible: !root.deleted && !root.editing
+            iconName: "paintbucket"
+            sizeScale: 1.15 * 0.65
+            Layout.alignment: Qt.AlignVCenter
+            Layout.topMargin: Math.round(Theme.taskFontPixelSize * 0.2) - 15
+            tint: colorHover.hovered ? "#00FFFF" : Theme.textColor
+            layer.enabled: colorHover.hovered
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: "#00FFFF"
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowOpacity: 1.0
+                shadowScale: 1.05
+            }
+            HoverHandler { id: colorHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler {
+                onTapped: {
+                    var current = windowManager.getBorderColor(root.windowId)
+                    colorDialog.selectedColor = current !== "" ? current : "white"
+                    colorDialog.open()
+                }
+            }
+
+            // QtQuick.Dialogs' ColorDialog (the native platform dialog when
+            // one is available) only reports a final choice via
+            // selectedColor/accepted — unlike, say, a Slider's onMoved,
+            // there's no continuous "still picking" signal to preview
+            // against, so this is confirm-to-apply rather than live-preview
+            // (native OS color pickers work the same way).
+            ColorDialog {
+                id: colorDialog
+                title: qsTr("Choose border color")
+                onAccepted: root.borderColorPicked(root.windowId, selectedColor)
+            }
         }
 
         Text {

@@ -103,15 +103,30 @@ FONT_SCALE = 1.4
 # constants), so it's correct regardless; regenerating from this script
 # later may need a quick visual re-check of font size against the committed
 # image.
+# border_color (r-4.md) values are deliberately far apart in hue from each
+# other AND from either window's own theme tint (magenta vs. black, green
+# vs. goldenrod) so this one screenshot doubles as a demonstration of the
+# per-window colorized-border feature — a viewer can tell the two windows
+# apart by border color alone, not just position/tint.
 MULTIWINDOW_BACK = dict(tag="Personal", theme_tint="black", opacity=100,
-                         x=3875, y=39, width=599, height=498, font_scale=1.4)
+                         x=3573, y=39, width=760, height=498, font_scale=1.4,
+                         border_color="#FF3DB2")
 MULTIWINDOW_FRONT = dict(tag="Work", theme_tint="goldenrod", opacity=65,
-                          x=4491, y=40, width=610, height=495, font_scale=1.4)
+                          x=4348, y=39, width=760, height=500, font_scale=1.4,
+                          border_color="#39FF14")
 
 # Each scenario: filename (under docs/screenshots/), theme, filters, which
 # view is showing, and an optional two-step hover target (row match text,
 # then a specific icon glyph inside that row to hover onto for its glow).
 SCENARIOS = {
+    # Restored — this scenario was accidentally dropped in commit 1155ace
+    # while main-yata/main-yatas-multiwindow were being added, even though
+    # README.md still references docs/screenshots/main-green.png at (0,0);
+    # without it the script couldn't regenerate that screenshot at all.
+    "main-green": dict(
+        theme_mode="dark", theme_tint="green", opacity=65,
+        view="list", group_by_day=False, status_sort="",
+    ),
     "main-goldenrod": dict(
         theme_mode="dark", theme_tint="goldenrod", opacity=65,
         view="month", group_by_day=False, status_sort="",
@@ -260,7 +275,8 @@ def _bootstrap_app(tmp_dir: str):
 
 def _build_window(engine, registry, manager, icon_provider, app_icon, *, tag, theme_mode,
                    theme_tint, opacity, x, y, width=WINDOW_WIDTH, height=WINDOW_HEIGHT,
-                   font_scale=FONT_SCALE, wheel_zoom_inverted=False, seed_tasks=True):
+                   font_scale=FONT_SCALE, wheel_zoom_inverted=False, seed_tasks=True,
+                   border_color=""):
     """Registers a fresh window_id in `registry`, seeds its task store (from
     the shared mock fixture, unless seed_tasks=False), and builds it via
     main._make_window() — the exact same construction path a real launch
@@ -287,6 +303,7 @@ def _build_window(engine, registry, manager, icon_provider, app_icon, *, tag, th
     settings.opacityPercent = opacity
     settings.fontScale = font_scale
     settings.wheelZoomInverted = wheel_zoom_inverted
+    settings.borderColor = border_color
 
     win = _make_window(engine, icon_provider, manager, app_icon, window_id, task_store, settings)
     task_model = manager._windows[window_id]["task_model"]
@@ -466,7 +483,7 @@ def run_yatas_multiwindow_scenario(out_dir: Path):
             tag=back_cfg["tag"], theme_mode="dark", theme_tint=back_cfg["theme_tint"],
             opacity=back_cfg["opacity"], x=back_cfg["x"], y=back_cfg["y"],
             width=back_cfg["width"], height=back_cfg["height"],
-            font_scale=back_cfg["font_scale"],
+            font_scale=back_cfg["font_scale"], border_color=back_cfg["border_color"],
         )
 
         result = {}
@@ -493,7 +510,7 @@ def run_yatas_multiwindow_scenario(out_dir: Path):
                 tag=front_cfg["tag"], theme_mode="dark", theme_tint=front_cfg["theme_tint"],
                 opacity=front_cfg["opacity"], x=front_cfg["x"], y=front_cfg["y"],
                 width=front_cfg["width"], height=front_cfg["height"],
-                font_scale=front_cfg["font_scale"],
+                font_scale=front_cfg["font_scale"], border_color=front_cfg["border_color"],
                 seed_tasks=False,  # never shown — YATAS view replaces the list entirely
             )
             result["front_id"] = front_id

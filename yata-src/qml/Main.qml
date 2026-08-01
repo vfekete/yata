@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Window
 
@@ -199,12 +200,12 @@ Window {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 6
+            anchors.margins: 15
             // Extra headroom so the toolbar doesn't collide with the tag
             // label sitting on the border line above it (see tagLabelBg
             // near the bottom of this file) — scales with the label's own
             // (font-zoom-dependent) height rather than a fixed guess.
-            anchors.topMargin: 6 + tagLabelBg.height / 2 + 4
+            anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
             spacing: 2
 
             Toolbar {
@@ -488,6 +489,7 @@ Window {
         }
 
         Rectangle {
+            id: windowBorder
             anchors.fill: parent
             anchors.topMargin: tagLabelBg.height / 2
             color: "transparent"
@@ -497,9 +499,63 @@ Window {
             // filterGlowColor is the default cyan for "none", or the
             // selected tint's own accent color, same rule as every other
             // on/active glow in this app (FilterBar's toggle buttons, and
-            // now TaskDelegate's drop placeholder too).
-            border.color: root.dragHoverActive ? Theme.filterGlowColor : Theme.borderColor
-            border.width: root.dragHoverActive ? 2 : 1
+            // now TaskDelegate's drop placeholder too). Takes priority over
+            // the user's own custom border color below — it's a separate,
+            // transient "you're dropping here" signal, not this window's
+            // persistent identity color.
+            //
+            // appSettings.borderColor !== "" is r-4.md's per-window custom
+            // color (YatasView's paint-bucket button) — "" (the default)
+            // means no override, follow the theme exactly as before.
+            border.color: root.dragHoverActive ? Theme.filterGlowColor
+                          : (appSettings.borderColor !== "" ? appSettings.borderColor : Theme.borderColor)
+            // A 1px stroke doesn't give MultiEffect's blur enough alpha
+            // "mass" to build a visible halo from — confirmed live: at
+            // width 1 the glow was barely a tint. Width 4 is what reads as
+            // an actual neon-tube glow (isolated side-by-side comparison
+            // against TaskDelegate's own deleteBtn glow, the vividness
+            // target); blurMax had negligible effect by comparison, so
+            // width is the real lever here. This is now the border's
+            // permanent width, not just a custom-color-only look — the
+            // glow itself is on by default (see layer.enabled below), so
+            // it needs this width whether or not a custom color is set.
+            // Drag-hover keeps its own distinct 2px highlight width.
+            border.width: root.dragHoverActive ? 2 : 4
+
+            // shadowScale: 1.0 (NOT the usual >1.0 outward-bleed used
+            // everywhere else in this app for icon glows/tag text) — a
+            // nonzero scale factor makes MultiEffect draw an entirely
+            // separate, differently-sized COPY of the whole border shape;
+            // for a small icon that copy is close enough to read as a tight
+            // halo, but for this Rectangle (anchors.fill: parent of the
+            // whole window) even a 10% scale is tens of pixels of absolute
+            // displacement — visibly a second, disconnected rectangle
+            // floating inside, not a glow hugging the real border (caught
+            // live: exactly this "detached rounded box" artifact). Also,
+            // any *outward* scale specifically has nowhere to bleed at all
+            // — a real window surface has zero pixels past its own true
+            // boundary, on any platform (confirmed: even a 40px margin
+            // barely made outward bleed visible, an unacceptable layout
+            // change). shadowScale: 1.0 draws the shadow at the exact same
+            // geometry as the source, so shadowBlur alone softens it into a
+            // halo that hugs the real line and bleeds inward (where there's
+            // always room) with zero displacement and zero margin needed.
+            // On by default now, not just when a custom color (r-4.md) is
+            // set — shadowColor reads border.color itself (already the
+            // full drag-hover > custom-color > theme-default fallback
+            // chain above), so the glow always matches whatever's
+            // actually drawn, with no separate default-vs-custom branch
+            // to keep in sync.
+            layer.enabled: !root.dragHoverActive
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: windowBorder.border.color
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowOpacity: 1.0
+                shadowScale: 1.0
+            }
         }
 
         // This window's tag, drawn "cutting into" the top border line like
@@ -537,10 +593,26 @@ Window {
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
                 text: root.windowTag
-                color: Theme.textColor
+                // Same custom-color-with-glow treatment as the border above
+                // (r-4.md) — "" (default) means no override, unchanged from
+                // before.
+                color: appSettings.borderColor !== "" ? appSettings.borderColor : Theme.textColor
                 font.bold: true
                 font.family: Theme.fontFamily
                 font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.8)
+
+                // On by default now, not just when a custom color (r-4.md)
+                // is set — same reasoning as windowBorder's glow above.
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: tagLabelText.color
+                    shadowBlur: 1.0
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 0
+                    shadowOpacity: 1.0
+                    shadowScale: 1.05
+                }
             }
 
             TapHandler {

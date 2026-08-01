@@ -76,6 +76,7 @@ class AppSettings(QObject):
     heightChanged = Signal()
     themeModeChanged = Signal()
     themeTintChanged = Signal()
+    borderColorChanged = Signal()
     opacityPercentChanged = Signal()
     fontScaleChanged = Signal()
     wheelZoomInvertedChanged = Signal()
@@ -88,6 +89,7 @@ class AppSettings(QObject):
         self._theme_mode = mode if mode in THEME_MODES else "dark"
         tint = self._settings.value("theme/tint", "none")
         self._theme_tint = tint if tint in THEME_TINTS else "none"
+        self._border_color = str(self._settings.value("theme/borderColor", ""))
         self._opacity_percent = self._clamp_opacity(
             self._settings.value("theme/opacityPercent", DEFAULT_OPACITY_PERCENT)
         )
@@ -204,6 +206,25 @@ class AppSettings(QObject):
         self.themeTintChanged.emit()
 
     themeTint = Property(str, _get_theme_tint, _set_theme_tint, notify=themeTintChanged)
+
+    def _get_border_color(self) -> str:
+        return self._border_color
+
+    def _set_border_color(self, value: str):
+        value = str(value)
+        if value == self._border_color:
+            return
+        self._border_color = value
+        self._settings.setValue("theme/borderColor", value)
+        self._settings.sync()
+        self.borderColorChanged.emit()
+
+    # Empty string means "no override, follow the theme's own border color"
+    # (r-4.md) — a window's border outline and tag-name text switch to this
+    # color (with a glow, same treatment as the task item menu's hover
+    # icons) once set. No separate bool flag needed: "" already can't be a
+    # valid CSS-style color string, so it's an unambiguous sentinel.
+    borderColor = Property(str, _get_border_color, _set_border_color, notify=borderColorChanged)
 
     def _get_opacity_percent(self) -> int:
         return self._opacity_percent

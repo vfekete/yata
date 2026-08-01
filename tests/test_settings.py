@@ -89,6 +89,33 @@ def test_invalid_theme_values_are_ignored(tmp_path):
     assert settings.themeTint == "none"
 
 
+def test_border_color_defaults_to_empty(tmp_path):
+    """Empty string means "no custom color, follow the theme" (r-4.md)."""
+    settings = AppSettings(settings=ini_settings(tmp_path))
+    assert settings.borderColor == ""
+
+
+def test_border_color_persists(tmp_path):
+    backing = ini_settings(tmp_path)
+    settings = AppSettings(settings=backing)
+
+    settings.borderColor = "#ff8800"
+    backing.sync()
+
+    restarted = AppSettings(settings=ini_settings(tmp_path))
+    assert restarted.borderColor == "#ff8800"
+
+
+def test_border_color_can_be_reset_to_empty(tmp_path):
+    backing = ini_settings(tmp_path)
+    settings = AppSettings(settings=backing)
+    settings.borderColor = "#ff8800"
+
+    settings.borderColor = ""
+
+    assert settings.borderColor == ""
+
+
 def test_opacity_and_font_scale_defaults(tmp_path):
     settings = AppSettings(settings=ini_settings(tmp_path))
     assert settings.opacityPercent == DEFAULT_OPACITY_PERCENT == 65
