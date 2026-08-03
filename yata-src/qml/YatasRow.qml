@@ -20,6 +20,14 @@ Item {
     required property bool open
     required property bool deleted
     required property int openWindowCount
+    // This window's own custom border color (r-4.md), "" if unset — set
+    // from YatasView's modelData.borderColor (windowManager.listWindows()
+    // now includes it), a genuine reactive property binding rather than
+    // calling windowManager.getBorderColor() directly from inside
+    // tagText's color binding, which wouldn't pick up a later change (a
+    // plain method call inside a QML binding expression isn't a tracked
+    // dependency, so it never re-evaluates on its own).
+    required property string borderColor
     signal renamed(string windowId, string newTag)
     signal deleteRequested(string windowId, string tag)
     signal showToggled(string windowId, bool show)
@@ -64,11 +72,11 @@ Item {
             // (not tint-gated either, same as the border itself). This is
             // a DIFFERENT window than the one this YATAS list lives in, so
             // it can't use this window's own Theme.effectiveGlowColor
-            // (that's this window's identity color, not row's); reads the
-            // row's own windowId via windowManager.getBorderColor()
-            // instead, same call colorBtn below already uses to seed its
-            // dialog. No glow — explicit follow-up request, color only.
-            color: windowManager.getBorderColor(root.windowId) !== "" ? windowManager.getBorderColor(root.windowId) : Theme.textColor
+            // (that's this window's identity color, not row's) — uses
+            // root.borderColor (a real reactive property, see its own
+            // declaration above) instead. No glow — explicit follow-up
+            // request, color only.
+            color: root.borderColor !== "" ? root.borderColor : Theme.textColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize
 

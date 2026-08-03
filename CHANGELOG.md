@@ -7,6 +7,33 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.25.4] - 2026-08-01
+
+### Fixed
+- **0.25.3's YATAS list name color didn't actually update when a color was
+  picked** without closing and reopening the list first. Root cause: the
+  binding called `windowManager.getBorderColor(windowId)` directly inside a
+  QML property expression — a plain method call doesn't register as a
+  tracked dependency for QML's binding engine, so it silently never
+  re-evaluated after its first read, no matter how many times the
+  underlying value actually changed. Fixed by making `borderColor` a real
+  property on each row instead, sourced from `windowManager.listWindows()`
+  (now includes each window's `borderColor`) via `modelData` — the same
+  already-reactive mechanism the tag/open/deleted fields use, which
+  correctly update today.
+
+### Testing
+- Discovered and fixed a real test-isolation gap while adding coverage for
+  this: a new test's bare `AppSettings()` (the same `QSettings("yata",
+  "yata")` 2-arg constructor the real app uses) leaked its written
+  `borderColor` into an unrelated, later-running test in the same pytest
+  process — monkeypatching `XDG_CONFIG_HOME` per-test didn't prevent it.
+  Switched to an explicit-path `QSettings(..., IniFormat)`, sidestepping
+  env-var-based resolution entirely. Confirmed via repeated full-suite runs
+  (including reversed file order) that the leak is gone; the real
+  `~/.config/yata`/`~/.local/share/yata` files were never actually at risk
+  (confirmed via mtime, unchanged throughout).
+
 ## [0.25.3] - 2026-08-01
 
 ### Added

@@ -74,6 +74,7 @@ Item {
             tag: modelData.tag
             open: modelData.open
             deleted: modelData.deleted
+            borderColor: modelData.borderColor
             openWindowCount: root.openWindowCount
             onRenamed: (id, newTag) => windowManager.renameWindow(id, newTag)
             onDeleteRequested: (id, tag) => deleteDialog.openFor(id, tag)

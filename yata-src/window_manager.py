@@ -102,7 +102,20 @@ class WindowManager(QObject):
         # (which only matters at next startup) — so the SHOW toggle in
         # YatasView always reflects reality, including for a window closed
         # or opened moments ago in this same session.
-        return [dict(e, open=self.is_open(e["id"])) for e in self._registry.list()]
+        #
+        # borderColor is included here (not read via a separate
+        # windowManager.getBorderColor() call from inside a QML binding) so
+        # YatasRow's tag-name color is a genuine reactive property binding
+        # off modelData — a plain method call inside a QML binding
+        # expression doesn't register the underlying value as a tracked
+        # dependency, so it would silently never re-evaluate after picking
+        # a new color, even though this array gets freshly rebuilt on every
+        # windowsChanged (confirmed live: exactly this symptom, color
+        # picked but the list never updated).
+        return [
+            dict(e, open=self.is_open(e["id"]), borderColor=self.getBorderColor(e["id"]))
+            for e in self._registry.list()
+        ]
 
     @Slot(str, result=str)
     def tagFor(self, window_id: str) -> str:
@@ -162,10 +175,22 @@ class WindowManager(QObject):
         """"" means "no custom color, follow the theme" (r-4.md). Reads the
         live AppSettings if the window is open (matches what's actually on
         screen right now), else opens its settings file directly — YatasView
-        lists closed windows too, so this needs to work either way."""
+        lists closed windows too, so this needs to work either way.
+
+        entry.get("app_settings") rather than entry["app_settings"]: some
+        callers (register_window's own test helpers, and window_factory
+        results that never wire a live AppSettings) register a window
+        without one — listWindows() now calls this for every window
+        unconditionally (r-6, so the YATAS list's tag-name color is a real
+        reactive property rather than a QML-side method call), so this
+        needs to degrade gracefully to the settings-file path instead of
+        crashing for those, exactly like an actually-closed window already
+        does.
+        """
         entry = self._windows.get(window_id)
-        if entry is not None:
-            return entry["app_settings"].borderColor
+        app_settings = entry.get("app_settings") if entry is not None else None
+        if app_settings is not None:
+            return app_settings.borderColor
         return str(self._open_settings_for(window_id).value("theme/borderColor", ""))
 
     @Slot(str, str)

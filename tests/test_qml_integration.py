@@ -139,7 +139,20 @@ def engine_and_window(qml_app, tmp_path, monkeypatch):
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
 
-    app_settings = AppSettings()
+    # An explicit-path QSettings (IniFormat), not bare AppSettings()'s own
+    # QSettings("yata", "yata") 2-arg fallback — that fallback resolves via
+    # QStandardPaths at construction time, and empirically (confirmed via a
+    # real full-suite run) Qt does NOT reliably re-resolve it per-process
+    # for every later monkeypatched XDG_CONFIG_HOME: this fixture's own
+    # write-then-read tests leaked their borderColor into an unrelated,
+    # later-running test_window_manager.py test in the same pytest process
+    # (that test's own autouse XDG_CONFIG_HOME fixture didn't help — the
+    # path/data was apparently already cached from this fixture's earlier,
+    # first-in-process use). An explicit absolute path sidesteps the whole
+    # env-var-resolution/caching question entirely — see feedback_test_data_safety.
+    from PySide6.QtCore import QSettings  # noqa: PLC0415
+
+    app_settings = AppSettings(QSettings(str(tmp_path / "app.ini"), QSettings.IniFormat))
     icon_provider = IconProvider()
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     window_manager = WindowManager(registry, window_factory=lambda *a: None)

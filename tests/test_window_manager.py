@@ -79,7 +79,9 @@ def make_manager(tmp_path):
 def test_list_windows_starts_with_default(tmp_path):
     manager = make_manager(tmp_path)
     windows = manager.listWindows()
-    assert windows == [{"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": False, "deleted": False}]
+    assert windows == [
+        {"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": False, "deleted": False, "borderColor": ""}
+    ]
 
 
 def test_create_window_appends_registry_entry(tmp_path):
