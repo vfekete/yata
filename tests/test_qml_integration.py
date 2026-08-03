@@ -121,6 +121,105 @@ def test_delete_task_removes_it(engine_and_model):
     assert model._find(t1) is None
 
 
+@pytest.fixture()
+def engine_and_window(qml_app, tmp_path, monkeypatch):
+    """Like engine_and_model, but yields (window, app_settings) instead of
+    just the task model — needed for r-5.md's Theme.effectiveGlowColor/
+    effectiveLinkColor, which live on the per-window Theme context property,
+    not on the task model."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "yata-src"))
+    import resources_rc  # noqa: F401,PLC0415
+    from icons import IconProvider  # noqa: PLC0415
+    from main import _make_window  # noqa: PLC0415
+    from settings import AppSettings  # noqa: PLC0415
+    from storage import TaskStore  # noqa: PLC0415
+    from window_manager import WindowManager  # noqa: PLC0415
+    from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
+
+    app_settings = AppSettings()
+    icon_provider = IconProvider()
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    window_manager = WindowManager(registry, window_factory=lambda *a: None)
+
+    engine = QQmlApplicationEngine()
+    qml_dir = os.path.join(os.path.dirname(__file__), "..", "yata-src", "qml")
+    engine.addImportPath(qml_dir)
+
+    window = _make_window(
+        engine, icon_provider, window_manager, QIcon(),
+        DEFAULT_WINDOW_ID, TaskStore(), app_settings,
+    )
+    qml_app.processEvents()
+    qml_app.processEvents()
+
+    yield window, app_settings
+
+    del engine
+    qml_app.processEvents()
+    qml_app.processEvents()
+
+
+def _theme_for(window):
+    from PySide6.QtQml import QQmlEngine  # noqa: PLC0415
+
+    return QQmlEngine.contextForObject(window).contextProperty("Theme")
+
+
+def test_effective_glow_color_follows_custom_border_color(engine_and_window):
+    """r-5.md: FilterButton's pushed-state glow and markdown link color/glow
+    should follow the window's custom border color (r-4.md) once one is
+    set, falling back to each one's own theme default otherwise."""
+    window, app_settings = engine_and_window
+    theme = _theme_for(window)
+
+    default_glow = theme.property("effectiveGlowColor")
+    default_link = theme.property("effectiveLinkColor")
+    assert default_glow == theme.property("filterGlowColor")
+    assert default_link == theme.property("linkColor")
+
+    app_settings.borderColor = "#ff3db2"
+    assert theme.property("effectiveGlowColor").name().lower() == "#ff3db2"
+    assert theme.property("effectiveLinkColor").name().lower() == "#ff3db2"
+
+
+def test_effective_glow_color_falls_back_after_reset(engine_and_window):
+    """Resetting the custom border color (ThemeMenu's Reset, or clearing it
+    any other way) must bring the button/link colors back to their own
+    theme defaults, not leave them stuck on the last custom color."""
+    window, app_settings = engine_and_window
+    theme = _theme_for(window)
+
+    app_settings.borderColor = "#39ff14"
+    assert theme.property("effectiveGlowColor").name().lower() == "#39ff14"
+
+    app_settings.borderColor = ""
+    assert theme.property("effectiveGlowColor") == theme.property("filterGlowColor")
+    assert theme.property("effectiveLinkColor") == theme.property("linkColor")
+
+
+def test_effective_glow_color_ignores_custom_color_under_a_tint(engine_and_window):
+    """Follow-up to r-5.md: under any CRT tint (not "none"), buttons/links
+    keep that tint's own accent-derived color regardless of a custom border
+    color — only the border itself (Main.qml, not Theme) takes the raw
+    custom color under a tint. Only the "none" tint lets buttons/links
+    follow the custom color."""
+    window, app_settings = engine_and_window
+    theme = _theme_for(window)
+
+    app_settings.themeTint = "green"
+    app_settings.borderColor = "#ff3db2"
+    assert theme.property("effectiveGlowColor") == theme.property("filterGlowColor")
+    assert theme.property("effectiveLinkColor") == theme.property("linkColor")
+    assert theme.property("effectiveGlowColor").name().lower() != "#ff3db2"
+
+    app_settings.themeTint = "none"
+    assert theme.property("effectiveGlowColor").name().lower() == "#ff3db2"
+    assert theme.property("effectiveLinkColor").name().lower() == "#ff3db2"
+
+
 def test_click_away_on_new_task_saves_task_name(engine_and_model, qml_app):
     """onEditingFinished with empty text for a new task should save 'Task name'.
 

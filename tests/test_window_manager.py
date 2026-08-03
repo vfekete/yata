@@ -448,6 +448,23 @@ def test_set_border_color_updates_live_app_settings_for_open_window(tmp_path):
     assert manager.getBorderColor(DEFAULT_WINDOW_ID) == "#ff8800"
 
 
+def test_set_border_color_emits_windows_changed(tmp_path):
+    """YatasView's row for a window's tag-name text reads the color via
+    windowManager.getBorderColor(), not a live binding to that window's own
+    AppSettings (YatasView is a different window) — it only re-reads on
+    windowsChanged, so setBorderColor must emit it like every other mutator
+    in this class, or a freshly-picked color wouldn't show up there."""
+    manager = make_manager(tmp_path)
+    app_settings = _make_app_settings(tmp_path, "win")
+    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), app_settings=app_settings)
+
+    received = []
+    manager.windowsChanged.connect(lambda: received.append(True))
+    manager.setBorderColor(DEFAULT_WINDOW_ID, "#ff8800")
+
+    assert received == [True]
+
+
 def test_border_color_works_for_a_closed_window_via_its_settings_file(tmp_path):
     """YatasView lists closed windows too — picking a color for one must
     still persist, even with no live AppSettings object to write through."""

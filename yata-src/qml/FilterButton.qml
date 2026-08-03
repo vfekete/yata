@@ -24,11 +24,16 @@ Item {
         font.family: Theme.fontFamily
         font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.75)
         font.capitalization: Font.AllUppercase
-        color: bh.hovered ? Theme.filterHoverColor : (btn.active ? Theme.filterGlowColor : Theme.mutedTextColor)
+        // Pushed (active) state matches the window's own custom border
+        // color (r-4.md/r-5.md) when one is set — Theme.effectiveGlowColor
+        // already carries that fallback. Hover keeps its own existing
+        // Theme.filterHoverColor regardless — that's a transient
+        // interaction state, not this window's persistent identity color.
+        color: bh.hovered ? Theme.filterHoverColor : (btn.active ? Theme.effectiveGlowColor : Theme.mutedTextColor)
         layer.enabled: bh.hovered || btn.active
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: bh.hovered ? Theme.filterHoverColor : Theme.filterGlowColor
+            shadowColor: bh.hovered ? Theme.filterHoverColor : Theme.effectiveGlowShadowColor
             shadowBlur: 1.0
             shadowHorizontalOffset: 0
             shadowVerticalOffset: 0

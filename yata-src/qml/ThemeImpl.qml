@@ -160,6 +160,36 @@ QtObject {
     readonly property color filterGlowColor: tintName === "none" ? "#00FFFF" : current.accent
     readonly property color filterHoverColor: tintName === "none" ? "#FFFFFF" : Qt.lighter(current.accent, 1.4)
 
+    // r-5.md: once a window has its own custom border color (r-4.md), the
+    // pushed FilterButton glow and markdown link color/glow follow that
+    // same color instead of their own theme defaults — one shared "this
+    // window's identity color" instead of three independently-themed
+    // accents. "" (no custom border color, the default) falls back to each
+    // one's own existing theme color exactly as before.
+    //
+    // Only under the "none" tint, though — a CRT tint's own accent-derived
+    // colors (filterGlowColor/linkColor above, current.accent, etc.) are
+    // already tuned per-tint for legibility against that tint's background,
+    // and a user-picked color can clash with them arbitrarily. Per explicit
+    // follow-up request: under any tint, only the border itself takes the
+    // custom color (Main.qml's windowBorder/tagLabelText — untouched by
+    // this file, always follows appSettings.borderColor regardless of
+    // tint); buttons/links keep the tint's own color exactly as they did
+    // before r-5.md existed.
+    readonly property color effectiveGlowColor: (tintName === "none" && appSettings.borderColor !== "") ? appSettings.borderColor : filterGlowColor
+    readonly property color effectiveLinkColor: (tintName === "none" && appSettings.borderColor !== "") ? appSettings.borderColor : linkColor
+
+    // Shadow-only variants, lightened the same way filterHoverColor already
+    // lightens its own base accent (Qt.lighter(..., 1.4)) — a custom border
+    // color can be any brightness the user picks (a mid-tone pink has much
+    // lower perceived luminance than the fixed "#00FFFF" every hover glow
+    // used before r-5.md), so the base color alone isn't reliably vivid
+    // enough to read as a strong glow at the same shadowBlur/shadowOpacity.
+    // The base effectiveGlowColor/effectiveLinkColor stay untouched for
+    // fill/text/border usage — only the glow itself gets lightened.
+    readonly property color effectiveGlowShadowColor: Qt.lighter(effectiveGlowColor, 1.4)
+    readonly property color effectiveLinkShadowColor: Qt.lighter(effectiveLinkColor, 1.4)
+
     // LinksView's "ACTIVE" status tag (see StatusTag.qml). Spec: "white with
     // glow; for tints, color follows tint color but has adequate brightness
     // to express white". A literal white would be unreadable in "none"

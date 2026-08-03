@@ -16,7 +16,7 @@ Item {
     id: root
     signal clicked()
 
-    readonly property color iconTint: hh.hovered ? "#00FFFF" : Theme.mutedTextColor
+    readonly property color iconTint: hh.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
     readonly property real iconBoxHeight: Theme.taskFontPixelSize * 1
     readonly property real iconBoxWidth: icon.implicitHeight > 0
         ? Math.round(iconBoxHeight * icon.implicitWidth / icon.implicitHeight)
@@ -40,7 +40,7 @@ Item {
         layer.enabled: hh.hovered
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: "#00FFFF"
+            shadowColor: Theme.effectiveGlowShadowColor
             shadowBlur: 1.0
             shadowHorizontalOffset: 0
             shadowVerticalOffset: 0

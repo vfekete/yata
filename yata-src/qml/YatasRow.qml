@@ -59,7 +59,16 @@ Item {
             Layout.fillWidth: true
             visible: !root.editing
             text: root.tag
-            color: Theme.textColor
+            // Shows in that window's own custom border color (r-4.md) when
+            // it has one — mirrors its own border/tag-name text exactly
+            // (not tint-gated either, same as the border itself). This is
+            // a DIFFERENT window than the one this YATAS list lives in, so
+            // it can't use this window's own Theme.effectiveGlowColor
+            // (that's this window's identity color, not row's); reads the
+            // row's own windowId via windowManager.getBorderColor()
+            // instead, same call colorBtn below already uses to seed its
+            // dialog. No glow — explicit follow-up request, color only.
+            color: windowManager.getBorderColor(root.windowId) !== "" ? windowManager.getBorderColor(root.windowId) : Theme.textColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize
 
@@ -121,12 +130,12 @@ Item {
             // Started as +0.2*taskFontPixelSize (too far down per live
             // screenshot); pulled back up 15px per direct user feedback.
             Layout.topMargin: Math.round(Theme.taskFontPixelSize * 0.2) - 15
-            tint: showHover.hovered ? "#00FFFF" : (root.open ? Theme.textColor : Theme.mutedTextColor)
+            tint: showHover.hovered ? Theme.effectiveGlowColor : (root.open ? Theme.textColor : Theme.mutedTextColor)
             opacity: root.open ? 1.0 : 0.4
             layer.enabled: showHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: "#00FFFF"
+                shadowColor: Theme.effectiveGlowShadowColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -140,9 +149,11 @@ Item {
         // Custom border/tag-name color picker (r-4.md) — same "ACTIVE row
         // only" visibility as showBtn/deleteBtn above; a deleted window
         // isn't rendered, so there's nothing to preview a color change on.
-        // Tinted/glowed the same neutral way as every other icon here
-        // (hover-only cyan), not by whatever color is currently picked —
-        // that flourish wasn't asked for.
+        // Hover tint/glow now follows the window's own custom color too
+        // (r-5.md, via Theme.effectiveGlowColor), same as every other icon
+        // in this row — this WAS deliberately kept neutral cyan-only
+        // before r-5.md existed, since "match the picked color" wasn't a
+        // thing yet at the time.
         IconIndicator {
             id: colorBtn
             visible: !root.deleted && !root.editing
@@ -150,11 +161,11 @@ Item {
             sizeScale: 1.15 * 0.65
             Layout.alignment: Qt.AlignVCenter
             Layout.topMargin: Math.round(Theme.taskFontPixelSize * 0.2) - 15
-            tint: colorHover.hovered ? "#00FFFF" : Theme.textColor
+            tint: colorHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
             layer.enabled: colorHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: "#00FFFF"
+                shadowColor: Theme.effectiveGlowShadowColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -190,13 +201,13 @@ Item {
             // for an already-DELETED row; that's purgeBtn's job below.
             visible: !root.deleted && !root.editing
             text: "🗑"
-            color: deleteHover.hovered ? "#00FFFF" : Theme.mutedTextColor
+            color: deleteHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize * 1.3
             layer.enabled: deleteHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: "#00FFFF"
+                shadowColor: Theme.effectiveGlowShadowColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -218,13 +229,13 @@ Item {
             // delete/purge this one isn't destructive at all.
             visible: root.deleted && !root.editing
             text: "↺"
-            color: recreateHover.hovered ? "#00FFFF" : Theme.accentColor
+            color: recreateHover.hovered ? Theme.effectiveGlowColor : Theme.accentColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize * 1.3
             layer.enabled: recreateHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: "#00FFFF"
+                shadowColor: Theme.effectiveGlowShadowColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -243,13 +254,13 @@ Item {
             // always confirms first.
             visible: root.deleted && !root.editing
             text: "🗑"
-            color: purgeHover.hovered ? "#00FFFF" : Theme.mutedTextColor
+            color: purgeHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize * 1.3
             layer.enabled: purgeHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: "#00FFFF"
+                shadowColor: Theme.effectiveGlowShadowColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0

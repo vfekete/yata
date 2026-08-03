@@ -174,14 +174,24 @@ class WindowManager(QObject):
         For an open window this goes through its live AppSettings object —
         the same one Main.qml's border/tag bindings already read from, so
         the change applies and previews instantly with no extra signal
-        plumbing needed here."""
+        plumbing needed here.
+
+        windowsChanged is emitted regardless (matching every other mutator
+        in this class) so YatasView.refresh() re-reads the new color for
+        that row's own tag-name text — the live-AppSettings path above
+        doesn't need this for the owning window's own border/tag
+        (Main.qml's binding already tracks appSettings.borderColor
+        directly), but YatasView's list is a different window entirely
+        with no such binding of its own.
+        """
         entry = self._windows.get(window_id)
         if entry is not None:
             entry["app_settings"].borderColor = color
-            return
-        settings = self._open_settings_for(window_id)
-        settings.setValue("theme/borderColor", color)
-        settings.sync()
+        else:
+            settings = self._open_settings_for(window_id)
+            settings.setValue("theme/borderColor", color)
+            settings.sync()
+        self.windowsChanged.emit()
 
     @Slot(str)
     def deleteWindow(self, window_id: str) -> None:

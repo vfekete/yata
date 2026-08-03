@@ -7,7 +7,77 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
-## [0.24.2] - 2026-08-01
+## [0.25.3] - 2026-08-01
+
+### Added
+- **YATAS list window names now show in that window's own custom border
+  color** (color only, no glow) — each row reads its own window's color via
+  `windowManager.getBorderColor()`, since a YATAS row can represent a
+  different window than the one the list itself lives in. Not tint-gated,
+  matching the border's own behavior (only buttons/links are tint-gated).
+  `WindowManager.setBorderColor()` now also emits `windowsChanged` (was
+  previously the one mutator in that class that didn't), so a freshly-picked
+  color shows up in the list immediately.
+
+## [0.25.2] - 2026-08-01
+
+### Changed
+- **Links view no longer glows**, per explicit follow-up — reverted to flat
+  colored text (still following the custom border color when set, just no
+  `MultiEffect` glow). It was the only glow added fresh by r-5.md rather
+  than an existing one just recolored, and didn't fit here after all.
+- **Buttons/links now ignore the custom border color under any CRT tint**
+  (green/goldenrod/black) — only the border itself takes the raw custom
+  color regardless of tint; buttons/links keep that tint's own
+  accent-derived color exactly as they did before r-5.md, since a
+  tint's own palette is already tuned per-element for legibility and an
+  arbitrary picked color could clash with it. Only under the "none" tint
+  do buttons/links follow the custom color, as before.
+
+## [0.25.1] - 2026-08-01
+
+### Fixed
+- **0.25.0's button/link glow didn't cover every hover-glow icon in the
+  app, and read fainter than the old fixed cyan even where it did apply.**
+  User feedback with a screenshot: the task list's ✓/✕/↺/🗑 hover icons
+  still showed the old hardcoded cyan glow, not the custom border color.
+  Turned out ~15 more spots across `TaskDelegate.qml`, `YatasRow.qml`
+  (show/paint-bucket/delete/recreate/purge icons), and
+  `LinkToTaskButton.qml` all hardcoded `"#00FFFF"` directly rather than
+  going through `Theme` — now all route through the same
+  `Theme.effectiveGlowColor`. `DragGhost.qml`'s cyan border is
+  deliberately left as-is: it's a single app-wide window built once,
+  outside any per-window `Theme`/`appSettings` context, and mid cross-window
+  drag there's no single unambiguous window's color to borrow anyway.
+- **Faintness**: a custom color can be any brightness the user picks (a
+  mid-tone pink has much lower perceived luminance than the old fixed
+  `#00FFFF`), so the same shadow parameters read weaker. Added
+  `Theme.effectiveGlowShadowColor`/`effectiveLinkShadowColor`
+  (`Qt.lighter(effective*Color, 1.4)`, same lightening factor
+  `filterHoverColor` already uses) — the base fill/text/border stays the
+  exact picked color, only the glow itself is lightened for visibility.
+
+## [0.25.0] - 2026-08-01
+
+### Added
+- **Pushed FilterBar/OrderBar buttons and markdown links now follow the
+  window's custom border color** (r-5.md), instead of each having its own
+  independently-themed accent color. `ThemeImpl.qml` gained
+  `effectiveGlowColor`/`effectiveLinkColor`, both falling back to their
+  existing theme defaults when no custom border color is set (and
+  reverting automatically on THEME > RESET, since these are plain reactive
+  bindings off `appSettings.borderColor`).
+- Links in the LINKS view (`LinkRow.qml`) now have a real glow effect
+  (previously flat colored text only), matching the border/tag/button glow
+  treatment, on by default using the theme's own link color. Inline
+  markdown links inside a task's own text (`TaskDelegate.qml`) get the
+  color update only, not a glow — a glow effect applies to a whole text
+  element's rendered layer, not a substring within it, so glowing just the
+  link portion of mixed prose+link text isn't achievable without fragile
+  per-link overlay hacks; a Links-view row is 100% link text so it doesn't
+  have that problem.
+
+
 
 ### Fixed
 - **README's screenshot grid had unequal column widths** — the

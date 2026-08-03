@@ -56,7 +56,7 @@ Item {
                         var link = root.links[i]
                         var label = String(link.label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                         var url = String(link.url).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                        parts.push('<a href="' + url + '"><font color="' + Theme.linkColor + '">' + label + '</font></a>')
+                        parts.push('<a href="' + url + '"><font color="' + Theme.effectiveLinkColor + '">' + label + '</font></a>')
                     }
                     return parts.join(', ')
                 }

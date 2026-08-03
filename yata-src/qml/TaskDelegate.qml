@@ -340,7 +340,15 @@ Item {
             Text {
                 id: taskText
                 width: parent.width
-                text: root.mdToHtml(root.text, Theme.linkColor)
+                // r-5.md: color only, no glow — this text mixes plain/bold/
+                // italic prose with zero or more inline links in one
+                // continuous StyledText block, and MultiEffect's glow
+                // applies to a whole Item's rendered layer, not a
+                // substring within it; glowing this Text would glow ALL of
+                // it, not just the link portions. LinkRow.qml (Links view)
+                // gets the full glow instead, since a row there is 100%
+                // link text with nothing else to accidentally light up.
+                text: root.mdToHtml(root.text, Theme.effectiveLinkColor)
                 textFormat: Text.StyledText
                 wrapMode: root.hovered ? Text.Wrap : Text.NoWrap
                 elide: root.hovered ? Text.ElideNone : Text.ElideRight
@@ -494,13 +502,13 @@ Item {
             Text {
                 id: doneBtn
                 text: "✓"
-                color: doneBtnHover.hovered ? "#00FFFF" : Theme.doneColor
+                color: doneBtnHover.hovered ? Theme.effectiveGlowColor : Theme.doneColor
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.taskFontPixelSize * 2
                 layer.enabled: doneBtnHover.hovered
                 layer.effect: MultiEffect {
                     shadowEnabled: true
-                    shadowColor: "#00FFFF"
+                    shadowColor: Theme.effectiveGlowShadowColor
                     shadowBlur: 1.0
                     shadowHorizontalOffset: 0
                     shadowVerticalOffset: 0
@@ -513,13 +521,13 @@ Item {
             Text {
                 id: cancelBtn
                 text: "✕"
-                color: cancelBtnHover.hovered ? "#00FFFF" : Theme.cancelledColor
+                color: cancelBtnHover.hovered ? Theme.effectiveGlowColor : Theme.cancelledColor
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.taskFontPixelSize * 2
                 layer.enabled: cancelBtnHover.hovered
                 layer.effect: MultiEffect {
                     shadowEnabled: true
-                    shadowColor: "#00FFFF"
+                    shadowColor: Theme.effectiveGlowShadowColor
                     shadowBlur: 1.0
                     shadowHorizontalOffset: 0
                     shadowVerticalOffset: 0
@@ -532,14 +540,14 @@ Item {
             Text {
                 id: reopenBtn
                 text: "↺"
-                color: reopenBtnHover.hovered ? "#00FFFF" : Theme.accentColor
+                color: reopenBtnHover.hovered ? Theme.effectiveGlowColor : Theme.accentColor
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.taskFontPixelSize * 2
                 visible: root.status !== "active"
                 layer.enabled: reopenBtnHover.hovered
                 layer.effect: MultiEffect {
                     shadowEnabled: true
-                    shadowColor: "#00FFFF"
+                    shadowColor: Theme.effectiveGlowShadowColor
                     shadowBlur: 1.0
                     shadowHorizontalOffset: 0
                     shadowVerticalOffset: 0
@@ -552,13 +560,13 @@ Item {
             Text {
                 id: deleteBtn
                 text: "🗑"
-                color: deleteBtnHover.hovered ? "#00FFFF" : Theme.mutedTextColor
+                color: deleteBtnHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.taskFontPixelSize * 2
                 layer.enabled: deleteBtnHover.hovered
                 layer.effect: MultiEffect {
                     shadowEnabled: true
-                    shadowColor: "#00FFFF"
+                    shadowColor: Theme.effectiveGlowShadowColor
                     shadowBlur: 1.0
                     shadowHorizontalOffset: 0
                     shadowVerticalOffset: 0
