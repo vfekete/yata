@@ -26,7 +26,7 @@ def _read_bool(s: QSettings, key: str, default: bool) -> bool:
         return v.lower() not in ("false", "0", "no")
     return bool(v)
 
-_ID, _TEXT, _STATUS, _DAY_LABEL, _COMPLETED_AT = (Qt.UserRole + i for i in range(1, 6))
+_ID, _TEXT, _STATUS, _DAY_LABEL, _COMPLETED_AT, _NOTE = (Qt.UserRole + i for i in range(1, 7))
 
 
 def day_label(iso_timestamp: str) -> str:
@@ -67,6 +67,7 @@ class TaskListModel(QAbstractListModel):
             _STATUS: b"status",
             _DAY_LABEL: b"dayLabel",
             _COMPLETED_AT: b"completedAt",
+            _NOTE: b"note",
         }
 
     def rowCount(self, parent=QModelIndex()):
@@ -88,6 +89,8 @@ class TaskListModel(QAbstractListModel):
             return day_label(task.created_at)
         if role == _COMPLETED_AT:
             return task.completed_at
+        if role == _NOTE:
+            return task.note
         return None
 
     # --- view state --------------------------------------------------------
@@ -264,6 +267,23 @@ class TaskListModel(QAbstractListModel):
             task.completed_at = datetime.now().isoformat()
         self._recompute()
         self._save()
+
+    @Slot(str, str)
+    def setNote(self, task_id: str, note: str):
+        task = self._find(task_id)
+        if task is None or task.note == note:
+            return
+        task.note = note
+        self._recompute()
+        self._save()
+
+    @Slot(str, result=str)
+    def noteFor(self, task_id: str) -> str:
+        """Reads a task's note by id — NoteEditorView.qml has no per-row
+        QML context to bind `note` from directly the way TaskDelegate can
+        (it's a whole-list-view sibling, not a delegate)."""
+        task = self._find(task_id)
+        return task.note if task is not None else ""
 
     @Slot(str)
     def deleteTask(self, task_id: str):

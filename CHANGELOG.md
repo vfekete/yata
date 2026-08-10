@@ -7,6 +7,151 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.27.1] - 2026-08-10
+
+### Changed
+- Status-line icon spacing (note/reopen icons in `TaskDelegate.qml`)
+  hand-tuned by the user: added a reusable `Theme.nonActiveActionIconGap`
+  constant (`ThemeImpl.qml`) for the small gap after each icon, and a
+  dedicated spacer `Item` between the timestamp and the note icon instead
+  of padding the timestamp text itself. Icon wrappers are now vertically
+  centered against their own height (matched to `completedStatus`'s
+  implicit height) rather than anchored to `completedStatus`'s own
+  `verticalCenter`.
+
+## [0.27.0] - 2026-08-10
+
+### Changed
+- **Reopen (↺) button moved** from the task row's hover-action buttons to
+  the status line, right of the note icon, for `DONE`/`CANCELED` tasks —
+  always visible there (like the note icon), not just on row hover.
+- **Task row hover-buttons for `DONE`/`CANCELED` tasks now show only
+  DELETE** — the ✓/✕ (mark done/cancelled) icons are hidden for
+  non-active tasks, since they no longer make sense once a task is
+  already closed. Active tasks keep ✓/✕/🗑 as before.
+
+## [0.26.6] - 2026-08-10
+
+### Changed
+- Status-line note icon (`TaskDelegate.qml`) hand-tuned by the user: made
+  larger (full `taskFontPixelSize` instead of `* 0.75`) and nudged to a
+  visually correct position.
+- Widened the gap between the status word and the timestamp (status
+  label's trailing padding now measures 5 spaces instead of 1).
+
+## [0.26.5] - 2026-08-10
+
+### Changed
+- **Status-line `DONE`/`CANCELED` label now has a fixed width** (sized to
+  fit the longer of the two words), so the timestamp that follows lines
+  up at the same horizontal position across rows regardless of status.
+- **Removed the `[` `]` brackets around the completion timestamp** —
+  it now reads as a plain `dd-mm-yyyy HH:MM`.
+
+## [0.26.4] - 2026-08-10
+
+### Changed
+- **The status-line note icon (`TaskDelegate.qml`) is now always visible**
+  on completed/cancelled tasks, not just once a note has been added —
+  clicking it now opens the note editor to add a first note, not only to
+  view/edit an existing one.
+- **Layout reordered** to `STATUS [TIMESTAMP]  NOTE_BUTTON` (was `STATUS
+  NOTE_BUTTON [TIMESTAMP]`) — the icon now comes last, with a bigger gap
+  before it than the status→timestamp gap, per explicit request.
+- **Vertical alignment fixed** — the icon read as sitting higher than the
+  status/timestamp text even though its own bounding box was centered;
+  anchored directly to `completedStatus`'s own `verticalCenter` instead of
+  its own wrapper's, sidestepping whatever asymmetry is in the icon
+  artwork's bounding box (same lesson as tuning `HoldToNoteButton`'s icon
+  earlier this session).
+
+## [0.26.3] - 2026-08-10
+
+### Changed
+- **HoldToNoteButton's note icon/ring tuned by hand** — the icon felt too
+  "stuffed" inside the ring at its previous size, and the empirical
+  horizontal-offset nudge (added to compensate for the icon's own
+  asymmetric artwork) wasn't needed once the icon was simply made smaller
+  (`boxSize * 0.80`, plain `anchors.centerIn` instead of an offset). Ring
+  stroke widened from 2px to 3px to read more clearly at the new size.
+
+## [0.26.2] - 2026-08-09
+
+### Fixed
+- **After Cancel in the NOTE dialog, the DONE/CANCEL button needed to be
+  pressed twice** — the first press after closing the dialog silently did
+  nothing, and only the second responded normally. Root cause: `NoteDialog`
+  (a real separate top-level window, modal to the row's own window) can
+  steal the pointer grab mid-hold before the real mouse-up ever reaches the
+  row's `TapHandler`, permanently stuck-orphaning its internal `pressed`
+  state — confirmed via direct property inspection, and confirmed that
+  merely disabling/re-enabling the handler (0.26.1's fix for the *visual*
+  symptom) does not clear this, since Qt doesn't discard a disabled
+  handler's grab bookkeeping. Fixed by wrapping the `TapHandler` in a
+  `Loader` and fully destroying and recreating it (not just disabling)
+  once the dialog closes, which does yield a genuinely fresh handler with
+  no grab history. (A `Loader` has no implicit size of its own, so it also
+  needed an explicit `anchors.fill: parent` — otherwise the recreated
+  handler silently stopped receiving any events at all, having no real
+  hit-test area.)
+
+## [0.26.1] - 2026-08-09
+
+### Fixed
+- **HoldToNoteButton's icon wasn't centered in its progress ring** — the
+  note icon's own artwork (a paperclip loop above a page stack, tightly
+  cropped to its ink) isn't visually symmetric within its bounding box,
+  reading as shifted left even when geometrically centered. Nudged right
+  empirically until it read as centered live.
+- **The ✓/✕/🗑 action icons weren't vertically aligned on the same row** —
+  `HoldToNoteButton`'s box size no longer matched a plain `Text` glyph's
+  own natural size (was a hardcoded formula), so it sat at a different
+  height than `reopenBtn`/`deleteBtn` despite all sharing one top-aligned
+  `Row`. Now sized off its own `glyphText`'s `implicitWidth`/
+  `implicitHeight` directly, matching a sibling `Text` glyph exactly. This
+  also revealed a second bug: `HoldToNoteButton`'s box is no longer
+  reliably square (glyphs differ in width), so the note icon's own
+  height-based sizing could overflow past the ring's diameter for a
+  narrower glyph — fixed by bounding it to a square sized off
+  `Math.min(width, height)` instead.
+- **The DONE/CANCEL icon stayed stuck on the glowing note icon + full ring
+  after pressing Cancel in the NOTE dialog** (task correctly stayed
+  unchanged, but the button never reverted). Root cause: the dialog is a
+  real separate top-level window that can steal the pointer grab mid-hold,
+  so the real mouse-up sometimes never reaches the row's own `TapHandler`
+  — its `pressed` property stayed stuck `true` after the dialog closed.
+  Fixed by tracking hold state manually (`isHeld`) instead of reading
+  `TapHandler.pressed` live: set `false` the instant `onLongPressed` fires
+  (before the dialog even opens), so a later stuck/stray `pressed` value
+  has nothing left to affect. Confirmed live via direct property
+  inspection, not just visually.
+
+## [0.26.0] - 2026-08-09
+
+### Added
+- **Task closure notes** (r-6.md): an optional markdown note can now be
+  attached when marking a task DONE or CANCELLED, explaining the reason
+  for the state change.
+  - A normal quick click on the ✓/✕ icon still behaves exactly as before
+    (instant status change, no note). Press-and-hold instead swaps the
+    icon for a Note icon with a circular progress ring filling around it
+    (`HoldToNoteButton.qml`); releasing before the ring fills does
+    nothing at all. Holding to completion opens a "NOTE" dialog
+    automatically (no release needed) with a markdown textbox and
+    OK/CANCEL — OK attaches the note and applies the status change,
+    CANCEL applies neither.
+  - Completed tasks with a note show a small Note icon (hover-glow, like
+    the other task action icons) between the STATE word and the
+    timestamp — clicking it opens a mini markdown editor in place of the
+    task list (`NoteEditorView.qml`), pre-filled and directly editable,
+    with an always-visible OK/CANCEL footer. While it's open, the
+    calendar/visibility/order sub-toolbar is disabled; switching to
+    LINKS/YATAS and back restores the editor (with any unsaved edits
+    intact) instead of the plain task list.
+  - New `Task.note` field (`storage.py`), `TaskListModel.setNote`/
+    `noteFor` (`models.py`), and the `notes` icon asset (Noun Project,
+    attribution added to README).
+
 ## [0.25.4] - 2026-08-01
 
 ### Fixed

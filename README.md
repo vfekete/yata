@@ -116,6 +116,7 @@ required by the Noun Project's license), licensed under
 - "Search" by Lyhn — `resources/assets/noun-search-2353120.svg`
 - "Link" by Design Queen — `resources/assets/noun-link-7985857.svg`
 - "Paint Bucket" by Arthur Shlain — `resources/assets/noun-paint-bucket-104334.svg`
+- "Notes" by Suharsono — `resources/assets/noun-notes-8410855.svg`
 
 ## Known limitation
 

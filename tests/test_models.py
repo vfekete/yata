@@ -50,6 +50,41 @@ def test_set_status(model):
     assert role(model, 0, "status") == "active"
 
 
+def test_set_note(model):
+    task_id = model.addTask()
+
+    model.setNote(task_id, "why it's done")
+    assert role(model, 0, "note") == "why it's done"
+
+
+def test_new_task_starts_with_empty_note(model):
+    model.addTask()
+    assert role(model, 0, "note") == ""
+
+
+def test_note_for_returns_set_value(model):
+    task_id = model.addTask()
+    model.setNote(task_id, "the reason")
+    assert model.noteFor(task_id) == "the reason"
+
+
+def test_note_for_returns_empty_for_unknown_or_unset_task(model):
+    task_id = model.addTask()
+    assert model.noteFor(task_id) == ""
+    assert model.noteFor("no-such-id") == ""
+
+
+def test_set_note_noop_when_unchanged(model):
+    task_id = model.addTask()
+    model.setNote(task_id, "reason")
+    resets, changes = _signal_counters(model)
+
+    model.setNote(task_id, "reason")
+
+    assert not changes
+    assert not resets
+
+
 # --- dataChanged vs. full reset (Qt Quick best practices: avoid destroying
 # delegates for non-structural mutations) --------------------------------
 
@@ -82,6 +117,18 @@ def test_status_change_without_sort_active_emits_data_changed_not_reset(model):
     assert changes
     assert not resets
     assert role(model, 0, "status") == "done"
+
+
+def test_set_note_emits_data_changed_not_reset(model):
+    task_id = model.addTask()
+    model.setText(task_id, "Task")
+    resets, changes = _signal_counters(model)
+
+    model.setNote(task_id, "why")
+
+    assert changes
+    assert not resets
+    assert role(model, 0, "note") == "why"
 
 
 def test_search_narrowing_visibility_still_emits_reset(model):

@@ -200,4 +200,8 @@ QtObject {
     // correctly its darkest ink color, not literal white, since that's what
     // reads as "the prominent accent" against that tint's own background.
     readonly property color activeTagColor: tintName === "none" ? textColor : accentColor
+
+    // vfe: default spacing between items:
+    readonly property int nonActiveActionIconGap: Math.round(taskFontPixelSize * 0.1)
+
 }

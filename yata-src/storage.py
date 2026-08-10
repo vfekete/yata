@@ -19,6 +19,7 @@ class Task:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     completed_at: str = ""  # ISO timestamp of last transition to done/cancelled; "" if never finished
+    note: str = ""  # optional markdown note explaining a done/cancelled state; "" if never added (r-6.md)
 
 
 def data_dir() -> str:

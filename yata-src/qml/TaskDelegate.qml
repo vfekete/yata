@@ -12,6 +12,7 @@ Item {
     required property string status
     required property string dayLabel
     required property string completedAt
+    required property string note
 
     property bool forceEditing: false
     readonly property bool editing: forceEditing || text.length === 0
@@ -379,12 +380,23 @@ Item {
                 visible: root.status !== "active"
                 spacing: 0
 
+                // Measures "DONE"/"CANCELED" in the status text's own font so
+                // completedStatus can be given a fixed width below — otherwise
+                // the shorter "DONE" would let the timestamp creep left,
+                // leaving timestamps unaligned across rows depending on status.
+                FontMetrics {
+                    id: statusFontMetrics
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.75)
+                }
+
                 Text {
                     id: completedStatus
                     textFormat: Text.PlainText
                     text: root.status === "done" ? qsTr("DONE") : qsTr("CANCELED")
                     font.family: Theme.fontFamily
                     font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.75)
+                    width: Math.max(statusFontMetrics.advanceWidth(qsTr("DONE")), statusFontMetrics.advanceWidth(qsTr("CANCELED"))) + statusFontMetrics.advanceWidth("     ")
                     readonly property color labelColor: root.status === "done" ? Theme.completedDoneLabelColor : Theme.completedCancelledLabelColor
                     color: labelColor
                     layer.enabled: true
@@ -400,6 +412,7 @@ Item {
                 }
 
                 Text {
+                    id: completedTimestamp
                     visible: root.completedAt !== ""
                     textFormat: Text.PlainText
                     text: {
@@ -409,11 +422,93 @@ Item {
                         var mm = String(dt.getMonth() + 1).padStart(2, '0')
                         var HH = String(dt.getHours()).padStart(2, '0')
                         var MM = String(dt.getMinutes()).padStart(2, '0')
-                        return " [" + dd + "-" + mm + "-" + dt.getFullYear() + " " + HH + ":" + MM + "]"
+                        return dd + "-" + mm + "-" + dt.getFullYear() + " " + HH + ":" + MM
                     }
                     font.family: Theme.fontFamily
                     font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.75)
                     color: root.status === "done" ? Theme.doneColor : Theme.cancelledColor
+                }
+
+                // vfe: spacer, timestamp was too close and adding additional
+                //      spaces to the timestamp text to create visual margin
+                //      smells bad and feels like antipattern
+                Item {
+                    width: Math.round(Theme.taskFontPixelSize * 0.8)
+                    height: 1
+                }
+
+
+                // r-6.md follow-up: always present now (not just once a
+                // note exists) — clicking it opens NoteEditorView to ADD
+                // one when there isn't one yet, not only to view/edit an
+                // existing one. Click switches the content area to
+                // NoteEditorView for this task, via the same custom-
+                // property-on-listView convention TaskDelegate already
+                // uses for dragActive/dragHoverIndex/flashTaskId.
+                // Hover-only color/glow, matching the ✓/✕/↺/🗑 action-icon
+                // convention (not completedStatus's own always-on glow) —
+                // this is a neutral utility affordance, not a status
+                // indicator. Placed last (after the timestamp, a bigger
+                // gap than status→timestamp's own) per explicit layout
+                // request: "STATUS [TIMESTAMP]  NOTE_BUTTON".
+                Item {
+                    width: noteIconImg.width + Theme.nonActiveActionIconGap
+                    height: completedStatus.implicitHeight
+                    Image {
+                        id: noteIconImg
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        height: Theme.taskFontPixelSize
+                        width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        source: iconProvider.coloredSvgUri("notes",
+                            (noteIconHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor).toString())
+                        layer.enabled: noteIconHover.hovered
+                        layer.effect: MultiEffect {
+                            shadowEnabled: true
+                            shadowColor: Theme.effectiveGlowShadowColor
+                            shadowBlur: 1.0
+                            shadowHorizontalOffset: 0
+                            shadowVerticalOffset: 0
+                            shadowOpacity: 1.0
+                            shadowScale: 1.05
+                        }
+                        HoverHandler { id: noteIconHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: root.ListView.view.noteEditorTaskId = root.taskId }
+                    }
+                }
+
+                // Moved here from the row's hover-action buttons — this
+                // Row is already status-gated (visible: root.status !==
+                // "active" above), so no extra guard is needed. Sits right
+                // of the note icon, always visible like it (not
+                // hover-gated), matching the note icon's own convention.
+                Item {
+                    width: reopenGlyph.implicitWidth + Theme.nonActiveActionIconGap
+                    height: completedStatus.implicitHeight
+
+                    Text {
+                        id: reopenGlyph
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "↺"
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Math.round(Theme.taskFontPixelSize * 1.2)
+                        color: reopenGlyphHover.hovered ? Theme.effectiveGlowColor : Theme.accentColor
+                        layer.enabled: reopenGlyphHover.hovered
+                        layer.effect: MultiEffect {
+                            shadowEnabled: true
+                            shadowColor: Theme.effectiveGlowShadowColor
+                            shadowBlur: 1.0
+                            shadowHorizontalOffset: 0
+                            shadowVerticalOffset: 0
+                            shadowOpacity: 1.0
+                            shadowScale: 1.05
+                        }
+                        HoverHandler { id: reopenGlyphHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: taskModel.setStatus(root.taskId, "active") }
+                    }
                 }
             }
         }
@@ -499,63 +594,23 @@ Item {
             spacing: 4
             Layout.alignment: Qt.AlignTop
 
-            Text {
+            HoldToNoteButton {
                 id: doneBtn
-                text: "✓"
-                color: doneBtnHover.hovered ? Theme.effectiveGlowColor : Theme.doneColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize * 2
-                layer.enabled: doneBtnHover.hovered
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Theme.effectiveGlowShadowColor
-                    shadowBlur: 1.0
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    shadowOpacity: 1.0
-                    shadowScale: 1.05
-                }
-                HoverHandler { id: doneBtnHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: taskModel.setStatus(root.taskId, "done") }
+                visible: root.status === "active"
+                taskId: root.taskId
+                targetStatus: "done"
+                glyph: "✓"
+                idleColor: Theme.doneColor
+                note: root.note
             }
-            Text {
+            HoldToNoteButton {
                 id: cancelBtn
-                text: "✕"
-                color: cancelBtnHover.hovered ? Theme.effectiveGlowColor : Theme.cancelledColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize * 2
-                layer.enabled: cancelBtnHover.hovered
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Theme.effectiveGlowShadowColor
-                    shadowBlur: 1.0
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    shadowOpacity: 1.0
-                    shadowScale: 1.05
-                }
-                HoverHandler { id: cancelBtnHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: taskModel.setStatus(root.taskId, "cancelled") }
-            }
-            Text {
-                id: reopenBtn
-                text: "↺"
-                color: reopenBtnHover.hovered ? Theme.effectiveGlowColor : Theme.accentColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize * 2
-                visible: root.status !== "active"
-                layer.enabled: reopenBtnHover.hovered
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Theme.effectiveGlowShadowColor
-                    shadowBlur: 1.0
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    shadowOpacity: 1.0
-                    shadowScale: 1.05
-                }
-                HoverHandler { id: reopenBtnHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: taskModel.setStatus(root.taskId, "active") }
+                visible: root.status === "active"
+                taskId: root.taskId
+                targetStatus: "cancelled"
+                glyph: "✕"
+                idleColor: Theme.cancelledColor
+                note: root.note
             }
             Text {
                 id: deleteBtn

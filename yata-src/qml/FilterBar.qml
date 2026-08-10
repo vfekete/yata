@@ -56,6 +56,15 @@ Item {
     property bool yatasShowDeleted: false
     property string yatasSortMode: ""
 
+    // r-6.md: true while NoteEditorView is the actually-visible content
+    // (set from Main.qml's noteEditorVisible) — disables (not hides) the
+    // whole Flow below, per explicit request ("calendar, visibility and
+    // ordering sub-toolbar actions are disabled"). Links/Yatas toggle
+    // buttons live in the separate Toolbar.qml and are deliberately never
+    // touched by this — they stay clickable so the note editor can be
+    // covered/uncovered without losing in-progress edits (see Main.qml).
+    property bool subToolbarDisabled: false
+
     function setGrouping(which, checked) {
         if (checked) {
             root.monthActive = (which === "month")
@@ -98,6 +107,8 @@ Item {
         anchors.leftMargin: 4
         anchors.rightMargin: 4
         spacing: root.groupGap
+        enabled: !root.subToolbarDisabled
+        opacity: root.subToolbarDisabled ? 0.4 : 1.0
 
         // ── Day / Month / Year ───────────────────────────────────────────
         // Hidden entirely while Yatas is active — a window list has no

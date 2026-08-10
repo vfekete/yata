@@ -27,6 +27,16 @@ Window {
     property int calMonth: new Date().getMonth() + 1
     property int calYearPage: new Date().getFullYear()
 
+    // r-6.md: true precisely when NoteEditorView should be the on-screen
+    // content — not merely whenever a task's note is "pending" (i.e. it
+    // stays covered-but-mounted, not this), which is why Links/Yatas are
+    // excluded here: clicking either while the editor is open shows their
+    // own view on top instead (see listView.visible/NoteEditorView.visible
+    // below, and FilterBar's subToolbarDisabled), and clicking them off
+    // again brings this back automatically since noteEditorTaskId itself
+    // is never cleared by that round trip.
+    readonly property bool noteEditorVisible: listView.noteEditorTaskId !== "" && !filterBar.linksActive && !filterBar.yatasActive
+
     // This window's own display tag (r-3.md multi-window support) — shown
     // in the top border label below. windowId is a per-window context
     // property (set once at creation in main.py, never changes); the tag
@@ -231,6 +241,7 @@ Window {
             FilterBar {
                 id: filterBar
                 Layout.fillWidth: true
+                subToolbarDisabled: root.noteEditorVisible
             }
 
             Item {
@@ -240,7 +251,7 @@ Window {
                 ListView {
                     id: listView
                     anchors.fill: parent
-                    visible: !filterBar.monthActive && !filterBar.yearActive && !filterBar.linksActive && !filterBar.yatasActive
+                    visible: !filterBar.monthActive && !filterBar.yearActive && !filterBar.linksActive && !filterBar.yatasActive && listView.noteEditorTaskId === ""
                     clip: true
                     spacing: 0
                     model: taskModel
@@ -314,6 +325,17 @@ Window {
                         interval: 1200
                         onTriggered: listView.flashTaskId = ""
                     }
+
+                    // r-6.md: the task whose note is currently being viewed/
+                    // edited in NoteEditorView below, "" when none — set by
+                    // TaskDelegate's note icon (same convention as
+                    // dragActive/flashTaskId above: a custom property added
+                    // directly onto listView, read/written via
+                    // root.ListView.view.xxx from the delegate). Stays set
+                    // while Links/Yatas cover it (see noteEditorVisible on
+                    // the root Window below), so returning from them
+                    // restores the editor instead of the plain list.
+                    property string noteEditorTaskId: ""
 
                     // The scrollbar is an overlay (doesn't reserve its own width),
                     // so rows must leave room for it themselves or their hover
@@ -432,6 +454,18 @@ Window {
                     showDeleted: filterBar.yatasShowDeleted
                     sortMode: filterBar.yatasSortMode
                     searchText: toolbar.searchText
+                }
+
+                // r-6.md: replaces the task list while a note is being
+                // viewed/edited. Stays mounted (visible: false, not
+                // destroyed) while Links/Yatas cover it, so in-progress
+                // edits survive that round trip — see root.noteEditorVisible
+                // above and listView.noteEditorTaskId's own comment.
+                NoteEditorView {
+                    anchors.fill: parent
+                    visible: root.noteEditorVisible
+                    taskId: listView.noteEditorTaskId
+                    onClosed: listView.noteEditorTaskId = ""
                 }
             }
         }
