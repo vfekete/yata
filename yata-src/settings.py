@@ -49,12 +49,23 @@ MAX_FONT_SCALE = 200.0
 
 
 def monitor_signature() -> str:
-    """A string identifying the current monitor layout (order + resolution)."""
+    """A string identifying the current monitor layout (position + resolution
+    of every screen), independent of enumeration order.
+
+    Sorted rather than joined in `QGuiApplication.screens()`'s own order:
+    that order is decided by the platform's output-detection sequence, which
+    is not guaranteed stable across a full session restart (e.g. GNOME
+    "Shutdown" then log back in) even when the physical monitors and their
+    resolutions haven't changed at all — confirmed directly, the same two
+    monitors report in a different order depending on detection timing.
+    Treating that as "layout changed" made `_load_geometry` below discard a
+    perfectly good saved position/size on an unlucky boot.
+    """
     parts = []
     for screen in QGuiApplication.screens():
         geo = screen.geometry()
         parts.append(f"{geo.x()},{geo.y()},{geo.width()},{geo.height()}")
-    return "|".join(parts)
+    return "|".join(sorted(parts))
 
 
 def first_run_geometry() -> tuple[int, int, int, int]:
@@ -64,6 +75,34 @@ def first_run_geometry() -> tuple[int, int, int, int]:
     height = int(width * ASPECT_HEIGHT / ASPECT_WIDTH)
     x = geo.x() + (geo.width() - width) // 2
     y = geo.y() + (geo.height() - height) // 2
+    return x, y, width, height
+
+
+def _clamp_geometry_to_virtual_desktop(
+    x: int, y: int, width: int, height: int
+) -> tuple[int, int, int, int]:
+    """Fit a previously saved (x, y, width, height) inside the union of all
+    currently connected screens, shrinking/moving it as little as possible
+    instead of discarding it outright.
+
+    Used by `_load_geometry` when the monitor signature no longer matches
+    what was stored — which can mean a genuine layout change (an external
+    monitor unplugged), but can just as easily be a still-fitting old
+    geometry paired with a signature that changed for an unrelated reason
+    (a monitor added elsewhere, or — before monitor_signature() was made
+    order-independent — pure output-enumeration reordering across a reboot).
+    Jumping straight to `first_run_geometry()`'s small centered box in every
+    such case is needlessly destructive, and since `_save_geometry` always
+    rewrites x/y/width/height together, the very next unrelated geometry
+    change (e.g. Main.qml's `ensureMinimumWidth()` on startup) would bake
+    that wrong box in permanently. Clamping instead preserves the saved
+    geometry byte-for-byte whenever it still fits.
+    """
+    virtual = QGuiApplication.primaryScreen().virtualGeometry()
+    width = max(1, min(width, virtual.width()))
+    height = max(1, min(height, virtual.height()))
+    x = min(max(x, virtual.x()), virtual.x() + virtual.width() - width)
+    y = min(max(y, virtual.y()), virtual.y() + virtual.height() - height)
     return x, y, width, height
 
 
@@ -109,16 +148,24 @@ class AppSettings(QObject):
     def _load_geometry(self) -> tuple[int, int, int, int]:
         current_signature = monitor_signature()
         stored_signature = self._settings.value("window/monitorSignature", "")
-        if stored_signature == current_signature and self._settings.contains("window/width"):
-            return (
-                int(self._settings.value("window/x")),
-                int(self._settings.value("window/y")),
-                int(self._settings.value("window/width")),
-                int(self._settings.value("window/height")),
-            )
-        x, y, width, height = first_run_geometry()
-        self._settings.setValue("window/monitorSignature", current_signature)
-        self._settings.sync()
+        if not self._settings.contains("window/width"):
+            x, y, width, height = first_run_geometry()
+            self._settings.setValue("window/monitorSignature", current_signature)
+            self._settings.sync()
+            return x, y, width, height
+
+        x = int(self._settings.value("window/x"))
+        y = int(self._settings.value("window/y"))
+        width = int(self._settings.value("window/width"))
+        height = int(self._settings.value("window/height"))
+        if stored_signature != current_signature:
+            # Monitor signature mismatch: clamp the saved geometry into the
+            # currently available space rather than discarding it for
+            # first_run_geometry()'s unrelated small centered box — see
+            # _clamp_geometry_to_virtual_desktop's docstring for why.
+            x, y, width, height = _clamp_geometry_to_virtual_desktop(x, y, width, height)
+            self._settings.setValue("window/monitorSignature", current_signature)
+            self._settings.sync()
         return x, y, width, height
 
     def _save_geometry(self):

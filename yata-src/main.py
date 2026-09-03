@@ -1,7 +1,10 @@
 """YATA entry point."""
+import argparse
 import os
 import signal
 import sys
+import zipfile
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QFile, QIODevice, QSettings, Qt, QTimer, QUrl
@@ -13,11 +16,12 @@ import resources_rc  # noqa: F401 — registers :/fonts/VT323-Regular.ttf and :/
 from icons import IconProvider
 from models import TaskListModel
 from settings import AppSettings
-from storage import TaskStore
+from storage import TaskStore, data_dir
 from window_manager import WindowManager
 from window_registry import (
     DEFAULT_TAG,
     WindowRegistry,
+    config_dir,
     settings_path_for,
     tasks_path_for,
 )
@@ -242,7 +246,51 @@ def _windows_to_restore(registry: WindowRegistry) -> list[dict]:
     return open_entries
 
 
+def _unique_backup_path(dest_dir: Path, stamp: str) -> Path:
+    """yb-<stamp>.zip, or yb-<stamp>-<n>.zip with the lowest n that doesn't
+    already exist — so running --backup twice in the same minute (same
+    stamp) never overwrites the earlier backup."""
+    candidate = dest_dir / f"yb-{stamp}.zip"
+    n = 1
+    while candidate.exists():
+        candidate = dest_dir / f"yb-{stamp}-{n}.zip"
+        n += 1
+    return candidate
+
+
+def _create_backup(dest_dir: Path | None = None) -> Path:
+    """Zips YATA's whole config and data directories (covering every
+    window's settings/tasks, not just the default window's — see
+    window_registry.py's per-instance paths) into dest_dir (defaults to the
+    current working directory)."""
+    dest_dir = dest_dir or Path.cwd()
+    stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
+    dest = _unique_backup_path(dest_dir, stamp)
+
+    with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root_dir, arc_root in ((config_dir(), "config"), (data_dir(), "data")):
+            root_path = Path(root_dir)
+            for file_path in root_path.rglob("*"):
+                if file_path.is_file():
+                    zf.write(file_path, str(Path(arc_root) / file_path.relative_to(root_path)))
+
+    return dest
+
+
 def main() -> int:
+    # add_help=True (the default) gives us -h/--help for free: argparse's
+    # own help action prints usage and calls sys.exit(0) immediately during
+    # parse_known_args() below, before any Qt setup runs, so `-h` never
+    # starts the app — same as --backup.
+    parser = argparse.ArgumentParser(prog="yata", description="Yet Another Todo Application")
+    parser.add_argument("-b", "--backup", action="store_true",
+                         help="Back up YATA's config/data folders to a zip file and exit, without starting the app.")
+    args, _ = parser.parse_known_args()
+    if args.backup:
+        dest = _create_backup()
+        print(f"Backup written to {dest}")
+        return 0
+
     # Must be set before QGuiApplication is constructed. PassThrough keeps
     # pixel sizes matching each monitor's actual reported scale factor
     # (rather than rounding to the nearest integer), so the app looks the

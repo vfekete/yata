@@ -42,7 +42,14 @@ def test_geometry_persists_across_restart_on_same_monitor_layout(tmp_path):
     assert (restarted.x, restarted.y, restarted.width, restarted.height) == (111, 222, 333, 444)
 
 
-def test_geometry_resets_to_first_run_when_monitor_layout_changed(tmp_path):
+def test_geometry_clamps_into_virtual_desktop_when_monitor_layout_changed(tmp_path):
+    """Regression test: a monitor-signature mismatch used to discard the
+    saved geometry outright for first_run_geometry()'s small centered box —
+    destructive even when the mismatch was a false alarm (see
+    test_monitor_signature_ignores_screen_order below) or when the old
+    geometry would still mostly fit. It's now clamped into whatever screen
+    space is currently available instead, preserving as much of the saved
+    position/size as still fits."""
     backing = ini_settings(tmp_path)
     backing.setValue("window/monitorSignature", "not-the-real-signature")
     backing.setValue("window/x", 999)
@@ -53,11 +60,65 @@ def test_geometry_resets_to_first_run_when_monitor_layout_changed(tmp_path):
 
     settings = AppSettings(settings=ini_settings(tmp_path))
 
-    assert (settings.x, settings.y, settings.width, settings.height) == first_run_geometry()
+    from PySide6.QtGui import QGuiApplication
+    virtual = QGuiApplication.primaryScreen().virtualGeometry()
+    assert settings.width == min(999, virtual.width())
+    assert settings.height == min(999, virtual.height())
+    assert virtual.x() <= settings.x <= virtual.x() + virtual.width() - settings.width
+    assert virtual.y() <= settings.y <= virtual.y() + virtual.height() - settings.height
+    # Confirmed genuinely different from the old reset-to-default behavior.
+    assert (settings.x, settings.y, settings.width, settings.height) != first_run_geometry()
+
+
+def test_geometry_untouched_when_saved_position_still_fits_despite_signature_mismatch(tmp_path):
+    """A monitor-signature mismatch alone shouldn't move/resize a window that
+    already fits fine in the currently available space — only genuinely
+    out-of-bounds geometry should be adjusted."""
+    backing = ini_settings(tmp_path)
+    backing.setValue("window/monitorSignature", "not-the-real-signature")
+    backing.setValue("window/x", 10)
+    backing.setValue("window/y", 10)
+    backing.setValue("window/width", 200)
+    backing.setValue("window/height", 200)
+    backing.sync()
+
+    settings = AppSettings(settings=ini_settings(tmp_path))
+
+    assert (settings.x, settings.y, settings.width, settings.height) == (10, 10, 200, 200)
 
 
 def test_monitor_signature_is_stable_between_calls():
     assert monitor_signature() == monitor_signature()
+
+
+def test_monitor_signature_ignores_screen_order(monkeypatch):
+    """Regression test: QGuiApplication.screens()'s enumeration order isn't
+    guaranteed stable across a full session restart (confirmed: GNOME
+    "Shutdown" then logging back in can report the same physical monitors in
+    a different order depending on output-detection timing), even though the
+    actual layout hasn't changed. monitor_signature() used to join screens in
+    whatever order screens() returned them, so that reordering alone made
+    _load_geometry think the monitor layout had changed and discard the
+    saved window geometry."""
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QGuiApplication
+
+    class FakeScreen:
+        def __init__(self, rect):
+            self._rect = rect
+
+        def geometry(self):
+            return self._rect
+
+    a = FakeScreen(QRect(0, 0, 1920, 1080))
+    b = FakeScreen(QRect(1920, 0, 1080, 1920))
+
+    monkeypatch.setattr(QGuiApplication, "screens", staticmethod(lambda: [a, b]))
+    signature_ab = monitor_signature()
+    monkeypatch.setattr(QGuiApplication, "screens", staticmethod(lambda: [b, a]))
+    signature_ba = monitor_signature()
+
+    assert signature_ab == signature_ba
 
 
 def test_theme_defaults(tmp_path):

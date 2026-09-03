@@ -1,9 +1,11 @@
 """Regression tests for main.py's startup logic (not the full app entry
 point, which needs a real QGuiApplication/QML engine — just the pure
 window-selection logic factored out into _windows_to_restore())."""
+import zipfile
+
 import pytest
 
-from main import _windows_to_restore
+from main import _create_backup, _unique_backup_path, _windows_to_restore
 from window_registry import DEFAULT_TAG, DEFAULT_WINDOW_ID, WindowRegistry
 
 
@@ -120,3 +122,45 @@ def test_seeds_a_fresh_window_if_registry_is_completely_empty(tmp_path):
     assert restored[0]["id"] != DEFAULT_WINDOW_ID  # never resurrects the reserved id
     # And it's actually persisted, not just returned in-memory.
     assert registry.list() == restored
+
+
+def test_create_backup_zips_config_and_data_dirs(tmp_path):
+    # isolated_xdg (autouse) already points XDG_CONFIG_HOME/XDG_DATA_HOME at
+    # tmp_path/config and tmp_path/data — populate those directly.
+    config_home = tmp_path / "config"
+    data_home = tmp_path / "data"
+    (config_home / "yata").mkdir(parents=True)
+    (config_home / "yata" / "yata.conf").write_text("[General]\n")
+    (data_home / "yata" / "instances" / "abc").mkdir(parents=True)
+    (data_home / "yata" / "tasks.json").write_text("[]")
+    (data_home / "yata" / "instances" / "abc" / "tasks.json").write_text("{}")
+
+    dest_dir = tmp_path / "backups"
+    dest_dir.mkdir()
+    backup_path = _create_backup(dest_dir)
+
+    assert backup_path.parent == dest_dir
+    assert backup_path.name.startswith("yb-")
+    with zipfile.ZipFile(backup_path) as zf:
+        names = set(zf.namelist())
+    assert "config/yata.conf" in names
+    assert "data/tasks.json" in names
+    assert "data/instances/abc/tasks.json" in names
+
+
+def test_unique_backup_path_appends_incrementing_number_on_collision(tmp_path):
+    stamp = "2026-08-26-18-23"
+    (tmp_path / f"yb-{stamp}.zip").touch()
+    (tmp_path / f"yb-{stamp}-1.zip").touch()
+
+    result = _unique_backup_path(tmp_path, stamp)
+
+    assert result == tmp_path / f"yb-{stamp}-2.zip"
+
+
+def test_unique_backup_path_no_collision(tmp_path):
+    stamp = "2026-08-26-18-23"
+
+    result = _unique_backup_path(tmp_path, stamp)
+
+    assert result == tmp_path / f"yb-{stamp}.zip"

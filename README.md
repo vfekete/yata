@@ -93,6 +93,19 @@ sticky note.
 See `BUILD.md` for setup and test instructions, including `./build.sh` to
 package YATA into a single standalone `dist/yata-X.Y.Z` executable.
 
+### Backing up your data
+
+```sh
+./run.sh --backup   # or -b
+```
+
+Instead of starting the app, this zips YATA's whole config and data
+directories (every window's settings and tasks) into a timestamped
+`yb-<date>-<time>.zip` file in the current directory — e.g.
+`yb-2026-08-26-18-23.zip`. If a file with that name already exists (e.g.
+you ran `--backup` twice in the same minute), a `-1`, `-2`, ... suffix is
+added instead of overwriting it.
+
 ## AI-assisted development
 
 This project was built with [Claude Sonnet 4.6](https://www.anthropic.com/claude) (`claude-sonnet-4-6`) by Anthropic as an active development collaborator — writing code, reviewing architecture decisions, and implementing features end-to-end alongside the human author.

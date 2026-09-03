@@ -7,6 +7,50 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.28.2] - 2026-09-03
+
+### Fixed
+- **Window position/size could come back wrong after a GNOME "Shutdown" and
+  login (but not after a plain app restart within the same session).** Root
+  cause: `monitor_signature()` joined screens in whatever order
+  `QGuiApplication.screens()` happened to return them, and that order isn't
+  guaranteed stable across a full session restart — the same physical
+  monitors can enumerate differently depending on output-detection timing at
+  login, even though the layout hasn't actually changed (confirmed directly:
+  two orderings of the identical monitor set produced two different
+  signature strings). `_load_geometry()` treated any signature mismatch as
+  "monitor layout changed" and discarded the saved geometry for
+  `first_run_geometry()`'s small centered box — and since `_save_geometry()`
+  always rewrites x/y/width/height together, the very next unrelated
+  geometry nudge (e.g. `Main.qml`'s `ensureMinimumWidth()`, which runs on
+  every startup) would bake that wrong box in permanently, overwriting the
+  real saved position for good. Every restored window computes the same
+  signature, so this could misplace all of them onto the same spot at once.
+  Fixed two ways: `monitor_signature()` now sorts its per-screen entries so
+  pure reordering no longer counts as a layout change, and a genuine
+  mismatch now clamps the saved geometry into whatever screen space is
+  currently available (new `_clamp_geometry_to_virtual_desktop`) instead of
+  discarding it for the unrelated default — so a window keeps its saved
+  position/size whenever it still fits, and only shrinks/moves the minimum
+  needed amount when it doesn't.
+
+## [0.28.1] - 2026-08-25
+
+### Added
+- **`-h` / `--help`**: prints the list of command-line options (now just
+  `-b`/`--backup`) and exits, without starting the app — argparse's
+  built-in help action, previously suppressed via `add_help=False`.
+
+## [0.28.0] - 2026-08-25
+
+### Added
+- **`--backup` / `-b` command-line flag**: instead of starting the app,
+  zips YATA's whole config and data directories (every window's
+  settings/tasks, not just the default window's) into a timestamped
+  `yb-<date>-<time>.zip` in the current directory. Colliding filenames
+  (e.g. running it twice in the same minute) get a `-1`, `-2`, ...
+  suffix rather than being overwritten.
+
 ## [0.27.1] - 2026-08-10
 
 ### Changed
