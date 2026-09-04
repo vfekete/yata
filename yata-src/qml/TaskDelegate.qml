@@ -515,6 +515,15 @@ Item {
 
         TextField {
             id: editField
+            // r-8.md "The glass lock": Main.qml's auto-locked exception
+            // reads this via Window.activeFocusItem.objectName, rather than
+            // a per-delegate signal relayed up to listView — the latter
+            // would go stale if this delegate is ever destroyed (e.g. a
+            // model reset from Reload) without first firing a proper
+            // focus-lost signal, permanently stranding the window unlocked.
+            // Window.activeFocusItem is Qt's own live focus tracking, so it
+            // can never go stale that way.
+            objectName: "taskDescriptionField"
             Layout.fillWidth: true
             visible: root.editing
             text: root.text

@@ -14,5 +14,8 @@
     <file alias="link.svg">../resources/assets/noun-link-7985857.svg</file>
     <file alias="paintbucket.svg">../resources/assets/noun-paint-bucket-104334.svg</file>
     <file alias="notes.svg">../resources/assets/noun-notes-8410855.svg</file>
+    <file alias="lock_locked.svg">../resources/assets/lock_locked_outline.svg</file>
+    <file alias="lock_autolocked.svg">../resources/assets/lock_locked_filled.svg</file>
+    <file alias="lock_unlocked.svg">../resources/assets/lock_unlocked_outline.svg</file>
 </qresource>
 </RCC>

@@ -6,7 +6,7 @@
 
 2. more info about the task and how it was done
  - add possibility to append notes to the task (for example it was not done completely, or why it was cancelled)
- - not only notes but perhaps link to files, pictures, video, other content, something like folder about given task, so I can keep my things organized. This also means I 
+ - not only notes but perhaps link to files, pictures, video, other content, something like folder about given task, so I can keep my things organized. This also means I
  - again purely optional, user shouldn't be bothered with necessity to write essays
 
 3. so I can feel good or maybe not about myself
@@ -22,10 +22,10 @@ As contractor I often need to track time I spend on given tasks and at the end o
  - respect holidays
  - allow work no non-work task and mark it as non-work task (it will be there with support of all features from (2), spent time will be tracked, but it wont be counted to overall working hours)
 
- # why second place?
+ # why second place for feature requests / notes?
  I don't want to have it on github since when I need to remember how exactly I formulated
- the idea I need to open the browser. This way it is with me, with the code and it is 
- versioned because git. 
+ the idea I need to open the browser. This way it is with me, with the code and it is
+ versioned because git.
 
  So actually this is not a second place, it is the only place
  from now (10-08-26) on.

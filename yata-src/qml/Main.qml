@@ -147,11 +147,60 @@ Window {
     Component.onCompleted: ensureMinimumWidth()
     onMinimumWidthChanged: ensureMinimumWidth()
 
+    // r-8.md "The glass lock": three-state persisted mode, cycled by
+    // clicking the lock icon (see lockIcon near the bottom of this file).
+    // "unlocked": normal, no blur, no restrictions. "locked": content
+    // permanently blurred and inert (toolbar/menu included). "auto-locked":
+    // same as locked, except automatically/temporarily unlocked while the
+    // mouse is inside the content area (or another window drops a task into
+    // it, see dragHoverActive above) or while a task's description is being
+    // actively typed (see editingTaskDescription below) — reverting once the
+    // mouse leaves (or, for the editing exception, once editing finishes and
+    // the mouse already isn't inside).
+    //
+    // contentHovered is read from contentHoverHandler, declared further
+    // down alongside the content overlay it belongs to.
+    //
+    // editingTaskDescription reads Qt's own live Window.activeFocusItem
+    // (via its objectName, set on TaskDelegate's editField) rather than a
+    // custom per-delegate signal relayed up through listView — the latter
+    // would go stale if a delegate is ever destroyed (e.g. a model reset
+    // from RELOAD) without first firing a proper focus-lost signal,
+    // permanently stranding the window unlocked. activeFocusItem can never
+    // go stale that way: it's always Qt's current, authoritative answer.
+    readonly property bool editingTaskDescription: root.activeFocusItem !== null
+        && root.activeFocusItem.objectName === "taskDescriptionField"
+
+    readonly property bool contentLocked: {
+        if (appSettings.lockState === "unlocked") return false
+        if (appSettings.lockState === "locked") return true
+        if (root.editingTaskDescription) return false
+        return !contentHoverHandler.hovered && !root.dragHoverActive
+    }
+
+    // Drives the blur amount smoothly (see contentColumn's MultiEffect
+    // below) rather than snapping instantly — 0 (fully clear) to 1 (fully
+    // blurred, i.e. MultiEffect's blurMax radius). 150ms per explicit
+    // request (shortened from the original 1-second spec in r-8.md).
+    property real blurAmount: root.contentLocked ? 1.0 : 0.0
+    Behavior on blurAmount {
+        NumberAnimation { duration: 150 }
+    }
+
+    function nextLockState() {
+        if (appSettings.lockState === "unlocked") return "auto-locked"
+        if (appSettings.lockState === "auto-locked") return "locked"
+        return "unlocked"
+    }
+
     // Right-click anywhere on the background for theme + quit. Placed first so
-    // real controls (declared later / painted on top) get first refusal at clicks.
+    // real controls (declared later / painted on top) get first refusal at
+    // clicks. Also part of "the menu items ... too" that a locked window must
+    // not react to (r-8.md).
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
+        enabled: !root.contentLocked
         onClicked: contextMenu.popup()
     }
 
@@ -189,36 +238,68 @@ Window {
         anchors.fill: parent
         opacity: Theme.windowOpacity
 
-        // The window itself stays fully transparent (per spec); this wash is
-        // what actually paints each tint's background, translucent so the
-        // window still reads as "transparent" rather than opaque.
+        // r-8.md "The glass lock", follow-up: the background wash AND the
+        // toolbar/list are blurred together as ONE frosted pane (originally
+        // only the toolbar/list column had the effect, leaving the plain
+        // background rectangle behind them crisp — "I expected everything
+        // will be blurred (together with background)"). Wrapping both in a
+        // single layered Item means one MultiEffect pass covers the whole
+        // panel, not two effects that could each render/settle slightly
+        // differently.
         //
-        // topMargin reserves room for the tag label below to straddle this
-        // Rectangle's top edge (half above it, half below — see tagLabelBg)
-        // — the label can't be positioned with a negative y to achieve that
-        // the usual way: a QQuickWindow's real drawable surface starts at
-        // y=0, so any content above that is genuinely not rendered on a
-        // live composited window (confirmed live; this was invisible in
-        // offscreen grabWindow() testing, which is apparently more
-        // forgiving of negative-y content than a real GPU-backed surface).
-        Rectangle {
+        // This is a live GPU-rendered layer, not a one-off blurred snapshot
+        // — it re-renders every frame from whatever contentColumn/the wash
+        // actually look like right now, so it can never go stale or briefly
+        // reveal crisp content while the window is being moved/resized.
+        Item {
+            id: frostedContent
             anchors.fill: parent
-            anchors.topMargin: tagLabelBg.height / 2
-            radius: 6
-            color: Theme.contentBackground
-        }
 
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 15
-            // Extra headroom so the toolbar doesn't collide with the tag
-            // label sitting on the border line above it (see tagLabelBg
-            // near the bottom of this file) — scales with the label's own
-            // (font-zoom-dependent) height rather than a fixed guess.
-            anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
-            spacing: 2
+            // blur: 0 (root.blurAmount, unlocked) renders identically to no
+            // effect at all, so layer.enabled can stay unconditionally true
+            // with no always-unlocked-window visual cost. blurMax: 48 is a
+            // heavy/"frosted" radius, picked after the original blurMax: 5
+            // was confirmed live to leave task text still fully readable —
+            // this one was confirmed live to genuinely obscure it instead.
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                blurEnabled: true
+                blur: root.blurAmount
+                blurMax: 48
+                autoPaddingEnabled: true
+            }
 
-            Toolbar {
+            // The window itself stays fully transparent (per spec); this wash
+            // is what actually paints each tint's background, translucent so
+            // the window still reads as "transparent" rather than opaque.
+            //
+            // topMargin reserves room for the tag label below to straddle this
+            // Rectangle's top edge (half above it, half below — see tagLabelBg)
+            // — the label can't be positioned with a negative y to achieve that
+            // the usual way: a QQuickWindow's real drawable surface starts at
+            // y=0, so any content above that is genuinely not rendered on a
+            // live composited window (confirmed live; this was invisible in
+            // offscreen grabWindow() testing, which is apparently more
+            // forgiving of negative-y content than a real GPU-backed surface).
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: tagLabelBg.height / 2
+                radius: 6
+                color: Theme.contentBackground
+            }
+
+            ColumnLayout {
+                id: contentColumn
+                anchors.fill: parent
+                anchors.margins: 15
+                // Extra headroom so the toolbar doesn't collide with the tag
+                // label sitting on the border line above it (see tagLabelBg
+                // near the bottom of this file) — scales with the label's own
+                // (font-zoom-dependent) height rather than a fixed guess.
+                anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
+                spacing: 2
+
+                Toolbar {
                 id: toolbar
                 Layout.fillWidth: true
                 linksActive: filterBar.linksActive
@@ -468,6 +549,107 @@ Window {
                     onClosed: listView.noteEditorTaskId = ""
                 }
             }
+        } // ColumnLayout (contentColumn)
+        } // Item (frostedContent)
+
+        // Frosted-glass tint: a flat, NOT-blurred scrim sitting on top of
+        // frostedContent's own blurred layer (drawn after it, so it paints
+        // above) — a plain translucent color doesn't change when blurred, so
+        // it has to live outside the layered item to have any visible effect
+        // of its own. This is what gives the "milky glass" look ("look and
+        // feel of glass / frosted overlay") rather than just a blurred photo
+        // of the task list — confirmed live: blur alone still let shapes read
+        // as clearly "the task list, blurred"; the added haze reads as glass.
+        // Fades in/out with the same blurAmount Behavior as the blur itself,
+        // so both always move together.
+        //
+        // Tinted with Theme.effectiveGlowColor per explicit request ("let the
+        // milk tint be the tint color of the window") rather than a fixed
+        // white — the same "this window's effective accent color" property
+        // already used for the border/tag-text glow and markdown link color
+        // elsewhere in this file, so it stays in sync with whatever's
+        // actually set: a CRT/terminal tint's own phosphor color ("in case
+        // of terminal colors, major color for the terminal" — green/
+        // goldenrod/white/black all resolve through this same property),
+        // this window's custom border color if one is set (r-4.md), or the
+        // theme's own default accent otherwise.
+        Rectangle {
+            anchors.fill: frostedContent
+            radius: 6
+            color: Theme.effectiveGlowColor
+            opacity: root.blurAmount * 0.35
+        }
+
+        // r-8.md "The glass lock": sits on top of contentColumn (declared
+        // after frostedContent, so it paints/hit-tests above it — the
+        // frosted tint scrim above is purely visual and never intercepts
+        // input, hence no effect on hit-testing order here). The
+        // HoverHandler is passive and always active — it must keep reporting
+        // hover regardless of lock state, both to notice the mouse arriving
+        // (to auto-unlock) and leaving (to auto-relock) — so it's a sibling
+        // of contentBlocker below, not nested inside it: an Item's own
+        // enabled:false also disables input for everything nested inside it,
+        // which would have blinded the hover handler at exactly the moments
+        // it's needed. contentBlocker itself does the actual blocking: an
+        // ordinary (non-hovering) MouseArea that, while enabled, simply
+        // grabs and swallows every mouse press/click/wheel event over this
+        // area before contentColumn's own toolbar/list ever sees it —
+        // exactly "does not react on mouse movement or mouse clicks" for
+        // "menu items and toolbar too" (r-8.md). While disabled (unlocked,
+        // or auto-locked-and-currently-hovered), it's excluded from hit-
+        // testing entirely and every event passes through to the real
+        // controls beneath, untouched.
+        //
+        // Deliberately still scoped to contentColumn, NOT the wider
+        // frostedContent (background + margins) that now gets blurred as one
+        // unit — the visual extent of the blur and the functional "mouse is
+        // inside the interactive area" boundary are two different concerns.
+        // Widening this to frostedContent was tried and reverted: frostedContent
+        // spans the *entire* window (anchors.fill: parent, no margin), so
+        // every point in the window — including over the tag label, the lock
+        // icon's corner, or the plain border gutter — would count as
+        // "hovering content", making auto-locked impossible to ever leave
+        // short of moving the mouse outside the window's edges entirely
+        // (confirmed live: the "moves outside content, should re-lock" test
+        // then failed since there was no more "outside content but inside
+        // the window" position left to move to).
+        //
+        // x/y/width/height read directly from contentColumn instead of
+        // anchors.fill: contentColumn — QML anchoring only works between a
+        // parent/child or direct siblings, and contentColumn is now nested
+        // one level deeper inside frostedContent, so a direct anchor errors
+        // at runtime ("Cannot anchor to an item that isn't a parent or
+        // sibling", confirmed live). contentColumn.x/y (relative to
+        // frostedContent) can be used as-is (rather than mapped into
+        // contentOverlay's own parent's coordinates) because frostedContent
+        // itself sits at (0, 0) with no margin relative to that same parent
+        // (anchors.fill: parent, no offset) — so the two coordinate spaces
+        // coincide exactly. (mapToItem() was tried first and reverted: its
+        // return value isn't tracked as a live binding dependency the way a
+        // plain property read is, so x/y silently froze at whatever
+        // contentColumn's position happened to be at the very first
+        // evaluation — before the ColumnLayout had actually positioned it —
+        // and never updated again; confirmed live via the resulting
+        // MouseArea sitting at (0,0) instead of contentColumn's real
+        // position.)
+        Item {
+            id: contentOverlay
+            x: contentColumn.x
+            y: contentColumn.y
+            width: contentColumn.width
+            height: contentColumn.height
+
+            HoverHandler {
+                id: contentHoverHandler
+            }
+
+            MouseArea {
+                id: contentBlocker
+                anchors.fill: parent
+                enabled: root.contentLocked
+                acceptedButtons: Qt.AllButtons
+                onWheel: (event) => { event.accepted = true }
+            }
         }
 
         // After addTask() the model emits taskAdded. We wait one short timer
@@ -686,6 +868,59 @@ Window {
             onEditingFinished: commit()
             Keys.onReturnPressed: commit()
             Keys.onEscapePressed: root.editingTag = false
+        }
+
+        // r-8.md "The glass lock": mirrors tagLabelBg's placement — same
+        // margin (14) from the right edge that the tag label has from the
+        // left, same y (0, straddling the border line), same height ("icons
+        // has same height as the window title"). Always clickable/crisp
+        // regardless of lock state: it lives outside contentColumn/
+        // contentOverlay entirely, so it's never blurred or blocked — the
+        // one control that must always work, or a locked window could never
+        // be unlocked again.
+        //
+        // Sits on the same solid background box as the tag label (same
+        // color/radius as tagLabelBg) rather than directly on the border
+        // line — without it, windowBorder's stroke ran straight through the
+        // icon and made it hard to see, especially when the border color was
+        // close to the icon's own color (user feedback: "the border passes
+        // through it and it is not very well visible").
+        Rectangle {
+            id: lockIconBg
+            y: 0
+            height: tagLabelBg.height
+            radius: 3
+            color: Theme.tintName === "none"
+                   ? (Theme.dark ? "#111827" : "#f9fafb")
+                   : Theme.contentBackground
+            width: lockIcon.width + 12
+            x: root.width - 14 - width
+
+            Image {
+                id: lockIcon
+                readonly property string iconName: appSettings.lockState === "locked" ? "lock_locked"
+                    : appSettings.lockState === "auto-locked" ? "lock_autolocked" : "lock_unlocked"
+                readonly property color iconColor: appSettings.borderColor !== "" ? appSettings.borderColor : Theme.borderColor
+
+                anchors.centerIn: parent
+                height: parent.height - 4
+                width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                source: iconProvider.coloredSvgUri(iconName, iconColor.toString())
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -4
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: appSettings.lockState = root.nextLockState()
+                ToolTip.visible: containsMouse
+                ToolTip.text: lockIcon.iconName === "lock_locked" ? qsTr("Locked — click to unlock")
+                    : lockIcon.iconName === "lock_autolocked" ? qsTr("Auto-locked — click to lock")
+                    : qsTr("Unlocked — click to auto-lock")
+            }
         }
     }
 }

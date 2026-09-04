@@ -7,6 +7,98 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.29.2] - 2026-09-04
+
+### Changed
+- **Glass lock polish**, three explicit follow-up requests:
+  1. The lock icon now sits on its own solid background box (same
+     color/radius as the window tag label's box) instead of directly on the
+     border line — previously `windowBorder`'s stroke ran straight through
+     the icon, making it hard to see, especially when the border color was
+     close to the icon's own color.
+  2. Blur/unblur transition shortened from 1 second to 250ms.
+  3. The frosted-glass tint now uses `Theme.effectiveGlowColor` (this
+     window's effective accent color — a CRT/terminal tint's own phosphor
+     color, this window's custom border color if set, or the theme's default
+     accent) instead of a fixed white, so it reads as "this window's own
+     tint, frosted" rather than a generic haze.
+
+### Fixed
+- **The glass lock's blur was too weak and too narrow.** User feedback after
+  0.29.0: task text was still readable through the blur, and the plain
+  background rectangle behind the toolbar/list stayed crisp since only the
+  toolbar+list column itself had the effect — "I expected everything will be
+  blurred (together with background)". Fixed by wrapping the background wash
+  *and* the toolbar/list in a single layered `Item` (`frostedContent`) so one
+  `MultiEffect` blur pass covers the whole panel, raised `blurMax` from `5` to
+  `48` (confirmed live: `5` left text fully legible, `48` reads as genuine
+  illegible smudges), and added a translucent white scrim on top (fading in
+  with the same 1-second `blurAmount` transition) for a "frosted glass" haze
+  rather than a plain blurred screenshot look. This is a live GPU-rendered
+  layer, not a snapshot, so it can't go stale or reveal anything crisp while
+  the window is moved or resized — confirmed live across several simulated
+  window moves while locked.
+  User also asked whether Qt/the OS could blur the *real desktop* behind the
+  window (true compositor "backdrop blur", updating as the window moves) —
+  answered directly rather than attempting it: neither Qt nor GNOME/Mutter
+  (this app's target compositor) support that for a normal window without a
+  shell extension outside the app's control, and it wouldn't actually serve
+  the "prevent reading task text" goal anyway (it would show the real
+  desktop, not obscure the task list). Went with the frosted-own-content
+  approach above instead.
+  Along the way, fixed a real bug introduced during this rework: the
+  auto-locked hover/re-lock boundary (`contentOverlay`) was first widened to
+  match the new full-panel blur target, which made the *entire window* count
+  as "hovering content" (nothing was left "inside the window but not
+  hovering"), making auto-locked impossible to ever leave unlocked-until-you-
+  hover — reverted to the narrower `contentColumn` bounds (matching the
+  actual interactive area) while the blur itself stays scoped to the wider
+  panel; these are two independent concerns. Positioning `contentOverlay`
+  against the now-nested `contentColumn` also surfaced two QML gotchas along
+  the way: `anchors.fill: contentColumn` throws at runtime once `contentColumn`
+  is no longer a direct sibling ("Cannot anchor to an item that isn't a parent
+  or sibling"), and the `mapToItem()`-based x/y fallback tried next silently
+  froze at a stale `(0, 0)` because a native method's return value isn't
+  tracked as a live QML binding dependency the way a plain property read is —
+  settled on reading `contentColumn.x`/`.y` directly instead, valid here
+  specifically because `frostedContent` sits at `(0, 0)` with no margin
+  relative to the same parent.
+
+## [0.29.0] - 2026-09-04
+
+### Added
+- **"The glass lock" (r-8.md)**: a small lock icon on the top border (mirrors
+  the window tag label's own margin, but on the right) cycles a per-window,
+  persisted 3-state privacy lock — click to advance unlocked → auto-locked →
+  locked → back to unlocked. Each state has its own icon (ChatGPT-generated
+  SVGs in `resources/assets/lock_*.svg`, recolored to match the window
+  border like every other toolbar icon):
+  - **unlocked**: normal, no restrictions.
+  - **locked**: content (toolbar, filter bar, task list — and the
+    right-click theme menu) permanently blurred and completely unresponsive
+    to the mouse. Only the lock icon itself stays live, so a locked window
+    can always be unlocked again.
+  - **auto-locked**: same as locked by default, but automatically and
+    temporarily unlocks (unblurs, becomes fully interactive) while the mouse
+    is actually inside the content area, or while another window's task drag
+    is hovering over it — reverting the instant the mouse leaves. Actively
+    typing a task's description keeps it unlocked regardless of mouse
+    position (checked live via `Window.activeFocusItem`, not a snapshot), so
+    finishing an edit while the mouse happens to be elsewhere doesn't yank
+    the content away mid-thought.
+  - Blur/unblur animates over 1 second (`MultiEffect`'s `blur`/`blurMax: 5`
+    on the toolbar+list, driven by a `Behavior`-animated property), rather
+    than snapping instantly.
+  - New `AppSettings.lockState` (`settings.py`), persisted per window under
+    `theme/lockState` alongside the rest of a window's settings, same
+    `sync()`-on-every-change guarantee as every other setting here.
+  - New `tests/test_lock_feature.py`: a real (offscreen) QML engine +
+    `QTest.mouseClick`/`mouseMove` integration suite covering the icon's
+    click-cycle, toolbar/menu blocking, hover-based auto-unlock/relock, the
+    cross-window drag-hover override, and the task-editing exception — not
+    just the Python-side persistence (already covered in
+    `tests/test_settings.py`'s new `lockState` tests).
+
 ## [0.28.2] - 2026-09-03
 
 ### Fixed

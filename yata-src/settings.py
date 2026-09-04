@@ -33,6 +33,13 @@ THEME_MODES = ("light", "dark")
 # of the QML tree as the context property "Theme" — see main.py).
 THEME_TINTS = ("none", "green", "goldenrod", "white", "black")
 
+# r-8.md "The glass lock": unlocked (normal) -> auto-locked (blurred/frozen
+# until the mouse is inside the window, or a task is dropped in from another
+# window) -> locked (permanently blurred/frozen) -> back to unlocked, cycled
+# by clicking the lock icon (Main.qml). "unlocked" is the default so a brand
+# new window is never born blurred/frozen.
+LOCK_STATES = ("unlocked", "auto-locked", "locked")
+
 DEFAULT_OPACITY_PERCENT = 65
 MIN_OPACITY_PERCENT = 5
 MAX_OPACITY_PERCENT = 100
@@ -119,6 +126,7 @@ class AppSettings(QObject):
     opacityPercentChanged = Signal()
     fontScaleChanged = Signal()
     wheelZoomInvertedChanged = Signal()
+    lockStateChanged = Signal()
 
     def __init__(self, settings: QSettings | None = None, parent=None):
         super().__init__(parent)
@@ -136,6 +144,8 @@ class AppSettings(QObject):
             self._settings.value("theme/fontScale", DEFAULT_FONT_SCALE)
         )
         self._wheel_zoom_inverted = _read_bool(self._settings, "theme/wheelZoomInverted", False)
+        lock_state = self._settings.value("theme/lockState", "unlocked")
+        self._lock_state = lock_state if lock_state in LOCK_STATES else "unlocked"
 
     @staticmethod
     def _clamp_opacity(value) -> int:
@@ -318,6 +328,19 @@ class AppSettings(QObject):
     wheelZoomInverted = Property(
         bool, _get_wheel_zoom_inverted, _set_wheel_zoom_inverted, notify=wheelZoomInvertedChanged
     )
+
+    def _get_lock_state(self) -> str:
+        return self._lock_state
+
+    def _set_lock_state(self, value: str):
+        if value not in LOCK_STATES or value == self._lock_state:
+            return
+        self._lock_state = value
+        self._settings.setValue("theme/lockState", value)
+        self._settings.sync()
+        self.lockStateChanged.emit()
+
+    lockState = Property(str, _get_lock_state, _set_lock_state, notify=lockStateChanged)
 
     # Read-only so QML can reset to these without hardcoding the values
     # itself in more than one place (the RESET button and the Ctrl+0

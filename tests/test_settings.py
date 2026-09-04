@@ -3,6 +3,7 @@ from PySide6.QtCore import QSettings
 from settings import (
     DEFAULT_FONT_SCALE,
     DEFAULT_OPACITY_PERCENT,
+    LOCK_STATES,
     MAX_FONT_SCALE,
     MIN_FONT_SCALE,
     AppSettings,
@@ -236,6 +237,37 @@ def test_wheel_zoom_inverted_defaults_false_and_persists(tmp_path):
 
     s2 = AppSettings(settings=backing)
     assert s2.wheelZoomInverted is True
+
+
+def test_lock_state_defaults_to_unlocked_and_persists(tmp_path):
+    """r-8.md: unlocked is the safe default (a brand new window must never
+    be born blurred/frozen)."""
+    backing = ini_settings(tmp_path)
+    s = AppSettings(settings=backing)
+
+    assert s.lockState == "unlocked"
+
+    s.lockState = "auto-locked"
+    assert s.lockState == "auto-locked"
+
+    s2 = AppSettings(settings=backing)
+    assert s2.lockState == "auto-locked"
+
+
+def test_lock_state_accepts_all_three_states(tmp_path):
+    assert set(LOCK_STATES) == {"unlocked", "auto-locked", "locked"}
+    for state in LOCK_STATES:
+        s = AppSettings(settings=ini_settings(tmp_path, name=f"{state}.ini"))
+        s.lockState = state
+        assert s.lockState == state
+
+
+def test_invalid_lock_state_is_ignored(tmp_path):
+    s = AppSettings(settings=ini_settings(tmp_path))
+
+    s.lockState = "super-locked"
+
+    assert s.lockState == "unlocked"
 
 
 def test_settings_persist_to_disk_without_explicit_caller_sync(tmp_path):
