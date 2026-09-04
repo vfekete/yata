@@ -7,6 +7,55 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.29.4] - 2026-09-04
+
+### Fixed
+- **A "locked" (not auto-locked) window still reacted to hover** — row
+  highlighting and hover-revealed action icons in the task list/LinksView/
+  YatasView still responded to the mouse, immediately after 0.29.3 fixed
+  hover being broken everywhere. Clicking was already correctly blocked;
+  only the hover reaction was wrong. Fixed by making `contentBlocker` (the
+  `MouseArea` that already blocks clicks while locked) also `hoverEnabled`
+  while enabled, so it claims hover away from the rows underneath exactly
+  like it already claims clicks — but scoped specifically to plain
+  `"locked"`, not `"auto-locked"`: auto-locked's own `enabled`-ness (while
+  not yet hovering) depends on `contentHoverHandler` — nested underneath
+  `contentBlocker` in the z-stack — detecting the mouse's arrival, so
+  claiming hover there too created a deadlock (confirmed live: auto-locked
+  got stuck locked forever, since the very hover that should disable the
+  blocker could never reach the handler that would notice it). New
+  regression tests `test_task_row_hover_suppressed_while_locked` and
+  `test_auto_locked_hover_unlock_not_deadlocked_by_hover_blocking` in
+  `tests/test_lock_feature.py` cover both the fix and the deadlock it must
+  not reintroduce.
+
+## [0.29.3] - 2026-09-04
+
+### Fixed
+- **The glass lock silently broke hover everywhere in the content area** —
+  task row highlighting/hover-action-icons, and the same row-hover mechanism
+  in LinksView/YatasView, stopped reacting to the mouse while unlocked or
+  auto-locked (auto-locked's own hover-to-unlock still worked, so the window
+  correctly unblurred, but nothing *inside* it responded to hover anymore).
+  Root cause: `contentHoverHandler` (added to detect "mouse is inside the
+  content area" for auto-locked) lived in a sibling `Item` stacked on top of
+  `contentColumn`. Confirmed via a minimal reproduction: an `Item` with an
+  enabled `HoverHandler` placed above another item in the same z-stack —
+  even with no `MouseArea`/grab at all — exclusively claims hover and blocks
+  it from ever reaching anything underneath, contradicting `HoverHandler`'s
+  own "non-exclusive, siblings can all respond" documentation (that
+  non-exclusivity turned out to only apply to multiple handlers on the *same*
+  item, not separate items competing in a z-stack). Fixed by nesting
+  `contentHoverHandler` as a child *inside* `contentColumn` instead of a
+  sibling overlay above it — a second minimal reproduction confirmed a
+  HoverHandler nested as a parent of items that have their own HoverHandlers
+  lets every one of them update independently and correctly, unlike sibling
+  stacking. `contentBlocker` (the actual click-blocking `MouseArea`) stays
+  exactly where it was — it never had a hover component, so it was never
+  part of this bug.
+  New regression test `test_task_row_hover_still_works_while_unlocked` in
+  `tests/test_lock_feature.py`.
+
 ## [0.29.2] - 2026-09-04
 
 ### Changed

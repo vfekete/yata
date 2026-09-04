@@ -299,6 +299,26 @@ Window {
                 anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
                 spacing: 2
 
+                // r-8.md "The glass lock": tracks whether the mouse is
+                // anywhere over the content area, for auto-locked's
+                // hover-to-unlock behavior (see root.contentLocked above).
+                // Nested here as a child of contentColumn itself — NOT a
+                // separate overlay Item stacked on top of it — precisely
+                // because a HoverHandler on a sibling placed above
+                // contentColumn was confirmed to exclusively claim hover and
+                // block it from ever reaching TaskDelegate rows/LinksView/
+                // YatasView's own hover-driven highlighting underneath (see
+                // contentOverlay's own comment, below, for the full
+                // reasoning and the minimal reproduction that confirmed it).
+                // A HoverHandler nested as a PARENT of items that have their
+                // own HoverHandlers coexists with all of them correctly —
+                // confirmed live — which is exactly this relationship
+                // (contentColumn is the parent of the toolbar/list/etc, not
+                // a same-level competing sibling of them).
+                HoverHandler {
+                    id: contentHoverHandler
+                }
+
                 Toolbar {
                 id: toolbar
                 Layout.fillWidth: true
@@ -583,22 +603,50 @@ Window {
         // r-8.md "The glass lock": sits on top of contentColumn (declared
         // after frostedContent, so it paints/hit-tests above it — the
         // frosted tint scrim above is purely visual and never intercepts
-        // input, hence no effect on hit-testing order here). The
-        // HoverHandler is passive and always active — it must keep reporting
-        // hover regardless of lock state, both to notice the mouse arriving
-        // (to auto-unlock) and leaving (to auto-relock) — so it's a sibling
-        // of contentBlocker below, not nested inside it: an Item's own
-        // enabled:false also disables input for everything nested inside it,
-        // which would have blinded the hover handler at exactly the moments
-        // it's needed. contentBlocker itself does the actual blocking: an
-        // ordinary (non-hovering) MouseArea that, while enabled, simply
-        // grabs and swallows every mouse press/click/wheel event over this
-        // area before contentColumn's own toolbar/list ever sees it —
-        // exactly "does not react on mouse movement or mouse clicks" for
-        // "menu items and toolbar too" (r-8.md). While disabled (unlocked,
-        // or auto-locked-and-currently-hovered), it's excluded from hit-
-        // testing entirely and every event passes through to the real
-        // controls beneath, untouched.
+        // input, hence no effect on hit-testing order here). contentBlocker
+        // is a MouseArea that, while enabled, grabs and swallows every mouse
+        // press/click/wheel event over this area before contentColumn's own
+        // toolbar/list ever sees it — exactly "does not react on mouse
+        // movement or mouse clicks" for "menu items and toolbar too"
+        // (r-8.md). While disabled (unlocked, or auto-locked-and-currently-
+        // hovered), it's excluded from hit-testing entirely and every event
+        // passes through to the real controls beneath, untouched.
+        //
+        // hoverEnabled: true is deliberate, not an oversight: while enabled
+        // (plain "locked"), it must ALSO claim hover away from TaskDelegate
+        // rows/LinksView/YatasView underneath, or their own hover highlight
+        // and hover-revealed action icons would keep visibly reacting to the
+        // mouse even though the window is supposed to be fully locked/inert
+        // (user feedback: hover worked again after the fix below, "but it
+        // also works when the window is locked... events should not go to
+        // underlying items"). Exploits the exact mechanism the next
+        // paragraph describes as a bug when it was accidental: an enabled
+        // hover-aware item above another in the same z-stack exclusively
+        // claims hover from what's underneath — undesirable when *nothing*
+        // should claim it (unlocked), wanted here specifically because
+        // contentBlocker's own `enabled` is already correctly gated to
+        // exactly the states (locked; auto-locked-and-not-hovering) where
+        // that blocking is supposed to happen.
+        //
+        // The hover *detection* (for auto-locked's own "has the mouse
+        // arrived" check) used to live here too, as a second HoverHandler
+        // alongside contentBlocker — but an always-on HoverHandler in this
+        // position broke every hover-driven control underneath regardless of
+        // lock state, including while fully unlocked — confirmed via a
+        // minimal reproduction: an Item with an enabled HoverHandler placed
+        // ABOVE another item in the same z-stack (siblings, even with no
+        // MouseArea/grab at all) exclusively claims hover for itself and
+        // blocks it from ever reaching anything underneath, contrary to
+        // HoverHandler's own "non-exclusive, siblings can all respond"
+        // documentation — that non-exclusivity turned out to only cover
+        // multiple handlers on the SAME item, not separate items competing
+        // in a z-stack. A second reproduction confirmed the fix: nesting a
+        // HoverHandler as a PARENT of items that have their own HoverHandlers
+        // (ancestor/descendant, not sibling-on-top) lets both the parent's
+        // and every descendant's hover state update independently and
+        // correctly. So the auto-locked
+        // hover detection (contentHoverHandler) now lives nested inside
+        // contentColumn itself instead — see there.
         //
         // Deliberately still scoped to contentColumn, NOT the wider
         // frostedContent (background + margins) that now gets blurred as one
@@ -639,14 +687,25 @@ Window {
             width: contentColumn.width
             height: contentColumn.height
 
-            HoverHandler {
-                id: contentHoverHandler
-            }
-
             MouseArea {
                 id: contentBlocker
                 anchors.fill: parent
                 enabled: root.contentLocked
+                // Only for plain "locked", NOT "auto-locked" — see the
+                // comment above for why claiming hover here is wanted at
+                // all, but doing it for auto-locked's transient "enabled
+                // because not yet hovering" phase creates a deadlock: that
+                // phase's own enabled-ness depends on contentHoverHandler
+                // (nested inside contentColumn, i.e. underneath this sibling
+                // in the z-stack) detecting the mouse's arrival, and once
+                // this claims hover for itself first, contentHoverHandler
+                // never gets a turn to notice anything ever arrived —
+                // confirmed live: auto-locked got stuck locked forever,
+                // hovering content no longer unlocked it at all. Plain
+                // "locked" has no such cycle (its enabled-ness doesn't
+                // depend on hover at all, only on appSettings.lockState), so
+                // it's safe to claim hover there unconditionally.
+                hoverEnabled: appSettings.lockState === "locked"
                 acceptedButtons: Qt.AllButtons
                 onWheel: (event) => { event.accepted = true }
             }

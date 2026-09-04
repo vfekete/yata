@@ -291,3 +291,89 @@ def test_auto_locked_stays_unlocked_while_editing_task_description(qml_window):
     assert window.property("contentLocked") is True, (
         "should re-lock once editing finishes and the mouse isn't hovering"
     )
+
+
+def test_task_row_hover_still_works_while_unlocked(qml_window):
+    """Regression test: contentHoverHandler (added for auto-locked's
+    hover-to-unlock detection) was originally a sibling Item stacked on top
+    of contentColumn — which, confirmed via a minimal reproduction, made it
+    exclusively claim hover and blocked every hover-driven control
+    underneath (TaskDelegate row highlighting, and the same mechanism in
+    LinksView/YatasView) from ever seeing it, even while fully unlocked.
+    Fixed by nesting contentHoverHandler as a child of contentColumn itself
+    instead of a sibling overlay above it."""
+    app, window, app_settings, task_model = qml_window
+    assert app_settings.lockState == "unlocked"
+
+    task_model.addTask()
+    QTest.qWait(300)
+    app.processEvents()
+
+    delegates = _find_by_class_prefix(window.contentItem(), "TaskDelegate")
+    assert delegates, "no TaskDelegate row found to hover"
+    row = delegates[0]
+
+    assert row.property("hovered") is False
+    QTest.mouseMove(window, _center_point(window, row))
+    app.processEvents()
+
+    assert row.property("hovered") is True, (
+        "task row should still react to hover while unlocked"
+    )
+
+
+def test_task_row_hover_suppressed_while_locked(qml_window):
+    """Regression test, immediate follow-up to the fix above: user reported
+    that once row hover started working again while unlocked, it *also*
+    started working while fully "locked" — where it shouldn't, since r-8.md
+    says a locked window "does not react on mouse movement or mouse clicks"
+    at all (clicking was already correctly blocked; only the hover reaction
+    was wrong). Fixed by making contentBlocker also hoverEnabled while
+    plain-locked, so it claims hover away from the rows underneath exactly
+    like it already claims clicks."""
+    app, window, app_settings, task_model = qml_window
+
+    task_model.addTask()
+    QTest.qWait(300)
+    app.processEvents()
+
+    delegates = _find_by_class_prefix(window.contentItem(), "TaskDelegate")
+    assert delegates, "no TaskDelegate row found to hover"
+    row = delegates[0]
+    point = _center_point(window, row)
+    away = QPoint(5, 2)
+
+    app_settings.lockState = "locked"
+    QTest.mouseMove(window, away)
+    app.processEvents()
+    QTest.mouseMove(window, point)
+    app.processEvents()
+
+    assert row.property("hovered") is False, (
+        "task row must not react to hover while locked"
+    )
+
+
+def test_auto_locked_hover_unlock_not_deadlocked_by_hover_blocking(qml_window):
+    """Regression test: contentBlocker claiming hover to fix the test above
+    must NOT apply to auto-locked — auto-locked's own enabled-ness (while
+    not yet hovering) depends on contentHoverHandler detecting the mouse's
+    arrival, and contentHoverHandler sits underneath contentBlocker in the
+    z-stack. If contentBlocker claimed hover there too, it would
+    permanently steal the hover contentHoverHandler needs to ever notice
+    anything and disable itself — confirmed live: auto-locked got stuck
+    locked forever, never unlocking on hover again, before this was scoped
+    to plain "locked" only."""
+    app, window, app_settings, task_model = qml_window
+    add_btn = _find_toolbutton(window, "Add")
+    point = _center_point(window, add_btn)
+
+    app_settings.lockState = "auto-locked"
+    assert window.property("contentLocked") is True
+
+    QTest.mouseMove(window, point)
+    app.processEvents()
+
+    assert window.property("contentLocked") is False, (
+        "auto-locked must still unlock on hover, not deadlock"
+    )
