@@ -187,6 +187,14 @@ Window {
         NumberAnimation { duration: 150 }
     }
 
+    // Small transparent gap between the lock and close icon boxes (near the
+    // bottom of this file), so they read as "two separate things near each
+    // other" rather than one merged box — scales gently with font zoom like
+    // the rest of this app's icon spacing (e.g. Theme.nonActiveActionIconGap),
+    // rather than a fixed pixel value that would look cramped or oversized
+    // at the extremes.
+    readonly property int lockCloseIconGap: Math.round(Theme.taskFontPixelSize * 0.4)
+
     function nextLockState() {
         if (appSettings.lockState === "unlocked") return "auto-locked"
         if (appSettings.lockState === "auto-locked") return "locked"
@@ -254,6 +262,19 @@ Window {
         Item {
             id: frostedContent
             anchors.fill: parent
+            // Inset to start exactly at the border line (half the tag
+            // label's height down, same as windowBorder/the wash Rectangle
+            // below), and clipped to that bound — without both of these,
+            // the blur/frost effect visibly bled upward past the border
+            // into the tag-label/border area ("the upper part goes over the
+            // border", user feedback). autoPaddingEnabled below deliberately
+            // lets the blur spread beyond frostedContent's own bounds for
+            // quality (so it doesn't look harshly cut off at the edges) —
+            // exactly the spread that needs clipping off at the top, since
+            // "make it end at the border" means a hard stop there, not an
+            // organic fade past it.
+            anchors.topMargin: tagLabelBg.height / 2
+            clip: true
 
             // blur: 0 (root.blurAmount, unlocked) renders identically to no
             // effect at all, so layer.enabled can stay unconditionally true
@@ -272,18 +293,12 @@ Window {
             // The window itself stays fully transparent (per spec); this wash
             // is what actually paints each tint's background, translucent so
             // the window still reads as "transparent" rather than opaque.
-            //
-            // topMargin reserves room for the tag label below to straddle this
-            // Rectangle's top edge (half above it, half below — see tagLabelBg)
-            // — the label can't be positioned with a negative y to achieve that
-            // the usual way: a QQuickWindow's real drawable surface starts at
-            // y=0, so any content above that is genuinely not rendered on a
-            // live composited window (confirmed live; this was invisible in
-            // offscreen grabWindow() testing, which is apparently more
-            // forgiving of negative-y content than a real GPU-backed surface).
+            // No topMargin of its own anymore — frostedContent (the parent)
+            // is already inset to start at the border line above, so filling
+            // frostedContent exactly reaches the same y position this used
+            // to reach with its own separate margin.
             Rectangle {
                 anchors.fill: parent
-                anchors.topMargin: tagLabelBg.height / 2
                 radius: 6
                 color: Theme.contentBackground
             }
@@ -929,14 +944,80 @@ Window {
             Keys.onEscapePressed: root.editingTag = false
         }
 
-        // r-8.md "The glass lock": mirrors tagLabelBg's placement — same
-        // margin (14) from the right edge that the tag label has from the
-        // left, same y (0, straddling the border line), same height ("icons
-        // has same height as the window title"). Always clickable/crisp
-        // regardless of lock state: it lives outside contentColumn/
-        // contentOverlay entirely, so it's never blurred or blocked — the
-        // one control that must always work, or a locked window could never
-        // be unlocked again.
+        // Classic "X" close-window button — closes (hides, per
+        // WindowManager.closeWindow) THIS window, same as YatasView's own
+        // SHOW toggle does for any window from the list; a no-op if this is
+        // the only window currently open (guarded inside closeWindow itself,
+        // same "at least one must stay visible" rule used throughout this
+        // app). Sits at the very right edge, in the outermost position
+        // ("Order of the icons on the right side is now: LOCK CLOSE"), with
+        // the lock icon positioned to its left below.
+        Rectangle {
+            id: closeIconBg
+            y: 0
+            height: tagLabelBg.height
+            radius: 3
+            // Brightens slightly on hover (same lift as the glow below),
+            // so the box itself visibly reacts, not just an icon inside it —
+            // see closeMouseArea's own comment for why both together.
+            color: Theme.tintName === "none"
+                   ? (Theme.dark ? (closeMouseArea.containsMouse ? "#1f2937" : "#111827")
+                                 : (closeMouseArea.containsMouse ? "#e5e7eb" : "#f9fafb"))
+                   : Theme.contentBackground
+            width: closeGlyph.implicitWidth + 16
+            x: root.width - 14 - width
+
+            // Hover-on/hover-off feedback so this reads as an action item,
+            // not a static picture (explicit request) — glows the BOX
+            // itself (this Rectangle's own rounded-rect shape), not the
+            // glyph inside it, using the same shadow-glow recipe as every
+            // other hoverable icon in this app (e.g. YatasRow's show/color
+            // buttons). Glowing the box rather than the glyph is also what
+            // keeps this looking consistent for the lock icon below, which
+            // swaps between 3 differently-shaped SVGs (outline/filled) —
+            // the box's own shape never changes, so the glow always looks
+            // the same regardless of which icon is currently showing.
+            layer.enabled: closeMouseArea.containsMouse
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: closeGlyph.color
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowOpacity: 1.0
+                shadowScale: 1.08
+            }
+
+            Text {
+                id: closeGlyph
+                anchors.centerIn: parent
+                text: "✕"
+                font.bold: true
+                font.pixelSize: Math.round(closeIconBg.height * 0.85)
+                color: appSettings.borderColor !== "" ? appSettings.borderColor : Theme.borderColor
+            }
+
+            MouseArea {
+                id: closeMouseArea
+                anchors.fill: parent
+                anchors.margins: -4
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: windowManager.closeWindow(windowId)
+                ToolTip.visible: containsMouse
+                ToolTip.text: qsTr("Close window")
+            }
+        }
+
+        // r-8.md "The glass lock": same margin (14) from the right edge that
+        // the tag label has from the left, same y (0, straddling the border
+        // line), same height ("icons has same height as the window title").
+        // Always clickable/crisp regardless of lock state: it lives outside
+        // contentColumn/contentOverlay entirely, so it's never blurred or
+        // blocked — the one control that must always work, or a locked
+        // window could never be unlocked again. Positioned to the left of
+        // closeIconBg (not at the fixed 14px margin itself anymore) so the
+        // two boxes sit side by side with lockCloseIconGap between them.
         //
         // Sits on the same solid background box as the tag label (same
         // color/radius as tagLabelBg) rather than directly on the border
@@ -949,11 +1030,34 @@ Window {
             y: 0
             height: tagLabelBg.height
             radius: 3
+            // Brightens slightly on hover — see closeIconBg's own comment
+            // for why this and the glow below are both wanted together.
             color: Theme.tintName === "none"
-                   ? (Theme.dark ? "#111827" : "#f9fafb")
+                   ? (Theme.dark ? (lockMouseArea.containsMouse ? "#1f2937" : "#111827")
+                                 : (lockMouseArea.containsMouse ? "#e5e7eb" : "#f9fafb"))
                    : Theme.contentBackground
             width: lockIcon.width + 12
-            x: root.width - 14 - width
+            x: closeIconBg.x - root.lockCloseIconGap - width
+
+            // Hover-on/hover-off feedback, same recipe as closeIconBg —
+            // glows the BOX's own shape rather than the icon inside it,
+            // specifically because this icon swaps between 3 differently
+            // shaped SVGs (locked/auto-locked/unlocked, outline vs filled):
+            // glowing the icon's own silhouette would look inconsistent
+            // across those three (a filled shape "fills out" a shadow very
+            // differently than a thin outline does), while the box's own
+            // rounded-rect shape never changes, so the glow looks identical
+            // regardless of which lock state is currently showing.
+            layer.enabled: lockMouseArea.containsMouse
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: lockIcon.iconColor
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowOpacity: 1.0
+                shadowScale: 1.08
+            }
 
             Image {
                 id: lockIcon
@@ -970,6 +1074,7 @@ Window {
             }
 
             MouseArea {
+                id: lockMouseArea
                 anchors.fill: parent
                 anchors.margins: -4
                 hoverEnabled: true

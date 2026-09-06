@@ -1,0 +1,148 @@
+"""Tests for the classic "X" close-window button next to the lock icon
+(top-right corner) — clicking it calls WindowManager.closeWindow() for this
+window, same as YatasView's own SHOW toggle does.
+
+Runs against a real QML engine (offscreen) using QTest.mouseClick, same
+construction pattern as the other QML integration test files.
+"""
+import os
+import sys
+
+import pytest
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuickControls2 import QQuickStyle
+from PySide6.QtTest import QTest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+_app = None
+
+
+def _get_app():
+    global _app
+    if _app is None:
+        QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
+        _app = QGuiApplication.instance() or QGuiApplication(sys.argv)
+        _app.setOrganizationName("yata-close-button-test")
+        _app.setApplicationName("yata-close-button-test")
+        QQuickStyle.setStyle("Basic")
+    return _app
+
+
+def _find_by_class_prefix(item, prefix, results=None):
+    if results is None:
+        results = []
+    if item.metaObject().className().startswith(prefix):
+        results.append(item)
+    for child in item.childItems():
+        _find_by_class_prefix(child, prefix, results)
+    return results
+
+
+def _close_button_center(window):
+    """The close ("X") icon's background box: the rightmost QQuickRectangle
+    straddling the top border line (y ~ 0) — same "read the live layout"
+    technique used elsewhere in this test suite (e.g. test_lock_feature.py's
+    _find_lock_icon) rather than a hardcoded pixel offset."""
+    rects = [
+        r for r in _find_by_class_prefix(window.contentItem(), "QQuickRectangle")
+        if r.mapToItem(window.contentItem(), 0, 0).y() < 5
+        and r.mapToItem(window.contentItem(), 0, 0).x() > window.width() - 60
+    ]
+    assert rects, "close icon background box not found near the top-right corner"
+    rects.sort(key=lambda r: -r.mapToItem(window.contentItem(), 0, 0).x())
+    box = rects[0]
+    center = box.mapToItem(window.contentItem(), box.width() / 2, box.height() / 2)
+    return QPoint(round(center.x()), round(center.y()))
+
+
+@pytest.fixture()
+def two_windows(tmp_path, monkeypatch):
+    """Yields (app, window_manager, window1, id1, window2, id2) — two real
+    windows in one engine, same real construction path as main.py
+    (window_factory building each one via main._make_window)."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    app = _get_app()
+
+    src = os.path.join(os.path.dirname(__file__), "..", "yata-src")
+    sys.path.insert(0, src)
+    import resources_rc  # noqa: F401,PLC0415 — registers qrc:/icons/*.svg etc.
+    from icons import IconProvider  # noqa: PLC0415
+    from main import _make_window  # noqa: PLC0415
+    from settings import AppSettings  # noqa: PLC0415
+    from storage import TaskStore  # noqa: PLC0415
+    from window_manager import WindowManager  # noqa: PLC0415
+    from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
+    from PySide6.QtCore import QSettings  # noqa: PLC0415
+
+    icon_provider = IconProvider()
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    engine = QQmlApplicationEngine()
+    engine.addImportPath(os.path.join(src, "qml"))
+
+    def window_factory(window_id, caller_state):
+        task_store = TaskStore(str(tmp_path / f"tasks-{window_id}.json"))
+        settings = AppSettings(QSettings(str(tmp_path / f"app-{window_id}.ini"), QSettings.IniFormat))
+        _make_window(engine, icon_provider, window_manager, QIcon(), window_id, task_store, settings)
+
+    window_manager = WindowManager(registry, window_factory=window_factory)
+
+    app_settings1 = AppSettings(QSettings(str(tmp_path / "app-default.ini"), QSettings.IniFormat))
+    window1 = _make_window(
+        engine, icon_provider, window_manager, QIcon(),
+        DEFAULT_WINDOW_ID, TaskStore(str(tmp_path / "tasks-default.json")), app_settings1,
+    )
+    app.processEvents()
+    app.processEvents()
+
+    id2 = window_manager.createWindow({
+        "themeMode": "dark", "themeTint": "none", "opacityPercent": 65,
+        "fontScale": 1.0, "wheelZoomInverted": False,
+        "x": 400, "y": 400, "width": 300, "height": 400,
+    })
+    app.processEvents()
+    QTest.qWait(150)
+    app.processEvents()
+    window2 = window_manager._windows[id2]["window"]
+
+    yield app, window_manager, window1, DEFAULT_WINDOW_ID, window2, id2
+
+    del engine
+    app.processEvents()
+    app.processEvents()
+
+
+def test_close_button_closes_this_window_when_another_is_open(two_windows):
+    app, window_manager, window1, id1, window2, id2 = two_windows
+    assert window_manager.is_open(id1)
+    assert window_manager.is_open(id2)
+
+    QTest.mouseClick(window1, Qt.LeftButton, Qt.NoModifier, _close_button_center(window1))
+    app.processEvents()
+
+    assert not window_manager.is_open(id1), "clicking close should close this window"
+    assert window_manager.is_open(id2), "the other window must be untouched"
+
+
+def test_close_button_is_a_noop_on_the_last_open_window(two_windows):
+    """Same "at least one window must stay visible" guard WindowManager
+    already enforces for every other close path (YatasView's SHOW toggle
+    included) — the close button reuses closeWindow(), not a bespoke path,
+    so it inherits this for free."""
+    app, window_manager, window1, id1, window2, id2 = two_windows
+
+    QTest.mouseClick(window1, Qt.LeftButton, Qt.NoModifier, _close_button_center(window1))
+    app.processEvents()
+    assert not window_manager.is_open(id1)
+    assert window_manager.is_open(id2)
+
+    QTest.mouseClick(window2, Qt.LeftButton, Qt.NoModifier, _close_button_center(window2))
+    app.processEvents()
+
+    assert window_manager.is_open(id2), "closing the only remaining window must be a no-op"

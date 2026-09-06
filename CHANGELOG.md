@@ -7,6 +7,73 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.31.2] - 2026-09-06
+
+### Fixed
+- **The glass lock's frost/blur bled upward past the top border** into the
+  tag-label/border area while locked or auto-locked — user feedback: "the
+  upper part goes over the border. Make it end at border." Root cause:
+  `frostedContent` (the layered `Item` that gets blurred) spanned the *full*
+  window content area with no inset, while the visible border line sits
+  `tagLabelBg.height / 2` further down (same as the wash `Rectangle`
+  underneath it and `windowBorder`'s own inset) — and `MultiEffect`'s
+  `autoPaddingEnabled: true` deliberately lets the blur spread beyond an
+  item's own bounds for quality, spilling it into that gap above the border.
+  Fixed by inset-ing `frostedContent` itself by the same `tagLabelBg.height /
+  2` margin (removing the now-redundant duplicate margin from the wash
+  `Rectangle` inside it) and adding `clip: true`, so the blurred/padded
+  render is hard-clipped exactly at the border line instead of fading past
+  it.
+
+## [0.31.1] - 2026-09-06
+
+### Changed
+- **Lock and close icons now have a hover-on/hover-off effect**, so they
+  read as action items rather than static pictures: on hover, each icon's
+  background box brightens slightly and gets a glow (the same shadow-glow
+  recipe used for every other hoverable icon in this app, e.g. YatasRow's
+  show/color buttons), fading back on hover-off. The glow targets the BOX's
+  own rounded-rect shape rather than the icon glyph inside it — deliberately,
+  since the lock icon swaps between 3 differently-shaped SVGs
+  (locked/auto-locked/unlocked, outline vs filled) and glowing each one's own
+  silhouette would look inconsistent between them; the box shape never
+  changes, so the effect looks identical regardless of which icon is
+  currently showing.
+
+## [0.31.0] - 2026-09-06
+
+### Added
+- **Classic "✕" close-window button**, next to the lock icon on the top
+  border ("Order of the icons on the right side is now: LOCK CLOSE"). Sits
+  in the outermost/rightmost position, on the same solid background box
+  style as the lock icon (and the tag label), with a small transparent gap
+  (`root.lockCloseIconGap`, scales with font zoom) between the two boxes so
+  they read as two separate controls rather than one merged one. Clicking it
+  calls `WindowManager.closeWindow(windowId)` — the same method YatasView's
+  own SHOW toggle already uses — so it's a no-op on the last remaining open
+  window (the existing "at least one window must stay visible" guard,
+  inherited for free rather than reimplemented), and otherwise hides the
+  window without touching its tasks/settings, reopenable later from YATAS.
+  New `tests/test_close_window_button.py` (2 tests, a real two-window setup
+  confirming both the close and the no-op-on-last-window cases).
+
+## [0.30.0] - 2026-09-04
+
+### Added
+- **Task row hover background now follows this window's custom color**
+  (r-4.md, assigned via the YATAS list) instead of a generic grey, for the
+  "none" tint — a subtle tinted wash (10% alpha) rather than the flat
+  grey/white `Theme.hoverColor` overlay used everywhere else. Falls back to
+  the original grey when no custom color is assigned (there's no "window
+  color" to use otherwise), and CRT/terminal tints are untouched by explicit
+  request — each already tints its own hover color to its own phosphor
+  color. New `TaskDelegate.rowHoverColor`/`effectiveBorderColor` properties;
+  the alpha (10%) was picked by comparing live screenshots of a saturated
+  color (red) and a calmer one (blue) at 18%/12%/10% — 18% read as a fairly
+  vivid solid-pink band for red, 10% stayed clearly recognizable without
+  looking like a flat color block for either. New
+  `tests/test_task_row_hover_color.py`.
+
 ## [0.29.4] - 2026-09-04
 
 ### Fixed

@@ -17,6 +17,31 @@ Item {
     property bool forceEditing: false
     readonly property bool editing: forceEditing || text.length === 0
     readonly property bool hovered: hoverHandler.hovered
+
+    // New feature: the row's own hover-on background follows this window's
+    // custom color (r-4.md, assigned via the YATAS list) instead of the
+    // generic grey — CRT tints are untouched (explicit request: "already
+    // done, no need to change anything there" — each one already tints its
+    // own Theme.hoverColor to its own phosphor color, see ThemeImpl.qml's
+    // palettes). Only kicks in for the "none" tint AND only once a custom
+    // color is actually assigned — "under 'window color' I understand color
+    // assigned to it in YATAS list", so absent that assignment there's no
+    // such color to use and the original grey stands.
+    //
+    // effectiveBorderColor exists purely to coerce appSettings.borderColor
+    // (a plain string) into a real `color` value so .r/.g/.b are readable —
+    // its "#000000" fallback is never actually used for that (rowHoverColor
+    // only reads it in the branch where borderColor is already known
+    // non-empty).
+    readonly property color effectiveBorderColor: appSettings.borderColor !== "" ? appSettings.borderColor : "#000000"
+    // Alpha 0.18, the author's own preference after trying a few values
+    // live — noticeably more than the grey/white overlay it replaces
+    // (Theme.hoverColor's own 0.06–0.08 for the "none" tint) needs, since a
+    // specific hue has to work harder than grey to register as "this
+    // window's color" rather than just a slightly different shade of grey.
+    readonly property color rowHoverColor: (Theme.tintName === "none" && appSettings.borderColor !== "")
+        ? Qt.rgba(effectiveBorderColor.r, effectiveBorderColor.g, effectiveBorderColor.b, 0.18)
+        : Theme.hoverColor
     // Set briefly by ListView.flashTaskId after "to task" navigation (see
     // LinksView), so the destination row reads as "selected" even though the
     // real mouse cursor didn't move there. Drives flashOverlay below rather
@@ -240,7 +265,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 4
-        color: root.hovered ? Theme.hoverColor : "transparent"
+        color: root.hovered ? root.rowHoverColor : "transparent"
     }
 
     // "To task" navigation flash: 3 consecutive blinks totaling 1.2s. Each
