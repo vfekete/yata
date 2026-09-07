@@ -12,15 +12,15 @@
 // effects.c's own comment for the actual numbers this was checked against
 // before deciding not to reach for a dependency.
 //
-// Sequence: fade in, then hold fully visible until a keypress/mouse click
-// (fade_notify_input), then fade out, then hold fully hidden until a
-// second keypress/mouse click, which is when fade_is_done() finally
-// becomes true. Input during either fade itself is ignored -- only the two
-// static "holding" states react to it. This is where a real readiness
-// signal will plug in later (calling fade_start_out() directly, skipping
-// the "wait for input" hold) once there's an actual app launch to wait on;
-// the original loader design is still the plan, this is only the visual
-// half of it.
+// Sequence: fade in, then hold fully visible until dismissed, then fade
+// out, then (standalone preview only) hold fully hidden until a second
+// dismissal, which is when fade_is_done() finally becomes true. Input
+// during either fade itself is ignored -- only the "holding" states react
+// to it. Two ways to dismiss the first hold: fade_notify_input() (a
+// keypress/click, for standalone preview runs) or fade_start_out() called
+// directly (main.c's readiness-socket handling, once YATA reports
+// 'running' or its wait times out). fade_set_auto_close() controls whether
+// the second hold happens at all.
 //
 // Rendering uses a real ARGB visual + alpha channel when one was found
 // (see main.c), so a compositor blends against whatever is actually behind
@@ -51,12 +51,20 @@ void fade_destroy(FadeEffect *fx);
 void fade_start_in(FadeEffect *fx);
 
 // Lower-level primitive: skips straight to fading out from whatever's
-// currently on screen, without waiting for input -- for a later readiness
-// signal to call once the real app is up. Not used by the current
-// input-driven flow (fade_notify_input covers that) but kept for that
-// future hook. Assumes it's called while already fully visible (i.e. not
-// mid fade-in); that's the only case exercised so far.
+// currently on screen, without waiting for input. This is what main.c's
+// readiness-socket handling calls once YATA reports 'running' (or its
+// 2-minute wait times out) instead of fade_notify_input. Assumes it's
+// called while already fully visible (i.e. not mid fade-in); that's the
+// only case exercised so far.
 void fade_start_out(FadeEffect *fx);
+
+// Socket-driven runs (YATA_LOADER_SOCKET set) skip the "hold fully hidden
+// until a second click" step entirely -- there's no user to click, so
+// fade_is_done() should become true the instant the fade-out finishes.
+// Standalone preview runs (run-loader.sh, no socket) leave this false and
+// keep the click-to-dismiss hold. Call once, any time before the fade-out
+// it should affect actually starts.
+void fade_set_auto_close(FadeEffect *fx, bool autoClose);
 
 // Call on every KeyPress/ButtonPress. Advances the state machine if (and
 // only if) currently in one of the two "holding" states: fully visible ->

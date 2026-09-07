@@ -1,8 +1,13 @@
 """YATA entry point."""
 import argparse
+import builtins
 import os
 import signal
+import socket
+import subprocess
 import sys
+import tempfile
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +33,15 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.9.32"
+APP_VERSION = "0.35.0"
+
+# Nuitka injects a module-level "__compiled__" global into every compiled
+# module -- this is the standard way to tell a packaged build.sh binary
+# apart from `uv run python yata-src/main.py`. Read once into a plain
+# module attribute (rather than checking "__compiled__" in globals() at
+# call time) so tests can monkeypatch it without needing an actual Nuitka
+# build.
+_IS_COMPILED = "__compiled__" in globals()
 
 
 def _version_tuple(v: str) -> tuple:
@@ -42,13 +55,13 @@ def _compute_exec_cmd(*, source_dir: Path | None = None) -> str:
     """Return the command for the .desktop Exec= field.
 
     For a source checkout this is run.sh (sits two dirs up from this file,
-    and itself launches the loader in front of YATA -- see loader-src/).
-    For a compiled standalone binary run.sh doesn't exist next to __file__,
-    so we fall back to the binary itself, resolved via PATH if needed --
-    except build.sh's packaged layout names *this* binary "<name>-app" and
-    puts the startup loader right next to it as the sibling "<name>" (no
-    suffix), so a desktop entry generated from the app binary's own
-    perspective should still point at that loader sibling, not skip it.
+    and itself launches the startup splash in front of YATA -- see
+    x-loader/ and run.sh's own comment). For a compiled standalone binary
+    run.sh doesn't exist next to __file__, so we fall back to the binary
+    itself, resolved via PATH if needed -- build.sh's packaged binary is
+    the only thing that needs pointing at, since it launches its own
+    sibling splash binary internally (see _maybe_launch_bundled_loader)
+    rather than needing a separate Exec= target for it.
 
     source_dir defaults to this file's own directory; overridable so tests
     can exercise the "compiled binary" branch without needing a fake
@@ -62,12 +75,56 @@ def _compute_exec_cmd(*, source_dir: Path | None = None) -> str:
     cmd = sys.argv[0]
     if not os.path.isabs(cmd):
         cmd = shutil.which(cmd) or os.path.abspath(cmd)
-    resolved = Path(cmd).resolve()
-    if resolved.name.endswith("-app"):
-        loader_sibling = resolved.with_name(resolved.name[: -len("-app")])
-        if loader_sibling.is_file() and os.access(loader_sibling, os.X_OK):
-            return str(loader_sibling)
-    return str(resolved)
+    return str(Path(cmd).resolve())
+
+
+def _maybe_launch_bundled_loader() -> None:
+    """build.sh bundles x-loader INSIDE the packaged binary itself, as a
+    Nuitka onefile data file (`--include-data-files=...=x-loader-loader`)
+    rather than shipping it as a separate file next to the binary -- one
+    file for a user to run, not two. Nuitka's onefile bootstrap self-
+    extracts included data files into a private temp directory at startup
+    and exposes that directory to the running program via a
+    "__nuitka_binary_dir" name it injects into `builtins` (confirmed
+    directly against Nuitka's own runtime source, not just docs --
+    CompiledCodeHelpers.c seeds exactly this name for standalone/onefile
+    EXE mode; empirically verified live too: a minimal onefile build with
+    an included data file reported this path and the file was really
+    there). Extracts (chmods it executable -- onefile extraction doesn't
+    promise the source file's own exec bit survived) and launches it with
+    a fresh YATA_LOADER_SOCKET, then sets that env var for this process's
+    own _connect_to_loader() (called right after this) to pick up -- same
+    socket protocol run.sh already uses for a source checkout, just self-
+    orchestrated instead of shell-scripted.
+
+    A no-op for `uv run python yata-src/main.py` (not compiled -- no
+    "__nuitka_binary_dir" exists at all) and for run.sh's own dev-mode
+    orchestration (YATA_LOADER_SOCKET already set externally in that case
+    -- launching a second loader on top of it would just leave an
+    orphaned extra splash window).
+    """
+    if not _IS_COMPILED or os.environ.get("YATA_LOADER_SOCKET"):
+        return
+    binary_dir = getattr(builtins, "__nuitka_binary_dir", None)
+    if not binary_dir:
+        return
+    loader_binary = Path(binary_dir) / "x-loader-loader"
+    if not loader_binary.is_file():
+        return
+    os.chmod(loader_binary, 0o755)
+    socket_path = tempfile.mktemp(
+        dir=os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(),
+        prefix="yata-loader-", suffix=".sock",
+    )
+    try:
+        subprocess.Popen(
+            [str(loader_binary)],
+            env={**os.environ, "YATA_LOADER_SOCKET": socket_path},
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return
+    os.environ["YATA_LOADER_SOCKET"] = socket_path
 
 
 def _ensure_desktop_entry(
@@ -292,6 +349,37 @@ def _create_backup(dest_dir: Path | None = None) -> Path:
     return dest
 
 
+def _connect_to_loader() -> socket.socket | None:
+    """Whoever set YATA_LOADER_SOCKET (run.sh for a source checkout, or
+    _maybe_launch_bundled_loader for a packaged build.sh binary) has
+    already started x-loader listening on it by the time we get here, but
+    this retries a little anyway (up to ~1s) in case scheduling ever put
+    the connect before the accept -- run directly (run-yata.sh, or a
+    packaged binary with no loader sibling) the env var is unset and this
+    is a silent no-op, same rationale the old SIGUSR1 handshake used. Never
+    raises: a splash that fails to connect just never hears 'running' and
+    times out on its own (see x-loader/main.c)."""
+    path = os.environ.get("YATA_LOADER_SOCKET")
+    if not path:
+        return None
+    for _ in range(50):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.connect(path)
+            return sock
+        except OSError:
+            sock.close()
+            time.sleep(0.02)
+    return None
+
+
+def _send_loader_message(sock: socket.socket, message: str) -> None:
+    try:
+        sock.sendall((message + "\n").encode("ascii"))
+    except OSError:
+        pass
+
+
 def main() -> int:
     # add_help=True (the default) gives us -h/--help for free: argparse's
     # own help action prints usage and calls sys.exit(0) immediately during
@@ -305,6 +393,11 @@ def main() -> int:
         dest = _create_backup()
         print(f"Backup written to {dest}")
         return 0
+
+    _maybe_launch_bundled_loader()
+    loader_socket = _connect_to_loader()
+    if loader_socket:
+        _send_loader_message(loader_socket, "starting")
 
     # Must be set before QGuiApplication is constructed. PassThrough keeps
     # pixel sizes matching each monitor's actual reported scale factor
@@ -374,25 +467,21 @@ def main() -> int:
         print(exc, file=sys.stderr)
         return 1
 
-    # loader-src's own startup splash (see its module docstring) waits for
-    # this exact signal to know every window this launch is going to open
-    # has actually appeared, then fades out. YATA_LOADER_PID is only set
-    # when actually launched *through* the loader (run.sh, or the packaged
-    # loader binary) -- launched directly (run-yata.sh, or this binary run
-    # standalone) there's no loader waiting, so this is a silent no-op.
+    # x-loader (see its own module docstring) waits for this exact message
+    # to know every window this launch is going to open has actually
+    # appeared, then fades out -- loader_socket is None unless we were
+    # actually launched *through* the loader (run.sh), so this is a silent
+    # no-op when run directly (run-yata.sh, or this binary standalone).
     # Two processEvents() calls (same idiom this codebase's own test suite
     # uses after creating windows) let Qt actually show/expose what was
     # just created before signaling "done" -- constructing a window and
     # setting visible:true doesn't guarantee it's been mapped by the
     # platform in that same instant.
-    loader_pid = os.environ.get("YATA_LOADER_PID")
-    if loader_pid:
+    if loader_socket:
         app.processEvents()
         app.processEvents()
-        try:
-            os.kill(int(loader_pid), signal.SIGUSR1)
-        except (ValueError, ProcessLookupError, PermissionError):
-            pass
+        _send_loader_message(loader_socket, "running")
+        loader_socket.close()
 
     # Qt's event loop runs entirely in C++ and never hands control back to
     # the Python interpreter, so Python's own SIGINT handler (installed

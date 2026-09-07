@@ -15,16 +15,24 @@
 // 26-53s -- confirms Qt's own init was the real cost, not anything
 // specific to this app.
 //
-// Fades in, holds fully visible until a keypress/mouse click, fades out,
-// then holds fully hidden until a second keypress/mouse click, which is
-// when it actually exits (see effects.h/effects.c). No process-
-// orchestration yet (launching YATA and waiting for a readiness signal,
-// the way the removed prototypes did, to trigger the fade-out
-// automatically instead of waiting for input) -- this is only the visual
-// half of the original design so far. The main loop is non-blocking (a
-// `select()` on the X connection with a short timeout while animating)
-// specifically so the fade can keep advancing between X events rather
-// than sitting blocked in XNextEvent.
+// Fades in, then either:
+//   - standalone (no YATA_LOADER_SOCKET): holds fully visible until a
+//     keypress/mouse click, fades out, then holds fully hidden until a
+//     second click, which is when it actually exits. This is the
+//     run-loader.sh preview path.
+//   - socket-driven (YATA_LOADER_SOCKET set, run.sh's normal path): holds
+//     fully visible until YATA connects and sends "running\n" over that
+//     socket, or 2 minutes pass, or YATA disconnects without ever sending
+//     it -- any of those trigger the fade-out, after which it exits
+//     immediately (no second-click hold; see fade_set_auto_close). YATA
+//     also sends "starting\n" as soon as it connects, but that's currently
+//     just a handshake with no effect on the state machine -- a hook for
+//     later (e.g. resetting the timeout, or showing progress text).
+// See effects.h/effects.c for the state machine itself. The main loop is
+// non-blocking (a `select()` across the X connection and the loader
+// socket, with a short timeout while animating) so the fade can keep
+// advancing, X events get handled, and socket messages get noticed, all
+// without sitting blocked in any one of those.
 //
 // Uses a real 32-bit ARGB visual when one is available (XMatchVisualInfo),
 // so the fade is genuine per-pixel window transparency composited against
@@ -41,16 +49,23 @@
 #include <X11/extensions/Xinerama.h>
 
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "assets.h"
 #include "effects.h"
 
 #define FADE_DURATION_MS 250
+#define LOADER_TIMEOUT_MS (2 * 60 * 1000)
 
 static void getPicture(bool isLightTheme, unsigned char **data, size_t *data_size)
 {
@@ -84,6 +99,93 @@ static bool isDarkMode(void)
     return strstr(line, "dark") != NULL;
 }
 
+static long long now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+static int set_nonblocking(int fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) {
+        return -1;
+    }
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
+// Binds+listens on the AF_UNIX path YATA_LOADER_SOCKET names, non-blocking
+// so the caller's select() loop can poll it alongside the X connection.
+// Bound as early in main() as possible (before even XOpenDisplay) so it's
+// ready to accept the instant YATA tries to connect, whenever run.sh
+// happens to schedule it -- YATA also retries its own connect a little, so
+// this isn't load-bearing, just belt and suspenders.
+static int create_loader_socket(const char *path)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    if (strlen(path) >= sizeof(addr.sun_path)) {
+        close(fd);
+        return -1;
+    }
+    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+    unlink(path); // clear a stale socket file left by a prior crashed run
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd);
+        return -1;
+    }
+    if (listen(fd, 1) < 0) {
+        close(fd);
+        unlink(path);
+        return -1;
+    }
+    set_nonblocking(fd);
+    return fd;
+}
+
+// Reads whatever is currently available from the loader socket and pulls
+// out complete newline-delimited messages, matching against the small
+// fixed vocabulary YATA's _send_loader_message() writes. `buf`/`len` is the
+// caller's persistent line-accumulation buffer (partial messages carry
+// over between calls). Sets *sawRunning true the moment a "running" line
+// is seen (sticky -- never cleared) and *disconnected true if the peer
+// closed the connection or a real error occurred (EAGAIN/EINTR are not
+// errors here, just "nothing to read right now").
+static void loader_socket_consume(int fd, char *buf, size_t *len, size_t cap,
+                                   bool *sawRunning, bool *disconnected)
+{
+    char chunk[128];
+    ssize_t n = recv(fd, chunk, sizeof(chunk), 0);
+    if (n < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+            *disconnected = true;
+        }
+        return;
+    }
+    if (n == 0) {
+        *disconnected = true;
+        return;
+    }
+    for (ssize_t i = 0; i < n; i++) {
+        char c = chunk[i];
+        if (c == '\n' || *len >= cap - 1) {
+            buf[*len] = '\0';
+            if (strcmp(buf, "running") == 0) {
+                *sawRunning = true;
+            }
+            *len = 0;
+        } else {
+            buf[(*len)++] = c;
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     bool light = false;
@@ -96,6 +198,20 @@ int main(int argc, char *argv[])
         }
     }
     bool useDark = light ? false : (dark ? true : isDarkMode());
+
+    // Bound before anything else (X connection included) so it's listening
+    // as early as physically possible -- see create_loader_socket()'s own
+    // comment on why that timing matters.
+    const char *socketPath = getenv("YATA_LOADER_SOCKET");
+    bool socketMode = socketPath != NULL && socketPath[0] != '\0';
+    int listenFd = -1;
+    if (socketMode) {
+        listenFd = create_loader_socket(socketPath);
+        if (listenFd < 0) {
+            fprintf(stderr, "x-loader: could not set up %s, continuing without it\n", socketPath);
+            socketMode = false;
+        }
+    }
 
     unsigned char *rgba = NULL;
     size_t rgbaSize = 0;
@@ -183,8 +299,19 @@ int main(int argc, char *argv[])
 
     XMapRaised(display, window);
     fade_start_in(fx);
+    if (socketMode) {
+        // No second click to wait for in this mode -- nobody's there to
+        // click. See fade_set_auto_close's own comment.
+        fade_set_auto_close(fx, true);
+    }
 
     int xfd = ConnectionNumber(display);
+    int clientFd = -1;
+    char socketBuf[256];
+    size_t socketBufLen = 0;
+    bool runningReceived = false;
+    bool peerGone = false;
+    long long deadlineMs = now_ms() + LOADER_TIMEOUT_MS;
 
     while (!fade_is_done(fx)) {
         XEvent event;
@@ -193,11 +320,46 @@ int main(int argc, char *argv[])
             switch (event.type) {
             case KeyPress:
             case ButtonPress:
-                fade_notify_input(fx);
+                // Only standalone preview runs dismiss on input -- a
+                // socket-driven run is dismissed by YATA, not the user (see
+                // the deadline/message check below).
+                if (!socketMode) {
+                    fade_notify_input(fx);
+                }
                 break;
             default:
                 break; // Expose is handled by the unconditional
                        // fade_render() below anyway.
+            }
+        }
+
+        if (socketMode && listenFd >= 0 && clientFd < 0) {
+            int accepted = accept(listenFd, NULL, NULL);
+            if (accepted >= 0) {
+                set_nonblocking(accepted);
+                clientFd = accepted;
+                close(listenFd);
+                unlink(socketPath);
+                listenFd = -1;
+            }
+        }
+        if (socketMode && clientFd >= 0) {
+            loader_socket_consume(clientFd, socketBuf, &socketBufLen, sizeof(socketBuf),
+                                   &runningReceived, &peerGone);
+            if (peerGone) {
+                close(clientFd);
+                clientFd = -1;
+            }
+        }
+        // Fully visible and still holding (the only hold state possible
+        // here, since fade_set_auto_close skips the other one) -- dismiss
+        // on "running", on YATA disconnecting without ever sending it, or
+        // once 2 minutes have passed with neither. A "running" that arrived
+        // mid fade-in is still honored, just once FADE_VISIBLE is actually
+        // reached (this check runs every iteration).
+        if (socketMode && !fade_is_animating(fx) && !fade_is_done(fx)) {
+            if (runningReceived || peerGone || now_ms() >= deadlineMs) {
+                fade_start_out(fx);
             }
         }
 
@@ -213,16 +375,38 @@ int main(int argc, char *argv[])
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(xfd, &fds);
+        int maxFd = xfd;
+        if (socketMode) {
+            int watchFd = clientFd >= 0 ? clientFd : listenFd;
+            if (watchFd >= 0) {
+                FD_SET(watchFd, &fds);
+                if (watchFd > maxFd) {
+                    maxFd = watchFd;
+                }
+            }
+        }
+
         if (fade_is_animating(fx)) {
             // Wake again in time for the next frame, or sooner if an X
-            // event arrives first.
+            // event or socket message arrives first.
             struct timeval tv = {.tv_sec = 0, .tv_usec = FADE_FRAME_INTERVAL_MS * 1000};
-            select(xfd + 1, &fds, NULL, NULL, &tv);
+            select(maxFd + 1, &fds, NULL, NULL, &tv);
+        } else if (socketMode) {
+            // Holding fully visible, waiting for "running" or the 2-minute
+            // deadline -- wake in time to notice the deadline even if
+            // nothing else happens first.
+            long long remain = deadlineMs - now_ms();
+            if (remain < 0) {
+                remain = 0;
+            }
+            struct timeval tv = {.tv_sec = remain / 1000, .tv_usec = (remain % 1000) * 1000};
+            select(maxFd + 1, &fds, NULL, NULL, &tv);
         } else {
-            // Holding (fully visible or fully hidden) -- nothing to
-            // animate, so block until a real X event (the next input)
-            // shows up instead of waking up on a timer for no reason.
-            select(xfd + 1, &fds, NULL, NULL, NULL);
+            // Standalone preview, holding (fully visible or fully hidden)
+            // -- nothing to animate and nothing timed to wait for, so block
+            // until a real X event (the next input) shows up instead of
+            // waking up on a timer for no reason.
+            select(maxFd + 1, &fds, NULL, NULL, NULL);
         }
     }
 
@@ -233,5 +417,12 @@ int main(int argc, char *argv[])
         XFreeColormap(display, colormap);
     }
     XCloseDisplay(display);
+    if (clientFd >= 0) {
+        close(clientFd);
+    }
+    if (listenFd >= 0) {
+        close(listenFd);
+        unlink(socketPath);
+    }
     return 0;
 }

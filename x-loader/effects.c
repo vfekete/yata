@@ -46,6 +46,7 @@ struct FadeEffect {
     int durationMs;
     FadeState state;
     struct timespec startTime;
+    bool autoClose; // see fade_set_auto_close
 };
 
 static long long now_ms(void)
@@ -133,6 +134,11 @@ void fade_start_out(FadeEffect *fx)
     clock_gettime(CLOCK_MONOTONIC, &fx->startTime);
 }
 
+void fade_set_auto_close(FadeEffect *fx, bool autoClose)
+{
+    fx->autoClose = autoClose;
+}
+
 void fade_notify_input(FadeEffect *fx)
 {
     switch (fx->state) {
@@ -181,7 +187,7 @@ static int currentAlpha256(FadeEffect *fx)
     case FADE_OUT: {
         long long elapsed = elapsed_ms_since(fx->startTime);
         if (elapsed >= fx->durationMs) {
-            fx->state = FADE_WAITING;
+            fx->state = fx->autoClose ? FADE_DONE : FADE_WAITING;
             return 0;
         }
         return 256 - (int)(elapsed * 256 / fx->durationMs);

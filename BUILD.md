@@ -23,45 +23,56 @@ installed outside of that virtual environment.
 ./run.sh
 ```
 
-```sh
-./run.sh
-```
-
-Currently just runs YATA directly (equivalent to `./run-yata.sh`) — see
-"Startup splash" below for why. `./run-yata.sh` is the explicit form of the
-same thing; `./run-loader.sh` previews the splash on its own, without
-launching YATA at all.
+Builds (if needed) and launches the startup splash (`x-loader/`) alongside
+YATA, wired together over a private Unix domain socket — see "Startup
+splash" below. `./run-yata.sh` runs YATA directly with no splash at all;
+`./run-loader.sh` previews the splash on its own, without launching YATA.
 
 ### Startup splash
 
-`x-loader/` is a small, independent program meant to be shown while the
-real YATA app loads — most useful for the packaged single-file binary,
-where Nuitka's onefile self-extraction plus Python/Qt init can take
-noticeably longer than an already-warm interpreter. It's had a rockier
-history than most things in this repo: two earlier Qt-based
-implementations (a PySide6 prototype, then a from-scratch C++/QML rewrite
-linking a real Qt6 install directly, both since removed) were built and
-verified working, but each turned out to have Qt's own startup/init cost
-baked in regardless of language or optimization level — reported/measured
-live at 26-53s before a window even appeared, even from an `-O3`+LTO
-Release C++ build. `x-loader/` is a ground-up rewrite in plain C against
-only Xlib/Xinerama (no Qt, no Python, no image-decoding library even — see
-its own top comment) and measures ~19ms from process start to the window
-actually appearing on screen.
+`x-loader/` is a small, independent program shown while the real YATA app
+loads — most useful for the packaged single-file binary, where Nuitka's
+onefile self-extraction plus Python/Qt init can take noticeably longer
+than an already-warm interpreter. It's had a rockier history than most
+things in this repo: two earlier Qt-based implementations (a PySide6
+prototype, then a from-scratch C++/QML rewrite linking a real Qt6 install
+directly, both since removed) were built and verified working, but each
+turned out to have Qt's own startup/init cost baked in regardless of
+language or optimization level — reported/measured live at 26-53s before a
+window even appeared, even from an `-O3`+LTO Release C++ build. `x-loader/`
+is a ground-up rewrite in plain C against only Xlib/Xinerama (no Qt, no
+Python, no image-decoding library even — see its own top comment) and
+measures ~19ms from process start to the window actually appearing on
+screen.
 
-**Current state: preview-only, not wired into the real launch flow.**
-`x-loader/` shows a static image (light/dark, from `resources/loader-assets/`)
-and exits on click or any key — no animation, and no
-process-orchestration (launching YATA and waiting for a readiness signal,
-the way the removed prototypes did) yet. That's why `run.sh` doesn't
-actually show it: there's nothing yet for it to orchestrate.
+**Fully wired into the real launch flow.** `x-loader/` fades in, holds
+fully visible, fades out, and exits — driven by two tiny messages YATA
+sends over a Unix domain socket (`YATA_LOADER_SOCKET`): `"starting"` once
+connected, `"running"` once every window from this launch is actually
+shown. The splash fades out and exits the instant it hears `"running"`,
+after 2 minutes if it never does, or immediately if YATA disconnects
+without ever sending it (e.g. a crash). Two ways this gets wired up:
+- **Source checkout**: `run.sh` generates the socket path, launches
+  `x-loader` in the background, and runs YATA in the foreground with that
+  path exported.
+- **Packaged binary** (`build.sh`, below): `x-loader` ships bundled inside
+  the one binary itself; at startup it self-extracts and launches (see
+  `yata-src/main.py`'s `_maybe_launch_bundled_loader`) — no shell script
+  involved, just running the one file.
+
+`./run-yata.sh --backup`/`-b` and `-h`/`--help` skip the splash entirely
+(both exit before any window opens, so there'd be nothing for a
+`"running"` to ever report).
 
 ```sh
-./run-loader.sh          # builds (if needed) and previews x-loader
+./run-loader.sh          # builds (if needed) and previews x-loader standalone
 ./run-loader.sh --dark   # force dark regardless of desktop preference
 ./run-loader.sh --light  # force light regardless of desktop preference
 ```
 
+Run standalone like this (no `YATA_LOADER_SOCKET` set), it just holds the
+fully-faded-in image until dismissed by a click or keypress, then holds
+fully hidden until a second one — there's no YATA to report `"running"`.
 With neither flag, it follows the desktop's own light/dark preference
 (`gsettings get org.gnome.desktop.interface color-scheme`). Needs
 `libx11-dev`/`libxinerama-dev` (or equivalent) and a C compiler; see
@@ -78,18 +89,34 @@ so far — see CHANGELOG).
 
 ## Build a standalone binary
 
-**`./build.sh` is currently broken — it still references `loader-src/`,
-which has been removed.** Left unfixed deliberately until `x-loader/` (or
-whatever the splash ends up being) actually gets wired into the real
-launch flow; packaging it before then would just be packaging dead paths.
-Once fixed, it's expected to still do what it says below for `yata-src/`
-itself, via
+```sh
+./build.sh
+```
+
+Checks that `yata-src/main.py`'s `APP_VERSION` matches `pyproject.toml`'s
+`version` (they gate independent things — `APP_VERSION` controls desktop
+entry/icon-cache resync on upgrade — but drifting apart is a real bug the
+build should catch, not ship) and that the app icon
+(`resources/assets/app-icon.png`) actually exists, then produces a single
+file: `dist/yata-X.Y.Z`, via
 [`pyside6-deploy`](https://doc.qt.io/qtforpython/deployment/deploy-guide.html)
 (bundled with PySide6, which drives [Nuitka](https://nuitka.net/) to
-compile it into one file); `nuitka`/`patchelf` come from the `build`
+compile it into one file). This is the file to run, and what a desktop
+entry's `Exec=` should point at. `nuitka`/`patchelf` come from the `build`
 dependency group (`uv run --group build ...`), the first build takes a few
-minutes, and the resulting binary is large (~60MB, embeds a private Qt) and
-Linux-only (produces ELF binaries).
+minutes, and the resulting binary is large (~65MB, embeds a private Qt
+plus `x-loader`) and Linux-only (produces ELF binaries).
+
+`x-loader` (compiled fresh via plain `make`, no Nuitka needed for it) ships
+*inside* that one file — `build.sh` passes it to Nuitka as an onefile data
+file (`--include-data-files`, injected into the generated
+`pysidedeploy.spec`'s `[nuitka] extra_args`), and `yata-src/main.py`'s
+`_maybe_launch_bundled_loader()` finds it at startup via the
+`__nuitka_binary_dir` name Nuitka injects into `builtins` (the directory
+included data files get self-extracted into) and launches it from there —
+see "Startup splash" above. No separate sibling file to lose track of; if
+extraction ever fails to turn it up, the app still runs fine, just with no
+splash.
 
 ## Try the mock task dataset
 
@@ -115,15 +142,14 @@ XDG_DATA_HOME="$(mktemp -d)" bash -c '
 ## Project layout
 
 - `yata-src/` — application source (Python backend + QML UI in `yata-src/qml/`)
-- `x-loader/` — the pure-X11 startup splash preview (`main.c`, `Makefile`,
-  `generate_assets.sh`) — see "Startup splash" above; not yet wired into
-  `run.sh`/`build.sh`
+- `x-loader/` — the pure-X11 startup splash (`main.c`, `effects.c`/`.h`,
+  `Makefile`, `generate_assets.sh`) — see "Startup splash" above
 - `resources/` — non-code assets for the main app, including
   `resources/loader-assets/` (the splash's background images)
 - `tests/` — pytest test suite for `yata-src/`; `tests/fixtures/` holds mock data
 - `pyproject.toml` — dependencies, managed by `uv`
-- `run.sh` / `run-yata.sh` / `run-loader.sh` — run YATA (currently no
-  splash), run YATA explicitly, and preview the splash standalone,
-  respectively
-- `build.sh` — packages `yata-src/` into a standalone binary; currently
-  broken (see "Build a standalone binary" above)
+- `run.sh` / `run-yata.sh` / `run-loader.sh` — run YATA with the splash in
+  front of it, run YATA directly with no splash, and preview the splash
+  standalone, respectively
+- `build.sh` — packages `yata-src/` + `x-loader/` into one standalone
+  binary (see "Build a standalone binary" above)

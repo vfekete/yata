@@ -10,11 +10,12 @@
 # -O3+LTO Release C++ build). x-loader/ links only Xlib/Xinerama and
 # measures ~19ms from process start to the window actually appearing.
 #
-# x-loader has no process-orchestration (launching YATA and waiting for a
-# readiness signal) or animation yet -- this script only previews the
-# static image. run.sh (the full loader-then-YATA flow) and build.sh
-# (packaging) still reference the removed Qt prototypes and are broken
-# pending that follow-up work.
+# x-loader does have process-orchestration now, but only via run.sh, which
+# launches it alongside YATA and wires up the readiness socket
+# (YATA_LOADER_SOCKET) -- run standalone like this, with no socket, it just
+# holds the fully-faded-in image until you dismiss it yourself (see
+# fade_set_auto_close in effects.c). build.sh (packaging) still references
+# the removed Qt prototypes and is broken pending that follow-up work.
 #
 # By default the light/dark background follows the desktop's own preference.
 # Pass --light or --dark to force one, e.g. `./run-loader.sh --dark`.

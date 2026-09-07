@@ -7,6 +7,155 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.35.0] - 2026-09-08
+
+### Changed
+- **The packaged build is now a genuine single file** — direct follow-up
+  to 0.34.0's two-file layout ("would it be possible to put it into single
+  binary? simply for the user convenience"). `x-loader` now ships *inside*
+  `dist/yata-X.Y.Z` itself instead of alongside it as a `-loader` sibling:
+  - `build.sh` passes it to Nuitka as an onefile data file
+    (`--include-data-files=.../x-loader/x-loader=x-loader-loader`),
+    injected into the `[nuitka] extra_args` of a `pysidedeploy.spec`
+    generated via `pyside6-deploy --init` specifically to get a chance to
+    add that flag before the real compile runs (a plain `pyside6-deploy -f
+    --name ...` with no spec file, as before, auto-generates and discards
+    one with no such opportunity).
+  - At startup, `yata-src/main.py`'s `_maybe_launch_bundled_loader()` finds
+    the self-extracted copy via `__nuitka_binary_dir` — a name Nuitka
+    injects into `builtins` (not a module global) pointing at the onefile
+    bootstrap's private per-run extraction directory, confirmed directly
+    against Nuitka's own runtime source (`CompiledCodeHelpers.c` seeds it
+    for standalone/onefile EXE mode) and empirically verified live with a
+    minimal onefile probe binary before wiring it into the real build.
+    Chmods the extracted file executable itself (onefile extraction
+    doesn't promise the source file's own exec bit survived) rather than
+    relying on it. A no-op, same as before, when not compiled or when
+    `YATA_LOADER_SOCKET` is already set externally (`run.sh`'s dev-mode
+    orchestration).
+  - This supersedes 0.34.0's sibling-file approach (and the earlier,
+    briefly-considered-then-rejected idea of embedding it via Qt resources
+    instead) — no more second file to keep track of or ship together.
+  - `tests/test_desktop_integration.py` updated: the sibling-file tests
+    replaced with equivalents that monkeypatch `builtins.__nuitka_binary_dir`
+    instead of writing a fake sibling file next to a fake `sys.argv[0]`; a
+    new test confirms the extracted file gets chmodded executable even
+    when it wasn't already. All 194 tests still pass.
+  - **Verified against a real build, not just the probe**: ran `./build.sh`
+    to completion (2m49s) and launched the resulting single
+    `dist/yata-0.34.0` file (isolated `XDG_*` dirs) — confirmed the
+    bundled loader really does self-extract to a Nuitka onefile temp
+    directory (`/tmp/onefile_<pid>_<time>_<random>/x-loader-loader`,
+    observed directly via `ps`) and launch from there (first seen ~523ms
+    in, gone by ~1795ms — a zombie/defunct process still shows up in `ps`
+    output after it's actually exited, which produced one misleadingly
+    "still there" reading before filtering `ps`'s `stat=` column caught
+    it), with the app window and process both still present and running
+    afterward. This build predates this entry's own version bump
+    (0.34.0 → 0.35.0, done immediately after to record the change) — same
+    code, cosmetic version-label difference only, not re-verified a second
+    time under the new number since the mechanism doesn't depend on it.
+
+## [0.34.0] - 2026-09-07
+
+### Changed
+- **`build.sh` rewritten around a single primary distributable binary**,
+  replacing the previous two-binary scheme where the *loader* was the file
+  a user ran (looking for an `-app` sibling) — a layout left over from the
+  now-removed `loader-src`/`loader-cpp`. Now:
+  - `dist/yata-X.Y.Z` — the app itself (`pyside6-deploy`/Nuitka, as
+    before). This is the one file to run, and what a desktop entry's
+    `Exec=` points at.
+  - `dist/yata-X.Y.Z-loader` — `x-loader`, compiled fresh via plain `make`
+    (no Nuitka needed for a 10KB-of-code Xlib program). The app binary
+    finds and launches this sibling itself at startup (new
+    `yata-src/main.py`'s `_maybe_launch_bundled_loader`, detected via
+    Nuitka's own `__compiled__` module marker so `uv run` dev mode is
+    unaffected) — reusing the exact same socket protocol `run.sh` already
+    uses for a source checkout, just self-orchestrated instead of
+    shell-scripted. No new IPC code needed, no Nuitka onefile
+    data-embedding tricks either — it's the same sibling-file-lookup
+    pattern (`sys.argv[0]`-relative) this codebase's `_compute_exec_cmd`
+    already used for the old scheme, just with the roles inverted.
+  - **Considered and rejected: embedding x-loader's compiled bytes inside
+    yata's own Qt resources** for a literal single-file result — x-loader
+    already bakes its two background images in as raw RGBA at compile time
+    (by design, for zero runtime decoding), making the binary itself
+    ~2.8MB; re-embedding that whole blob a second time through
+    `pyside6-rcc`'s byte-array encoding would have bloated the tracked
+    `resources_rc.py` by several more MB for no real benefit over a plain
+    sibling file, which the existing `_ensure_desktop_entry`/`Exec=`
+    machinery already handles as "one thing to run."
+  - `build.sh` now also **checks `yata-src/main.py`'s `APP_VERSION`
+    against `pyproject.toml`'s version** before building, exiting with an
+    error on mismatch rather than silently shipping a binary whose
+    desktop-entry-resync gate is stale — this exact drift had actually
+    happened (`APP_VERSION` was stuck at `"0.9.32"`, last touched long
+    before the version scheme settled on `pyproject.toml`'s `X.Y.Z`, while
+    `pyproject.toml` had moved on to `0.33.0`); fixed by bumping
+    `APP_VERSION` to match here. Also checks `resources/assets/app-icon.png`
+    exists and is non-empty before starting the multi-minute build.
+  - `_compute_exec_cmd`'s compiled-binary branch simplified to match: no
+    more "-app" suffix stripping / sibling-swap logic, since the packaged
+    binary now points `Exec=` at itself and handles launching its own
+    splash sibling internally.
+- **Verified with a real build**, not just reviewed: ran `./build.sh` to
+  completion (2m41s; previous dist/ artifacts on this machine, `yata-0.28.0`
+  through `yata-0.30.0`, predate the splash work entirely and only proved
+  the plain `pyside6-deploy` pipeline itself, not this new layout).
+  Launched the real `dist/yata-0.34.0` binary (isolated `XDG_*` dirs) and
+  confirmed, against the real Nuitka onefile output rather than just unit
+  tests: the `-loader` sibling actually gets found and launched (first
+  seen ~489ms in, gone by ~1724ms — the extra latency vs. dev-mode's ~36ms
+  is plausibly onefile self-extraction happening before any Python code,
+  including `_maybe_launch_bundled_loader`, can even run), the app window
+  is still there and the app still running once the splash exits, and a
+  freshly generated `~/.local/share/applications/yata.desktop` has
+  `Exec=` pointing directly at the binary itself (no sibling-swap) with
+  `X-AppVersion=0.34.0` matching `pyproject.toml`.
+
+## [0.33.0] - 2026-09-07
+
+### Added
+- **`x-loader` process-orchestration**: `run.sh` now actually launches the
+  splash alongside YATA and wires them together over a private Unix domain
+  socket (`YATA_LOADER_SOCKET`, generated fresh per run under
+  `$XDG_RUNTIME_DIR` — falls back to `/tmp` if unset), replacing the
+  keypress/click-driven dismissal that was the only way to close it until
+  now. Protocol is two tiny newline-delimited messages, x-loader as the
+  server and YATA (`yata-src/main.py`'s new `_connect_to_loader`/
+  `_send_loader_message`) as the client:
+  1. YATA connects (retrying for up to ~1s in case it wins the race against
+     the loader's own socket bind, which happens as early in `main()` as
+     possible specifically to make that unlikely) and sends `starting` —
+     currently just a handshake with no effect on the loader's state
+     machine, a hook for later (e.g. resetting the timeout, showing
+     progress text).
+  2. Once every window this launch opens has actually been shown (same
+     `app.processEvents()` idiom the old `YATA_LOADER_PID`/`SIGUSR1`
+     mechanism used, now removed as fully obsolete), YATA sends `running`
+     and closes its end.
+  3. The loader (`x-loader/main.c`'s new socket-mode branch, alongside its
+     existing X connection in the same non-blocking `select()` loop) fades
+     out and exits the instant it sees `running`; after 2 minutes with no
+     `running` (`LOADER_TIMEOUT_MS`); or immediately if YATA's end closes
+     without ever sending it (e.g. a crash) — all three funnel into the
+     same `fade_start_out()` call. A `running` that arrives mid fade-in is
+     honored as soon as the fade-in itself finishes, rather than causing a
+     visible pop.
+  4. Socket-driven runs skip the standalone preview's "hold fully hidden
+     until a second click" step entirely (`effects.c`'s new
+     `fade_set_auto_close`) — once faded out there's no user left to click,
+     so it just exits.
+  - `run.sh --backup`/`-b` and `-h`/`--help` skip the splash entirely
+    (`main.py` returns before opening any window for either), rather than
+    leaving it on screen for up to 2 minutes waiting for a `running` that's
+    never coming.
+  - `run-loader.sh` (standalone preview, no socket) is unaffected — same
+    click-to-dismiss behavior as before.
+  - `build.sh` (packaging) remains broken, still referencing the removed
+    `loader-src/` — unrelated follow-up, not touched here.
+
 ## [0.32.0] - 2026-09-07
 
 ### Added

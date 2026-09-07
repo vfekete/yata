@@ -1,9 +1,16 @@
+import os
 import stat
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from main import APP_VERSION, _compute_exec_cmd, _ensure_desktop_entry, _version_tuple
+from main import (
+    APP_VERSION,
+    _compute_exec_cmd,
+    _ensure_desktop_entry,
+    _maybe_launch_bundled_loader,
+    _version_tuple,
+)
 
 FAKE_EXEC = "/home/user/apps/yata"
 ALT_EXEC = "/mnt/repo/run.sh"
@@ -119,50 +126,12 @@ def _make_executable(path):
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
 
 
-def test_compute_exec_cmd_packaged_app_binary_points_at_loader_sibling(tmp_path, monkeypatch):
-    """build.sh's packaged layout: dist/yata-X.Y.Z (the loader) and
-    dist/yata-X.Y.Z-app (this binary) sit side by side. A desktop entry
-    generated from the app binary's own perspective (source_dir has no
-    run.sh -- i.e. not a source checkout) must still point at the loader,
-    not skip straight to the app and bypass the splash entirely."""
-    source_dir = tmp_path / "fake-src"
-    source_dir.mkdir()
-    app_binary = tmp_path / "yata-1.2.3-app"
-    loader_binary = tmp_path / "yata-1.2.3"
-    _make_executable(app_binary)
-    _make_executable(loader_binary)
-
-    monkeypatch.setattr("main.sys.argv", [str(app_binary)])
-    assert _compute_exec_cmd(source_dir=source_dir) == str(loader_binary)
-
-
-def test_compute_exec_cmd_falls_back_to_self_when_no_loader_sibling(tmp_path, monkeypatch):
-    source_dir = tmp_path / "fake-src"
-    source_dir.mkdir()
-    app_binary = tmp_path / "yata-1.2.3-app"
-    _make_executable(app_binary)
-    # Deliberately no sibling "yata-1.2.3" file at all.
-
-    monkeypatch.setattr("main.sys.argv", [str(app_binary)])
-    assert _compute_exec_cmd(source_dir=source_dir) == str(app_binary)
-
-
-def test_compute_exec_cmd_ignores_non_executable_loader_sibling(tmp_path, monkeypatch):
-    source_dir = tmp_path / "fake-src"
-    source_dir.mkdir()
-    app_binary = tmp_path / "yata-1.2.3-app"
-    loader_binary = tmp_path / "yata-1.2.3"
-    _make_executable(app_binary)
-    loader_binary.write_text("#!/bin/sh\n")  # not chmod +x
-
-    monkeypatch.setattr("main.sys.argv", [str(app_binary)])
-    assert _compute_exec_cmd(source_dir=source_dir) == str(app_binary)
-
-
-def test_compute_exec_cmd_plain_binary_without_app_suffix_is_unaffected(tmp_path, monkeypatch):
-    """A binary not named "*-app" (e.g. someone runs build.sh's app binary
-    under a custom name, or this convention doesn't apply) must resolve to
-    itself exactly as before this feature existed."""
+def test_compute_exec_cmd_packaged_binary_points_at_itself(tmp_path, monkeypatch):
+    """build.sh's packaged binary launches its own splash sibling
+    internally (_maybe_launch_bundled_loader) rather than needing a
+    separate Exec= target for it, so a desktop entry generated from a
+    compiled binary's own perspective (source_dir has no run.sh -- i.e.
+    not a source checkout) should just point at the binary itself."""
     source_dir = tmp_path / "fake-src"
     source_dir.mkdir()
     binary = tmp_path / "yata-1.2.3"
@@ -170,6 +139,77 @@ def test_compute_exec_cmd_plain_binary_without_app_suffix_is_unaffected(tmp_path
 
     monkeypatch.setattr("main.sys.argv", [str(binary)])
     assert _compute_exec_cmd(source_dir=source_dir) == str(binary)
+
+
+def test_maybe_launch_bundled_loader_noop_when_not_compiled(tmp_path, monkeypatch):
+    monkeypatch.setattr("main._IS_COMPILED", False)
+    monkeypatch.delenv("YATA_LOADER_SOCKET", raising=False)
+    monkeypatch.setattr("main.builtins.__nuitka_binary_dir", str(tmp_path), raising=False)
+    (tmp_path / "x-loader-loader").write_text("#!/bin/sh\n")
+
+    with patch("main.subprocess.Popen") as popen:
+        _maybe_launch_bundled_loader()
+        popen.assert_not_called()
+    assert "YATA_LOADER_SOCKET" not in os.environ
+
+
+def test_maybe_launch_bundled_loader_noop_when_socket_already_set(tmp_path, monkeypatch):
+    """run.sh's own dev-mode orchestration already set the env var --
+    launching a second loader on top of it would just orphan an extra
+    splash window."""
+    monkeypatch.setattr("main._IS_COMPILED", True)
+    monkeypatch.setenv("YATA_LOADER_SOCKET", "/tmp/already-set.sock")
+    monkeypatch.setattr("main.builtins.__nuitka_binary_dir", str(tmp_path), raising=False)
+    (tmp_path / "x-loader-loader").write_text("#!/bin/sh\n")
+
+    with patch("main.subprocess.Popen") as popen:
+        _maybe_launch_bundled_loader()
+        popen.assert_not_called()
+
+
+def test_maybe_launch_bundled_loader_noop_when_binary_dir_missing(monkeypatch):
+    """A dev-mode `uv run` process never gets the "__nuitka_binary_dir"
+    builtin Nuitka injects at all -- _IS_COMPILED already guards that case,
+    but this pins the (belt-and-suspenders) getattr default too."""
+    monkeypatch.setattr("main._IS_COMPILED", True)
+    monkeypatch.delenv("YATA_LOADER_SOCKET", raising=False)
+    monkeypatch.delattr("main.builtins.__nuitka_binary_dir", raising=False)
+
+    with patch("main.subprocess.Popen") as popen:
+        _maybe_launch_bundled_loader()
+        popen.assert_not_called()
+
+
+def test_maybe_launch_bundled_loader_noop_when_bundled_file_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr("main._IS_COMPILED", True)
+    monkeypatch.delenv("YATA_LOADER_SOCKET", raising=False)
+    monkeypatch.setattr("main.builtins.__nuitka_binary_dir", str(tmp_path), raising=False)
+    # Deliberately no "x-loader-loader" file extracted into binary_dir.
+
+    with patch("main.subprocess.Popen") as popen:
+        _maybe_launch_bundled_loader()
+        popen.assert_not_called()
+
+
+def test_maybe_launch_bundled_loader_launches_extracted_file_and_sets_env(tmp_path, monkeypatch):
+    monkeypatch.setattr("main._IS_COMPILED", True)
+    monkeypatch.delenv("YATA_LOADER_SOCKET", raising=False)
+    monkeypatch.setattr("main.builtins.__nuitka_binary_dir", str(tmp_path), raising=False)
+    loader = tmp_path / "x-loader-loader"
+    loader.write_text("#!/bin/sh\n")  # deliberately NOT chmod +x -- the
+    # function must fix that itself (Nuitka's onefile extraction doesn't
+    # promise the source file's own exec bit survived).
+
+    with patch("main.subprocess.Popen") as popen:
+        _maybe_launch_bundled_loader()
+        popen.assert_called_once()
+        args, kwargs = popen.call_args
+        assert args[0] == [str(loader)]
+        assert os.access(loader, os.X_OK)
+        socket_path = kwargs["env"]["YATA_LOADER_SOCKET"]
+        assert socket_path
+
+    assert os.environ.pop("YATA_LOADER_SOCKET") == socket_path
 
 
 def test_app_version_constant_is_set():
