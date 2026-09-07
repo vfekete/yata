@@ -1,8 +1,9 @@
+import stat
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from main import APP_VERSION, _ensure_desktop_entry, _version_tuple
+from main import APP_VERSION, _compute_exec_cmd, _ensure_desktop_entry, _version_tuple
 
 FAKE_EXEC = "/home/user/apps/yata"
 ALT_EXEC = "/mnt/repo/run.sh"
@@ -111,6 +112,64 @@ def test_installs_when_version_key_missing(home):
         _ensure_desktop_entry("1.0.0", home=home, exec_cmd=FAKE_EXEC)
 
     assert "X-AppVersion=1.0.0" in desktop.read_text()
+
+
+def _make_executable(path):
+    path.write_text("#!/bin/sh\n")
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+def test_compute_exec_cmd_packaged_app_binary_points_at_loader_sibling(tmp_path, monkeypatch):
+    """build.sh's packaged layout: dist/yata-X.Y.Z (the loader) and
+    dist/yata-X.Y.Z-app (this binary) sit side by side. A desktop entry
+    generated from the app binary's own perspective (source_dir has no
+    run.sh -- i.e. not a source checkout) must still point at the loader,
+    not skip straight to the app and bypass the splash entirely."""
+    source_dir = tmp_path / "fake-src"
+    source_dir.mkdir()
+    app_binary = tmp_path / "yata-1.2.3-app"
+    loader_binary = tmp_path / "yata-1.2.3"
+    _make_executable(app_binary)
+    _make_executable(loader_binary)
+
+    monkeypatch.setattr("main.sys.argv", [str(app_binary)])
+    assert _compute_exec_cmd(source_dir=source_dir) == str(loader_binary)
+
+
+def test_compute_exec_cmd_falls_back_to_self_when_no_loader_sibling(tmp_path, monkeypatch):
+    source_dir = tmp_path / "fake-src"
+    source_dir.mkdir()
+    app_binary = tmp_path / "yata-1.2.3-app"
+    _make_executable(app_binary)
+    # Deliberately no sibling "yata-1.2.3" file at all.
+
+    monkeypatch.setattr("main.sys.argv", [str(app_binary)])
+    assert _compute_exec_cmd(source_dir=source_dir) == str(app_binary)
+
+
+def test_compute_exec_cmd_ignores_non_executable_loader_sibling(tmp_path, monkeypatch):
+    source_dir = tmp_path / "fake-src"
+    source_dir.mkdir()
+    app_binary = tmp_path / "yata-1.2.3-app"
+    loader_binary = tmp_path / "yata-1.2.3"
+    _make_executable(app_binary)
+    loader_binary.write_text("#!/bin/sh\n")  # not chmod +x
+
+    monkeypatch.setattr("main.sys.argv", [str(app_binary)])
+    assert _compute_exec_cmd(source_dir=source_dir) == str(app_binary)
+
+
+def test_compute_exec_cmd_plain_binary_without_app_suffix_is_unaffected(tmp_path, monkeypatch):
+    """A binary not named "*-app" (e.g. someone runs build.sh's app binary
+    under a custom name, or this convention doesn't apply) must resolve to
+    itself exactly as before this feature existed."""
+    source_dir = tmp_path / "fake-src"
+    source_dir.mkdir()
+    binary = tmp_path / "yata-1.2.3"
+    _make_executable(binary)
+
+    monkeypatch.setattr("main.sys.argv", [str(binary)])
+    assert _compute_exec_cmd(source_dir=source_dir) == str(binary)
 
 
 def test_app_version_constant_is_set():

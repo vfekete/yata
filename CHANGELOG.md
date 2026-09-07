@@ -7,6 +7,83 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.32.0] - 2026-09-07
+
+### Added
+- **New application logo** (`resources/assets/app-icon.png`, ChatGPT-generated,
+  steered/iterated on by the author) — replaces the previous icon everywhere
+  it was used (window icon, desktop entry, hicolor icon cache). `APP_VERSION`
+  bumped so existing installations' desktop entry/icon cache actually
+  refresh on next launch (`_ensure_desktop_entry`'s own version check).
+- **Startup loader/splash, in progress — now a pure-X11 preview (`x-loader/`)**:
+  a small, independent program meant to be shown while the real YATA app
+  loads, most useful for masking the packaged single-file binary's slower
+  startup. Went through three implementations before landing here:
+  1. A PySide6 prototype (fade in/out, an orbiting highlight on the logo's
+     ring, a `YATA_LOADER_PID`+`SIGUSR1` readiness protocol so it only
+     fades out once YATA has actually shown every window it's going to
+     open, sibling-`-app`-binary auto-detection for the packaged case) —
+     worked, but Python interpreter + Qt-for-Python's own init cost turned
+     out to be big enough to defeat the entire point of a splash meant to
+     mask slow startup: reported live at ~9s with no fade-in visible at
+     all, then ~30s+ even after removing a `QtQuick.Effects` `MultiEffect`
+     glow that was the first suspect.
+  2. A from-scratch rewrite in C++ against a real Qt6 install (CMake,
+     same design/protocol, POSIX signals via the standard Qt
+     self-pipe→`QSocketNotifier` bridge) — ruled out "Python" as the cause,
+     but not Qt itself: still measured 26-53s before a window even
+     appeared, including from an `-O3`+LTO Release build with link-time
+     optimization on, which ruled out "unoptimized code" too.
+  3. **`x-loader/`**: plain C against only Xlib/Xinerama, no Qt/Python/UI
+     toolkit at all, and no image-decoding library either — the two
+     background PNGs (`resources/loader-assets/`, used verbatim from the
+     design mockup: logo, wordmark, "Loading...", and the "SMALL STEPS. BIG
+     PROGRESS." tagline are all part of that artwork already) are
+     pre-decoded to raw RGBA and embedded as plain C byte arrays at build
+     time (`x-loader/generate_assets.sh`, `xxd -i`), so the running program
+     never parses/decodes anything — just opens the display and blits
+     pixels. Measured live: ~19ms from process start to the window actually
+     appearing on screen (X11 window-mapped wall clock), confirming Qt's
+     own init was the real cost all along, not this app's code, its
+     language, or its optimization level.
+  - Matches the desktop's own light/dark preference by default (same
+    `gsettings get org.gnome.desktop.interface color-scheme` check all
+    three implementations used), `--light`/`--dark` force one regardless.
+    Run via `./run-loader.sh` (builds via `make` if needed).
+  - **Fade in/out, real transparency** (`x-loader/effects.h`/`effects.c`):
+    fades in over 250ms, holds fully visible until a keypress/mouse click,
+    fades out over 250ms, holds fully hidden until a second
+    keypress/mouse click, and only then actually exits. Input during
+    either active fade is ignored — only the two static "holding" states
+    react to it — which also incidentally fixes a real bug reported live:
+    launching from a shell (`./x-loader --light`, Enter to run it) could
+    dismiss the splash immediately, the Enter keystroke landing on the
+    window right as it was mapped, mid fade-in.
+    Uses a real 32-bit ARGB visual (`XMatchVisualInfo`) with premultiplied
+    per-pixel alpha, so a compositor genuinely blends the fade against
+    whatever is actually behind the window — confirmed live by screenshotting
+    the root window (not the splash window itself, which only ever holds
+    its own uncomposited pixels) mid-fade and seeing real desktop content
+    show through. Falls back to blending toward the image's own top-left
+    pixel color if no ARGB visual is found (no compositor, or a minimal X
+    setup without one). Repacking ~346,000 pixels/frame this way still
+    measures well under 1ms, so no SIMD or external library was needed to
+    hit 60fps. Driven by a non-blocking main loop (`select()` on the X
+    connection, timed while animating, blocking indefinitely while
+    holding) rather than blocking in `XNextEvent`, so the animation can
+    advance between events instead of waiting on user input to make
+    progress.
+  - **Not yet feature-complete**: no process-orchestration (launching YATA
+    and waiting for a real readiness signal to trigger the fade-out,
+    instead of waiting for a keypress/click) — that's still the plan, just
+    not built yet. `run.sh` is accordingly just `run-yata.sh` for now (no
+    splash in the real launch flow), and `build.sh` (packaging) still
+    references the removed `loader-src/` and is left broken pending this
+    follow-up work — both deliberate, not oversights. No automated tests
+    yet either (the two Qt prototypes each had one — PySide6's via pytest,
+    the C++ one's verified manually — but `x-loader/` hasn't gotten there
+    yet).
+
 ## [0.31.2] - 2026-09-06
 
 ### Fixed

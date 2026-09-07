@@ -28,7 +28,7 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.9.31"
+APP_VERSION = "0.9.32"
 
 
 def _version_tuple(v: str) -> tuple:
@@ -38,21 +38,36 @@ def _version_tuple(v: str) -> tuple:
         return (0,)
 
 
-def _compute_exec_cmd() -> str:
+def _compute_exec_cmd(*, source_dir: Path | None = None) -> str:
     """Return the command for the .desktop Exec= field.
 
-    For a source checkout this is run.sh (sits two dirs up from this file).
-    For a compiled standalone binary run.sh doesn't exist next to __file__, so
-    we fall back to the binary itself, resolved via PATH if needed.
+    For a source checkout this is run.sh (sits two dirs up from this file,
+    and itself launches the loader in front of YATA -- see loader-src/).
+    For a compiled standalone binary run.sh doesn't exist next to __file__,
+    so we fall back to the binary itself, resolved via PATH if needed --
+    except build.sh's packaged layout names *this* binary "<name>-app" and
+    puts the startup loader right next to it as the sibling "<name>" (no
+    suffix), so a desktop entry generated from the app binary's own
+    perspective should still point at that loader sibling, not skip it.
+
+    source_dir defaults to this file's own directory; overridable so tests
+    can exercise the "compiled binary" branch without needing a fake
+    checkout where run.sh genuinely doesn't exist next to a real main.py.
     """
-    run_sh = Path(__file__).parent.parent / "run.sh"
+    source_dir = source_dir or Path(__file__).parent
+    run_sh = source_dir.parent / "run.sh"
     if run_sh.is_file():
         return str(run_sh)
     import shutil
     cmd = sys.argv[0]
     if not os.path.isabs(cmd):
         cmd = shutil.which(cmd) or os.path.abspath(cmd)
-    return str(Path(cmd).resolve())
+    resolved = Path(cmd).resolve()
+    if resolved.name.endswith("-app"):
+        loader_sibling = resolved.with_name(resolved.name[: -len("-app")])
+        if loader_sibling.is_file() and os.access(loader_sibling, os.X_OK):
+            return str(loader_sibling)
+    return str(resolved)
 
 
 def _ensure_desktop_entry(
@@ -358,6 +373,26 @@ def main() -> int:
     except RuntimeError as exc:
         print(exc, file=sys.stderr)
         return 1
+
+    # loader-src's own startup splash (see its module docstring) waits for
+    # this exact signal to know every window this launch is going to open
+    # has actually appeared, then fades out. YATA_LOADER_PID is only set
+    # when actually launched *through* the loader (run.sh, or the packaged
+    # loader binary) -- launched directly (run-yata.sh, or this binary run
+    # standalone) there's no loader waiting, so this is a silent no-op.
+    # Two processEvents() calls (same idiom this codebase's own test suite
+    # uses after creating windows) let Qt actually show/expose what was
+    # just created before signaling "done" -- constructing a window and
+    # setting visible:true doesn't guarantee it's been mapped by the
+    # platform in that same instant.
+    loader_pid = os.environ.get("YATA_LOADER_PID")
+    if loader_pid:
+        app.processEvents()
+        app.processEvents()
+        try:
+            os.kill(int(loader_pid), signal.SIGUSR1)
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
 
     # Qt's event loop runs entirely in C++ and never hands control back to
     # the Python interpreter, so Python's own SIGINT handler (installed

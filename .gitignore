@@ -7,6 +7,12 @@ dist/
 yata-src/deployment/
 yata-src/pysidedeploy.spec
 
+# x-loader: assets.h is generated (make/generate_assets.sh) from the PNGs
+# in resources/loader-assets/ -- regenerable, and large (~17MB of source
+# text), so not worth tracking.
+x-loader/assets.h
+x-loader/x-loader
+
 # Claude AI
 claude-docs/
 .claude
