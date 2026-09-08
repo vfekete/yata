@@ -7,6 +7,19 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.37.6] - 2026-09-08
+
+### Fixed
+- `README.md` promo images were sized too small (280px height, ~624px
+  combined width) relative to GitHub's actual README content column
+  (roughly 1000-1050px), leaving large empty margins on both sides under
+  `<p align="center">`. The earlier 480px-height attempt (0.37.3, ~1070px
+  combined) had wrapped onto two lines because it slightly exceeded that
+  same column width — so 1000-1050px is the real ceiling to stay under, not
+  a narrow-viewer-only concern. Sized up to 380px height, comfortably
+  under it: `background_dark.png` is now 152x380, `demo.gif` is now
+  695x380 (combined ~847px).
+
 ## [0.37.5] - 2026-09-08
 
 ### Fixed
