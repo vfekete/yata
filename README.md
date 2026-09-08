@@ -4,16 +4,8 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/main-green.png" alt="Green phosphor CRT theme" width="100%"/></td>
-    <td width="50%"><img src="docs/screenshots/main-goldenrod.png" alt="Amber phosphor CRT theme — Month calendar view" width="100%"/></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/main-dark.png" alt="Dark theme — Markdown rendering, long task wrapping, hover delete glow" width="100%"/></td>
-    <td width="50%"><img src="docs/screenshots/main-yatas-multiwindow.png" alt="YATAS multi-window management — one window listing both open windows, another showing its own task list, each with a distinct custom glowing border color" width="100%"/></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/main_settings.png" alt="Theme menu — opacity slider, tints, dark/light" width="100%"/></td>
-    <td width="50%"><img src="docs/screenshots/main-links.png" alt="Links view — every URL mentioned across tasks, with hover-to-navigate" width="100%"/></td>
+    <td><img src="docs/promo/background_dark.png" alt="YATA dark theme startup splash" height="480"/></td>
+    <td><img src="docs/promo/demo.gif" alt="YATA demo — adding, editing, and organizing tasks" height="480"/></td>
   </tr>
 </table>
 

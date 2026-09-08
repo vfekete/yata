@@ -7,6 +7,46 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.37.2] - 2026-09-08
+
+### Changed
+- `README.md`: replaced the 6-screenshot gallery table with a 2-up
+  `docs/promo/background_dark.png` (the dark-theme loader splash) +
+  `docs/promo/demo.gif` layout, both `<img>`s height-capped at 480px with
+  no explicit width so aspect ratio is preserved. Copied
+  `resources/loader-assets/background_dark.png` into the new
+  `docs/promo/` directory (alongside the already-placed `demo.gif`) rather
+  than referencing the resources copy in place, keeping promo assets
+  together.
+
+## [0.37.1] - 2026-09-08
+
+### Changed
+- `scripts/mock-env-init.sh` now also snapshots every window's *settings*
+  file (`yata.conf` / `instances/<id>.conf` — position, size, theme, tint,
+  border color, opacity, font scale) before doing anything, alongside the
+  existing tasks.json backup. The script itself still never edits these
+  files, but restoring now puts back whatever they looked like before —
+  so freely repositioning/recoloring/zooming windows for a screenshot,
+  then running the script again and choosing restore, reverts that too,
+  not just the mock task data.
+
+## [0.37.0] - 2026-09-08
+
+### Added
+- `scripts/mock-env-init.sh`: swaps the real `~/.local/share/yata` task data
+  for `tests/fixtures/mock_tasks.json` in place, for taking manual/
+  interactive README screenshots of the real, already-configured app
+  (window positions/sizes/themes/tags untouched — only each window's
+  `tasks.json` content is replaced). Unlike `scripts/capture_screenshots.py`
+  (fully isolated throwaway `XDG_DATA_HOME`/`XDG_CONFIG_HOME`, never touches
+  real files), this one mutates real files on purpose, so it backs up every
+  `tasks.json` it's about to overwrite (including "didn't exist yet") under
+  `.mock-backup/` before touching anything, and refuses to guess if that
+  backup is already present from an earlier run — it asks whether to
+  refresh the mock data again or restore the real data instead. Deleted
+  windows (`windows.json` `deleted: true` entries) are left alone.
+
 ## [0.36.0] - 2026-09-08
 
 ### Added
