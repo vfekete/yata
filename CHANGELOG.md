@@ -7,6 +7,46 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.37.5] - 2026-09-08
+
+### Fixed
+- `README.md` audit for content that had gone stale relative to the actual
+  app (nothing here touches code, docs only):
+  - **Features section** was missing several shipped features entirely:
+    the independent Active/Done/Cancelled visibility filter (separate from
+    status-sort), the hold-to-note feature on done/cancel icons (r-6.md),
+    the glass-lock feature (r-8.md, Unlocked/Auto-locked/Locked), each
+    window's own close ("✕") button, and per-window custom border/glow
+    color (r-4.md). Also merged two near-duplicate "drag and drop to
+    reorder" bullets into one, and fixed the "toolbar captions" bullet,
+    which cited `DAY`/`STATUS` as toolbar captions when they're actually
+    filter-bar captions (and didn't mention `LINKS`/`YATAS`, which are).
+  - **Quick start**: `./run.sh` no longer says the startup splash is
+    "not... wired into this yet" — it's been wired in since 0.7.0-era
+    work; corrected to describe the actual current behavior and mention
+    `run-yata.sh` as the no-splash alternative.
+  - **AI-assisted development**: was pinned to a specific, now-outdated
+    model (`claude-sonnet-4-6`) despite ongoing work happening under newer
+    ones since — generalized to "Claude, Anthropic's AI model" so it
+    doesn't need editing every time the model changes.
+  - Checked all attribution/copyright content (Noun Project icon credits,
+    VT323 font license, ChatGPT-generated-artwork notice, `LICENSE`
+    copyright holder/year) against `resources/assets/` and found no gaps
+    or mismatches — no changes needed there.
+
+## [0.37.4] - 2026-09-08
+
+### Fixed
+- `README.md` promo images were stacking one above the other instead of
+  staying side-by-side: at height 480, `demo.gif`'s wide 640x350 aspect
+  ratio alone needs ~878px of width, and combined with
+  `background_dark.png`'s ~192px that's ~1070px total — wider than most
+  README content columns (GitHub's included), so the second image wrapped
+  onto its own line regardless of the table-vs-`<p>` question fixed in
+  0.37.3. Shrunk the fixed height from 480 to 280 (a size both images
+  comfortably fit within a single row at): `background_dark.png` is now
+  112x280, `demo.gif` is now 512x280 (combined ~624px).
+
 ## [0.37.3] - 2026-09-08
 
 ### Fixed

@@ -15,5 +15,6 @@ x-loader/x-loader
 
 # Claude AI
 claude-docs/
+claude-scripts/
 .claude
 cresume

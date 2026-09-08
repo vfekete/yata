@@ -3,8 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/promo/background_dark.png" alt="YATA dark theme startup splash" width="192" height="480"/>
-  <img src="docs/promo/demo.gif" alt="YATA demo — adding, editing, and organizing tasks" width="878" height="480"/>
+  <img src="docs/promo/background_dark.png" alt="YATA dark theme startup splash" width="112" height="280"/>
+  <img src="docs/promo/demo.gif" alt="YATA demo — adding, editing, and organizing tasks" width="512" height="280"/>
 </p>
 
 A minimal always-on-desktop todo list for GNOME/Ubuntu: a borderless,
@@ -15,17 +15,24 @@ sticky note.
 
 - Add, edit, cancel, mark done, re-open and delete tasks
 - Task text supports Markdown (bold, italic, ...)
-- Drag and drop to reorder tasks (grip icon on hover)
+- Drag and drop to reorder tasks (grip icon on hover) — works in day-grouped
+  view too, and dragging a task onto a different day's section reassigns it
+  to that day
 - Group the list by day (with a bigger day-heading font and indented tasks),
   or sort with a chosen status first — status sort also applies within each
   day when both are active
 - Non-active tasks show a small check (done) or cross (cancelled) icon in
   front of their text, colored green/red in the plain theme or tint-native
   colors under a CRT tint
+- Filter which statuses are shown (Active/Done/Cancelled) independently of
+  the Day/Month/Year grouping — each toggles on/off on its own, so e.g.
+  Done and Cancelled can be shown together while Active is hidden
+- Press-and-hold a task's done/cancel icon (instead of a quick click) to
+  attach an optional Markdown note explaining the change before it's
+  applied, via a fill-up progress ring on the icon itself; a plain click
+  still applies the status instantly with no note, and an existing note can
+  be reopened and edited the same way
 - Realtime text search
-- Drag and drop to reorder tasks (grip icon on hover) — works in day-grouped
-  view too, and dragging a task onto a different day's section reassigns it
-  to that day
 - Window position/size is remembered per monitor layout; first launch
   centers the window at 20% of the screen width with a 9:16 aspect ratio
 - Theming via the "Theme" button (toolbar) or the right-click background
@@ -39,10 +46,15 @@ sticky note.
   buttons and fields (tints ignore the Dark/Light choice, but do follow the
   opacity and font-size settings). Window opacity is a single global
   setting applied to every theme alike
+- A lock icon (top-right of the window) cycles Unlocked → Auto-locked →
+  Locked: Locked blurs and freezes the entire window, toolbar included,
+  until clicked again; Auto-locked does the same but automatically and
+  temporarily unlocks itself while the mouse is inside the window or a task
+  is dropped in from another one
 - `Ctrl+=`/`Ctrl+-` grow/shrink the whole app's font size; `Ctrl+0` resets it
-- Toolbar button captions render in capitals (ADD, DAY, STATUS, RELOAD,
-  THEME) in every theme; RELOAD re-reads `tasks.json` from disk, for
-  picking up changes made by an external process
+- Toolbar and filter-bar button captions render in capitals in every theme
+  (e.g. ADD, THEME, DAY, YEAR); RELOAD re-reads that window's tasks from
+  disk, for picking up changes made by an external process
 - Month and Year calendar views (FilterBar's MONTH/YEAR buttons) show
   active/done/cancelled counts per day or month; clicking a day jumps back
   to the task list grouped by day and scrolled to it
@@ -64,7 +76,11 @@ sticky note.
   always asks for confirmation — deleting moves a window to the DELETED
   category (its tasks/settings are kept), switchable via YATAS's own
   ACTIVE/DELETED sub-toolbar; from there, Re-create restores it, and Purge
-  permanently discards it.
+  permanently discards it. Each window also has its own close ("✕") button
+  (top-right, next to the lock icon) that hides it without touching its
+  data — the same action as the SHOW toggle — and can be given a custom
+  border/glow color from the YATAS list, overriding the theme's own accent
+  color everywhere in that window
 
 ## Usage notes
 
@@ -80,9 +96,10 @@ sticky note.
 ./run.sh
 ```
 
-Runs YATA. A startup splash is in progress (`x-loader/`, a pure-X11
-preview — see `BUILD.md`) but not wired into this yet; `./run-loader.sh`
-previews it standalone in the meantime.
+Runs YATA behind a startup splash (`x-loader/`, a pure-X11 splash — see
+`BUILD.md`) that fades out once every window from this launch is actually
+shown; use `./run-yata.sh` instead to skip the splash entirely (faster for
+development), or `./run-loader.sh` to preview the splash on its own.
 
 See `BUILD.md` for setup and test instructions.
 
@@ -101,7 +118,7 @@ added instead of overwriting it.
 
 ## AI-assisted development
 
-This project was built with [Claude Sonnet 4.6](https://www.anthropic.com/claude) (`claude-sonnet-4-6`) by Anthropic as an active development collaborator — writing code, reviewing architecture decisions, and implementing features end-to-end alongside the human author.
+This project was built with [Claude](https://www.anthropic.com/claude), Anthropic's AI model, as an active development collaborator — writing code, reviewing architecture decisions, and implementing features end-to-end alongside the human author.
 
 ## Third-party notices
 
