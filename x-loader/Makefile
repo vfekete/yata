@@ -3,10 +3,10 @@
 # no CMake -- deliberately as few moving parts as possible.
 CC ?= gcc
 CFLAGS ?= -O2 -Wall -Wextra
-LDLIBS := -lX11 -lXinerama
+LDLIBS := -lX11 -lXinerama -lm
 
-x-loader: main.c effects.c effects.h assets.h
-	$(CC) $(CFLAGS) -o $@ main.c effects.c $(LDLIBS)
+x-loader: main.c effects.c spinner.c effects.h spinner.h assets.h
+	$(CC) $(CFLAGS) -o $@ main.c effects.c spinner.c $(LDLIBS)
 
 assets.h: generate_assets.sh ../resources/loader-assets/background_light.png ../resources/loader-assets/background_dark.png
 	./generate_assets.sh

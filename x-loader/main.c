@@ -34,6 +34,13 @@
 // advancing, X events get handled, and socket messages get noticed, all
 // without sitting blocked in any one of those.
 //
+// While fully visible, a small bright flare also orbits the logo's ring
+// (spinner.h/spinner.c) -- a visual PoC, layered on top of the fade and
+// otherwise independent of it, hardcoded to this specific artwork's ring
+// geometry rather than a generic reusable spinner (see spinner.c's own
+// comment). fade_needs_frequent_wakeups() is what keeps the main loop
+// waking up often enough to animate it even while otherwise just holding.
+//
 // Uses a real 32-bit ARGB visual when one is available (XMatchVisualInfo),
 // so the fade is genuine per-pixel window transparency composited against
 // whatever is actually behind it (needs a compositor -- true by default on
@@ -63,6 +70,7 @@
 
 #include "assets.h"
 #include "effects.h"
+#include "spinner.h"
 
 #define FADE_DURATION_MS 250
 #define LOADER_TIMEOUT_MS (2 * 60 * 1000)
@@ -297,6 +305,16 @@ int main(int argc, char *argv[])
 
     GC gc = XCreateGC(display, window, 0, NULL);
 
+    // Visual PoC: the flare that travels around the logo's ring, drawn
+    // over the fade's own output every frame it's fully visible (see
+    // spinner.h). Independent of theme detection failing gracefully --
+    // spinner_create() only fails on OOM, in which case fx->spinner stays
+    // NULL and fade_render() just skips it, same as no spinner attached.
+    Spinner *spinner = spinner_create(useDark, IMG_WIDTH, IMG_HEIGHT);
+    if (spinner) {
+        fade_set_spinner(fx, spinner);
+    }
+
     XMapRaised(display, window);
     fade_start_in(fx);
     if (socketMode) {
@@ -386,9 +404,9 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (fade_is_animating(fx)) {
-            // Wake again in time for the next frame, or sooner if an X
-            // event or socket message arrives first.
+        if (fade_needs_frequent_wakeups(fx)) {
+            // Wake again in time for the next frame (fade and/or spinner),
+            // or sooner if an X event or socket message arrives first.
             struct timeval tv = {.tv_sec = 0, .tv_usec = FADE_FRAME_INTERVAL_MS * 1000};
             select(maxFd + 1, &fds, NULL, NULL, &tv);
         } else if (socketMode) {
@@ -411,6 +429,9 @@ int main(int argc, char *argv[])
     }
 
     fade_destroy(fx);
+    if (spinner) {
+        spinner_destroy(spinner);
+    }
     XFreeGC(display, gc);
     XDestroyWindow(display, window);
     if (hasAlphaChannel) {

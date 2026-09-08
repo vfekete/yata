@@ -3,6 +3,8 @@
 #include <X11/Xlib.h>
 #include <stdbool.h>
 
+#include "spinner.h"
+
 // CPU-driven fade in/out for a single static image, driven by main.c's own
 // non-blocking event loop (a `select()` on the X connection with a timeout,
 // not a toolkit animation timer). Deliberately plain scalar C rather than
@@ -66,6 +68,14 @@ void fade_start_out(FadeEffect *fx);
 // it should affect actually starts.
 void fade_set_auto_close(FadeEffect *fx, bool autoClose);
 
+// Attaches a Spinner (spinner.h) whose highlight fade_render() draws over
+// the image every frame it's fully visible (see fade_needs_frequent_wakeups
+// below) -- a visual PoC layered on top of the fade, otherwise
+// independent of it (its own clock, not tied to fade timing at all). NULL
+// (the default) draws nothing extra, unchanged from before this existed.
+// Not owned: the caller creates/destroys the Spinner itself.
+void fade_set_spinner(FadeEffect *fx, Spinner *sp);
+
 // Call on every KeyPress/ButtonPress. Advances the state machine if (and
 // only if) currently in one of the two "holding" states: fully visible ->
 // starts fading out; fully hidden -> marks the whole thing done. Ignored
@@ -79,8 +89,20 @@ bool fade_is_done(const FadeEffect *fx);
 
 // True while actively animating (fade in or out): the caller should keep
 // waking up at a short interval. False means it's safe for the caller to
-// block indefinitely on X events instead.
+// block indefinitely on X events instead. (Does NOT account for an
+// attached spinner still needing frequent wakeups while holding fully
+// visible -- see fade_needs_frequent_wakeups for that.)
 bool fade_is_animating(const FadeEffect *fx);
+
+// What main.c's select() loop actually wants to know for choosing its
+// timeout: true whenever fade_is_animating() is true, OR a spinner is
+// attached and currently fully visible (spinning has nothing to animate
+// while the image itself isn't shown, i.e. during either "hold fully
+// hidden" state). Kept separate from fade_is_animating() itself so
+// existing state-machine logic gated on "is a real fade in progress"
+// (e.g. main.c's socket-mode deadline check) isn't affected by whether a
+// spinner happens to be attached.
+bool fade_needs_frequent_wakeups(const FadeEffect *fx);
 
 // Recomputes the current frame (advancing the fade state as needed) and
 // blits it onto `window` via `gc`. Cheap enough to call on every loop

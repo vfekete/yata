@@ -1,8 +1,13 @@
 #include "effects.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+
+// One full lap of the spinner's flare per this many ms -- independent of
+// fadeDurationMs (a completely different animation, layered on top).
+#define SPIN_PERIOD_MS 2000
 
 // Cost check, worked out up front rather than guessed: this splash is
 // ~372x929 = ~346,000 pixels. Repacking (a premultiply + shift per
@@ -47,6 +52,9 @@ struct FadeEffect {
     FadeState state;
     struct timespec startTime;
     bool autoClose; // see fade_set_auto_close
+
+    Spinner *spinner;         // see fade_set_spinner; NULL = none attached
+    struct timespec createTime; // spinner's own clock -- never reset, unlike startTime
 };
 
 static long long now_ms(void)
@@ -95,6 +103,7 @@ FadeEffect *fade_create(Display *display, Visual *visual, int depth,
     fx->bshift = maskShift(visual->blue_mask);
     fx->durationMs = fadeDurationMs;
     fx->state = FADE_IN;
+    clock_gettime(CLOCK_MONOTONIC, &fx->createTime);
 
     fx->packed = malloc((size_t)width * (size_t)height * sizeof(uint32_t));
     if (!fx->packed) {
@@ -139,6 +148,11 @@ void fade_set_auto_close(FadeEffect *fx, bool autoClose)
     fx->autoClose = autoClose;
 }
 
+void fade_set_spinner(FadeEffect *fx, Spinner *sp)
+{
+    fx->spinner = sp;
+}
+
 void fade_notify_input(FadeEffect *fx)
 {
     switch (fx->state) {
@@ -163,6 +177,14 @@ bool fade_is_done(const FadeEffect *fx)
 bool fade_is_animating(const FadeEffect *fx)
 {
     return fx->state == FADE_IN || fx->state == FADE_OUT;
+}
+
+bool fade_needs_frequent_wakeups(const FadeEffect *fx)
+{
+    if (fade_is_animating(fx)) {
+        return true;
+    }
+    return fx->spinner != NULL && fx->state == FADE_VISIBLE;
 }
 
 // alpha256: 0 = fully hidden, 256 = fully the source image. May advance
@@ -243,6 +265,13 @@ void fade_render(FadeEffect *fx, Window window, GC gc)
                             ((uint32_t)outG << fx->gshift) |
                             ((uint32_t)outB << fx->bshift);
         }
+    }
+
+    if (fx->spinner) {
+        long long elapsedMs = elapsed_ms_since(fx->createTime);
+        double t = fmod((double)elapsedMs / SPIN_PERIOD_MS, 1.0);
+        spinner_render(fx->spinner, fx->packed, fx->width, fx->height,
+                       fx->rshift, fx->gshift, fx->bshift, t);
     }
 
     XPutImage(fx->display, window, gc, fx->image, 0, 0, 0, 0, fx->width, fx->height);
