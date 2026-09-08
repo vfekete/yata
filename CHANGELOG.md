@@ -7,6 +7,48 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.36.0] - 2026-09-08
+
+### Added
+- **`x-loader` logo animation, visual PoC**: a small bright flare now orbits
+  the logo's ring while the splash holds fully visible, restoring the
+  original design intent ("the ring stays put while only a highlight
+  travels around it") that got dropped when the loader went through its
+  PySide6 → C++/Qt6 → pure-X11 rewrites chasing startup latency instead.
+  New `x-loader/spinner.h`/`spinner.c`: `spinner_render(sp, pixels, width,
+  height, rshift, gshift, bshift, t)` takes a loop progress `t` in
+  `[0.0, 1.0)` (0.0 and the limit as t→1.0 are visually identical, so it
+  loops with no seam) and alpha-blends the flare directly into the
+  already-fade-blended pixel buffer — only the small area around the
+  flare's current position is touched, the rest of the static background
+  picture is left untouched. Deliberately not a generic reusable spinner:
+  ring center/orbit radius are hardcoded to this exact artwork's geometry,
+  with only the flare's own color varying per theme.
+- `effects.c` wires it in: `fade_set_spinner()` attaches one to a
+  `FadeEffect`, `fade_render()` draws it every frame on top of the fade's
+  own blend using its own independent 2-second-per-lap clock. New
+  `fade_needs_frequent_wakeups()` (deliberately kept separate from
+  `fade_is_animating()`, so the existing socket-mode 2-minute-deadline
+  check isn't affected by whether a spinner happens to be attached) tells
+  `main.c`'s `select()` loop to keep waking every 16ms while holding fully
+  visible with a spinner attached, instead of blocking indefinitely — the
+  hold is when the flare is actually seen, so it can't be allowed to
+  freeze there.
+- Flare geometry/color constants (`RING_CENTER_X_FRAC`,
+  `RING_CENTER_Y_FRAC`, `FLARE_RADIUS_FRAC`, and the per-theme `flareR/G/B`
+  values in `spinner_create()`) were hand-tuned live against the real
+  artwork after this landed, by the user directly, not re-verified here —
+  see spinner.c's own current values.
+- **Scope note**: this iteration touched only `x-loader/` (`spinner.h`/
+  `.c`, `effects.h`/`.c`, `main.c`, `Makefile`) per explicit instruction to
+  work only on the loader; not run/screenshotted here either, per explicit
+  instruction that visual verification would be done by hand via
+  `run-loader.sh`. `yata-src/main.py`'s `APP_VERSION` is therefore
+  deliberately left at `0.35.0`, one behind this entry's `0.36.0` —
+  `build.sh`'s own version-consistency check will refuse to build until
+  that's reconciled, which is fine since packaging wasn't part of this
+  iteration, but worth bumping before the next real build.
+
 ## [0.35.0] - 2026-09-08
 
 ### Changed
