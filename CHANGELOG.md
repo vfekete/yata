@@ -7,6 +7,31 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.37.8] - 2026-09-08
+
+### Changed
+- `README.md` promo images: switched from fixed pixel `width`/`height` to
+  percentage `width` only (`background_dark.png` 17%, `demo.gif` 76%,
+  summing to 93% so they can never exceed the container). This ends the
+  0.37.3-0.37.7 back-and-forth of guessing a fixed pixel size that fits
+  GitHub's actual (apparently narrower-than-assumed, and never directly
+  observable from here) content column: percentage widths mathematically
+  cannot wrap regardless of that column's real size, and the 17:76 ratio
+  matches each image's real aspect ratio closely enough that both render
+  at close to the same height as each other. Trade-off: the actual
+  on-screen height now scales with the reader's browser width instead of
+  being a fixed pixel value.
+
+## [0.37.7] - 2026-09-08
+
+### Fixed
+- `README.md` promo images: reverted the 0.37.6 size-up (380px height,
+  ~847px combined width) — confirmed on the actual rendered GitHub page to
+  wrap onto two lines, same as the original 480px-height attempt (0.37.3,
+  ~1070px). Back to the 280px-height size (112x280 / 512x280, ~624px
+  combined) confirmed working in 0.37.4/0.37.5 — the real safe width
+  ceiling sits somewhere between 624px and 847px, narrower than assumed.
+
 ## [0.37.6] - 2026-09-08
 
 ### Fixed
