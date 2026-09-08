@@ -2,12 +2,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-<table>
-  <tr>
-    <td><img src="docs/promo/background_dark.png" alt="YATA dark theme startup splash" height="480"/></td>
-    <td><img src="docs/promo/demo.gif" alt="YATA demo — adding, editing, and organizing tasks" height="480"/></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/promo/background_dark.png" alt="YATA dark theme startup splash" width="192" height="480"/>
+  <img src="docs/promo/demo.gif" alt="YATA demo — adding, editing, and organizing tasks" width="878" height="480"/>
+</p>
 
 A minimal always-on-desktop todo list for GNOME/Ubuntu: a borderless,
 transparent, vertical list of one-line tasks that sits on the desktop like a

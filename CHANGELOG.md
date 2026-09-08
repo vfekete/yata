@@ -7,6 +7,23 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.37.3] - 2026-09-08
+
+### Fixed
+- `README.md` promo images: the `<table>` wrapper around
+  `background_dark.png`/`demo.gif` is gone — GitHub's own CSS forces
+  visible `<table>`/`<td>` borders regardless of a `border="0"` attribute,
+  so removing the table was the only reliable fix. Replaced with two plain
+  `<img>` tags in a `<p align="center">`. Also gave both images an
+  explicit `width` *and* `height` (not height alone): several renderers
+  (VS Code's Markdown preview included) apply an `img { height: auto }`
+  rule that silently overrides a lone `height` attribute and re-derives it
+  from width instead, which was why `background_dark.png` (a tall 372x929
+  portrait image) was rendering at roughly 2x the height of `demo.gif`
+  (a wide 640x350 image) even though both had `height="480"`. Widths were
+  back-computed per image from its real aspect ratio at height 480:
+  `background_dark.png` → 192x480, `demo.gif` → 878x480.
+
 ## [0.37.2] - 2026-09-08
 
 ### Changed
