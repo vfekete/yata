@@ -39,15 +39,14 @@ The version scheme is `X.Y.Z`:
   values in `spinner_create()`) were hand-tuned live against the real
   artwork after this landed, by the user directly, not re-verified here —
   see spinner.c's own current values.
-- **Scope note**: this iteration touched only `x-loader/` (`spinner.h`/
-  `.c`, `effects.h`/`.c`, `main.c`, `Makefile`) per explicit instruction to
-  work only on the loader; not run/screenshotted here either, per explicit
-  instruction that visual verification would be done by hand via
-  `run-loader.sh`. `yata-src/main.py`'s `APP_VERSION` is therefore
-  deliberately left at `0.35.0`, one behind this entry's `0.36.0` —
-  `build.sh`'s own version-consistency check will refuse to build until
-  that's reconciled, which is fine since packaging wasn't part of this
-  iteration, but worth bumping before the next real build.
+- **Scope note**: the feature work itself touched only `x-loader/`
+  (`spinner.h`/`.c`, `effects.h`/`.c`, `main.c`, `Makefile`) per explicit
+  instruction to work only on the loader; not run/screenshotted here
+  either, per explicit instruction that visual verification would be done
+  by hand via `run-loader.sh`. `yata-src/main.py`'s `APP_VERSION` was
+  bumped to `0.36.0` to match afterward, on request, once this entry's
+  version bump was already in place — `build.sh`'s own version-consistency
+  check now passes again.
 
 ## [0.35.0] - 2026-09-08
 
