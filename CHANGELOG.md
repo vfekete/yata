@@ -7,6 +7,119 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.38.2] - 2026-09-09
+
+### Fixed
+- **Toggling a status sort back off (no move involved) still reshuffled
+  the list**: 0.38.1 fixed this for the case where a task is actually
+  moved while sorted, but clicking the "Active" (or Done/Cancel) button a
+  SECOND time — to turn the sort off directly, with no move at all — had
+  the identical bug: `setStatusSortMode("")` just cleared the flag and let
+  the stale pre-sort manual order resurface. "Visibility [filters] is not
+  order" — turning ordering off must not itself look like a reorder.
+  Extracted the rebase logic from `_reposition` into a shared
+  `_rebase_manual_order()`, now also called from `setStatusSortMode()`
+  when clearing an active sort back to `""`.
+
+### Testing
+- New `tests/test_models.py` case (`test_toggling_status_sort_off_directly_
+  freezes_the_sorted_order_too`) and a live-QML companion in
+  `tests/test_task_order_controls.py` (`test_toggling_active_sort_off_
+  live_freezes_the_sorted_order`) pin the exact reported scenario. Both
+  deliberately verified to fail without the fix before trusting them
+  green.
+
+## [0.38.1] - 2026-09-09
+
+### Fixed
+- **Order-control icons**: the "^"/"v" ASCII characters added in 0.38.0
+  were meant as illustrative shorthand in r-7.md, not a literal spec —
+  replaced with real icons (`resources/assets/move_up.svg`/`move_down.svg`,
+  simple filled triangles, recolored via the same `iconProvider.
+  coloredSvgUri()` pipeline as every other themed icon in this app) sized
+  noticeably bigger and with a clear vertical gap between them, so they're
+  easy to spot and tell apart at a glance.
+- **Reordering while a status sort is active reshuffled to the wrong
+  order**: selecting e.g. "Active" first (so actives sort to the top),
+  then moving one active task, correctly switched ordering back to Manual
+  but the list jumped to show Done/Cancelled tasks first instead of
+  keeping Active-first with just that one move applied — because the
+  underlying manual order (`self._tasks`) had never been touched while the
+  sort was active, so clearing the sort resurfaced whatever unrelated
+  manual order existed from before the sort was ever turned on. "Moving a
+  task means the CURRENT order is now manual," not "reshuffle to some
+  other order." Fixed in `TaskListModel._reposition()` (replacing
+  `_switch_to_manual_if_needed`): when a sort is active, the manual order
+  is now rebased to match what's currently visible — with the requested
+  move already applied — before the sort is cleared; tasks hidden by
+  search/visibility filters keep their existing relative position. Shared
+  by both `moveTask` (drag&drop) and `_move_by_one` (the up/down buttons).
+- **Month/Year: ordering sub-toolbar hover-glowed and let drag-through move
+  the window**: the group was correctly shaded via `opacity`, but disabling
+  it via a plain `enabled: false` excludes an item from hit-testing
+  entirely rather than making it inert, so presses/hover fell through to
+  whatever's behind it — here, the FilterBar's own full-width "drag empty
+  space to move the window" MouseArea. Fixed with an enabled/hoverEnabled
+  `MouseArea` (`orderBlocker`) stacked on top of the group instead, the
+  same "claims hover/press away from what's underneath" idiom the glass
+  lock's `contentBlocker` (Main.qml) already uses.
+
+### Testing
+- New `tests/test_models.py` cases pin the exact reported scenario (mixed
+  Active/Done/Cancelled tasks, Active-sort selected, move one active task,
+  assert the FULL resulting order — not just that the sort mode reset) for
+  both `moveTaskUp`/`moveTaskDown` and `moveTask`.
+- `tests/test_task_order_controls.py` gained a live QML test for the
+  Month/Year blocker (hover claimed away from the Active button, click
+  doesn't reach it either) and its icon-lookup helper was updated for real
+  `Image` icons instead of text glyphs. Deliberately verified this test
+  actually fails without the fix (temporarily reverted `orderBlocker` to
+  `enabled: false`, confirmed red, restored) before trusting it green.
+
+## [0.38.0] - 2026-09-09
+
+### Changed
+- **Task ordering rework (r-7.md)**: no more separate "Manual" button in
+  the ordering sub-toolbar — `TaskListModel.statusSortMode`'s existing
+  `""`/`"active"`/`"done"`/`"cancelled"` string already meant exactly
+  "Manual" for `""`, so only the UI needed to change. FilterBar's
+  Active/Done/Cancel sort buttons now toggle (tapping the already-active
+  one clears back to `""`, i.e. Manual — same pattern already used by the
+  Yatas Active/Deleted group) instead of always selecting their own value
+  on tap; they're disabled (not hidden) during Month/Year, which have no
+  per-task order for this to apply to.
+- `TaskDelegate.qml`'s old "⋮⋮" drag-handle glyph is replaced by explicit
+  "^"/"v" buttons (each disabled at its end of the list) — moving a task
+  either way, or by dragging (still works from anywhere on the row, now
+  including while a status sort is active), switches ordering back to
+  Manual. New `TaskListModel.moveTaskUp`/`moveTaskDown` methods (a shared
+  `_move_by_one`, deliberately not reusing `moveTask`'s "insert after
+  target" convention tuned for drag&drop's drop-below-row placeholder,
+  since up/down always means "exactly one visible position" — reusing it
+  as-is is off-by-one for the "up" direction specifically, confirmed while
+  implementing this) and a shared `_switch_to_manual_if_needed()` used by
+  both the new methods and `moveTask`. `canReorder` no longer factors in
+  `statusSortMode` (only an active search still blocks reordering) — an
+  active sort no longer blocks a manual move, it's switched off by it.
+- `README.md`'s reordering/sort-order bullets updated to match.
+
+### Testing
+- 12 new `tests/test_models.py` cases (moveTaskUp/moveTaskDown swap
+  behavior, boundary no-ops, day-group reassignment, status-sort reset on
+  an actual move vs. a same-index no-op drop, and `canReorder` no longer
+  tied to an active sort) plus a new `tests/test_task_order_controls.py`
+  running a real offscreen QML engine (same construction pattern as
+  test_lock_feature.py/test_close_window_button.py) confirming the "^"/"v"
+  buttons and the FilterBar toggle wiring actually work against the
+  compiled QML, not just the Python model. That integration test
+  deliberately does NOT chain a real synthetic FilterBar click into a real
+  synthetic row-button click in the same test — doing so during
+  development reproducibly hit an offscreen-QPA event-timing artifact
+  (confirmed independent of this feature's own logic via direct signal-
+  tracing) where the second click's TapHandler silently never fired;
+  the combinatorial "resets to manual" behavior is instead covered
+  directly and reliably at the Python level.
+
 ## [0.37.8] - 2026-09-08
 
 ### Changed

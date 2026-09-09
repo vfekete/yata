@@ -225,7 +225,7 @@ def test_move_task_ignored_when_not_reorderable(model):
     assert [role(model, i, "taskId") for i in range(model.rowCount())] == [b, a]
 
 
-def test_can_reorder_false_while_filtering_or_sorting_but_not_while_grouping(model):
+def test_can_reorder_false_only_while_searching(model):
     assert model.canReorder is True
 
     model.setSearchText("x")
@@ -233,16 +233,191 @@ def test_can_reorder_false_while_filtering_or_sorting_but_not_while_grouping(mod
     model.setSearchText("")
     assert model.canReorder is True
 
+    # r-7.md: an active status sort no longer blocks reordering — dragging
+    # (or the up/down row controls) while sorted is now allowed and jumps
+    # ordering back to Manual instead (see the moveTask/moveTaskUp tests
+    # below that assert statusSortMode resets to "").
     model.setStatusSortMode("done")
-    assert model.canReorder is False
-    model.setStatusSortMode("")
     assert model.canReorder is True
+    model.setStatusSortMode("")
 
     # Grouping by day alone does not block manual reordering: dragging can
     # still move a task, including between day groups (see moveTask tests).
     model.setGroupByDay(True)
     assert model.canReorder is True
     model.setGroupByDay(False)
+
+
+def test_move_task_switches_status_sort_back_to_manual(model):
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    c = model.addTask()
+    model.setText(c, "C")
+    model.setStatus(b, "done")
+    model.setStatusSortMode("done")
+    assert model.statusSortMode == "done"
+
+    model.moveTask(0, 1)
+
+    assert model.statusSortMode == ""
+
+
+def test_move_task_up_down_while_sorted_freezes_the_sorted_order_not_stale_manual_order(model):
+    """Regression test for a reported bug: with Active-sort selected (so
+    actives show first) and all three statuses visible, moving one active
+    task down turned ordering back to Manual (correct) but the list jumped
+    to show Cancelled/Done first — resurfacing the OLD, unrelated manual
+    order from before the sort was ever turned on, rather than keeping the
+    order the user was just looking at (actives first) with just the one
+    move applied. "Moving a task means the CURRENT [visible] order is now
+    manual," not "reshuffle to some other order."""
+    d = model.addTask()
+    model.setText(d, "D")
+    model.setStatus(d, "cancelled")
+    c = model.addTask()
+    model.setText(c, "C")
+    b = model.addTask()
+    model.setText(b, "B")
+    model.setStatus(b, "done")
+    a = model.addTask()
+    model.setText(a, "A")
+    # Manual/insertion order (each addTask() inserts at the front): A, B, C, D.
+
+    model.setStatusSortMode("active")
+    # Actives (A, C) first in their existing relative order, then the rest
+    # (B, D) in theirs.
+    assert [role(model, i, "taskId") for i in range(4)] == [a, c, b, d]
+
+    model.moveTaskDown(a)  # swap the two actives
+
+    assert model.statusSortMode == ""
+    assert [role(model, i, "taskId") for i in range(4)] == [c, a, b, d]
+
+
+def test_move_task_drag_while_sorted_freezes_the_sorted_order_not_stale_manual_order(model):
+    """Same regression as above, via moveTask (drag&drop) instead of the
+    up/down buttons — both funnel through the same _reposition helper."""
+    d = model.addTask()
+    model.setText(d, "D")
+    model.setStatus(d, "cancelled")
+    c = model.addTask()
+    model.setText(c, "C")
+    b = model.addTask()
+    model.setText(b, "B")
+    model.setStatus(b, "done")
+    a = model.addTask()
+    model.setText(a, "A")
+    # Manual/insertion order (each addTask() inserts at the front): A, B, C, D.
+
+    model.setStatusSortMode("active")
+    assert [role(model, i, "taskId") for i in range(4)] == [a, c, b, d]
+
+    model.moveTask(0, 1)  # drag A (visible index 0) onto C's slot (index 1)
+
+    assert model.statusSortMode == ""
+    assert [role(model, i, "taskId") for i in range(4)] == [c, a, b, d]
+
+
+def test_toggling_status_sort_off_directly_freezes_the_sorted_order_too(model):
+    """Regression test for a follow-up report: the fix above covered
+    turning the sort off via a MOVE, but toggling the "Active" sort button
+    itself back off (setStatusSortMode("") with no move at all — e.g.
+    clicking FilterBar's Active button a second time) had the exact same
+    bug, resurfacing the stale pre-sort manual order instead of freezing
+    the order just shown. "Visibility [filters] is not order" — turning
+    ordering off must not look like a reorder in itself."""
+    d = model.addTask()
+    model.setText(d, "D")
+    model.setStatus(d, "cancelled")
+    c = model.addTask()
+    model.setText(c, "C")
+    b = model.addTask()
+    model.setText(b, "B")
+    model.setStatus(b, "done")
+    a = model.addTask()
+    model.setText(a, "A")
+    # Manual/insertion order (each addTask() inserts at the front): A, B, C, D.
+
+    model.setStatusSortMode("active")
+    assert [role(model, i, "taskId") for i in range(4)] == [a, c, b, d]
+
+    model.setStatusSortMode("")  # toggle back off, no move involved
+
+    assert [role(model, i, "taskId") for i in range(4)] == [a, c, b, d]
+
+
+def test_move_task_noop_does_not_switch_status_sort(model):
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    model.setStatus(b, "done")
+    model.setStatusSortMode("done")
+
+    # from_index == to_index: dragging started but the row was dropped back
+    # onto its own slot — spec: ordering must NOT jump to manual for this.
+    model.moveTask(0, 0)
+
+    assert model.statusSortMode == "done"
+
+
+def test_move_task_up_and_down_swap_adjacent_visible_rows(model):
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    c = model.addTask()
+    model.setText(c, "C")
+    # Insertion order (newest first): C, B, A.
+    assert [role(model, i, "taskId") for i in range(3)] == [c, b, a]
+
+    model.moveTaskDown(b)
+    assert [role(model, i, "taskId") for i in range(3)] == [c, a, b]
+
+    model.moveTaskUp(b)
+    assert [role(model, i, "taskId") for i in range(3)] == [c, b, a]
+
+
+def test_move_task_up_disabled_at_top_and_down_disabled_at_bottom(model):
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    # Insertion order (newest first): B, A.
+
+    model.moveTaskUp(b)  # already topmost — no-op
+    assert [role(model, i, "taskId") for i in range(2)] == [b, a]
+
+    model.moveTaskDown(a)  # already last — no-op
+    assert [role(model, i, "taskId") for i in range(2)] == [b, a]
+
+
+def test_move_task_up_down_switch_status_sort_back_to_manual(model):
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    model.setStatus(b, "done")
+    model.setStatusSortMode("done")
+
+    model.moveTaskDown(b)
+
+    assert model.statusSortMode == ""
+
+
+def test_move_task_up_down_ignored_while_searching(model):
+    a = model.addTask()
+    model.setText(a, "A")
+    b = model.addTask()
+    model.setText(b, "B")
+    model.setSearchText("a")
+
+    model.moveTaskDown(b)
+
+    model.setSearchText("")
+    assert [role(model, i, "taskId") for i in range(2)] == [b, a]
 
 
 def test_group_by_day_groups_todays_task_under_its_date_label(model):
@@ -269,6 +444,32 @@ def test_group_by_day_respects_active_status_sort_within_a_day(model):
     # All three tasks land in the same (today's) group; within it, "done"
     # sorts first instead of the day grouping ignoring status sort.
     assert [role(model, i, "taskId") for i in range(3)] == [b, c, a]
+
+
+def test_move_task_down_across_day_groups_reassigns_its_day_keeping_time_of_day(model):
+    a = model.addTask()
+    model.setText(a, "Today task")
+    b = model.addTask()
+    model.setText(b, "Yesterday task")
+
+    yesterday = datetime.now() - timedelta(days=1)
+    yesterday_label = day_label(yesterday.isoformat())
+    task_b = model._find(b)
+    task_b.created_at = yesterday.replace(hour=9, minute=30, second=0, microsecond=0).isoformat()
+    model._recompute()
+    original_time = datetime.fromisoformat(model._find(a).created_at).time()
+
+    model.setGroupByDay(True)
+    assert [role(model, i, "taskId") for i in range(2)] == [a, b]
+
+    model.moveTaskDown(a)  # "today"'s task swaps down onto "yesterday"'s slot
+
+    moved = model._find(a)
+    moved_dt = datetime.fromisoformat(moved.created_at)
+    assert moved_dt.date() == yesterday.date()
+    assert moved_dt.time() == original_time
+    assert role(model, 0, "dayLabel") == yesterday_label
+    assert role(model, 1, "dayLabel") == yesterday_label
 
 
 def test_move_task_across_day_groups_reassigns_its_day_keeping_time_of_day(model):

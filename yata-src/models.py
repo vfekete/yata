@@ -98,9 +98,11 @@ class TaskListModel(QAbstractListModel):
     def _get_can_reorder(self) -> bool:
         # Grouping by day does not block manual reordering: dragging a task
         # onto a different day's section reassigns it to that day (see
-        # moveTask). A search or an active status sort still does, since
-        # the visible order isn't the manual order in those cases.
-        return not (self._search or self._status_sort)
+        # moveTask). A search still does, since the visible order isn't the
+        # manual order in that case. An active status sort no longer blocks
+        # it (r-7.md): reordering while sorted is allowed and switches the
+        # sort back to manual instead (see moveTask).
+        return not self._search
 
     canReorder = Property(bool, _get_can_reorder, notify=canReorderChanged)
 
@@ -289,6 +291,62 @@ class TaskListModel(QAbstractListModel):
     def deleteTask(self, task_id: str):
         self.take_task(task_id)
 
+    def _rebase_manual_order(self, new_visible_order: list[Task]):
+        """Replaces the manual order's (self._tasks) VISIBLE-subset slots
+        with new_visible_order (the same set of tasks as self._visible, in
+        a new sequence), leaving any task currently hidden by a search or
+        visibility filter exactly where it already was.
+
+        Used whenever a status sort is about to stop governing what's
+        shown — either because a move just happened (_reposition, with the
+        move already applied to new_visible_order) or because the sort was
+        explicitly turned off (setStatusSortMode(""), with self._visible
+        itself passed unchanged) — so that whichever way it happens, the
+        order the user was just looking at is what "manual" now means,
+        rather than resurfacing whatever unrelated manual order existed
+        from before the sort was ever turned on. Confirmed as an actual
+        reported bug via both paths: moving one task while Active-sorted
+        surfaced Cancelled/Done at the top instead of keeping Active first
+        with just that one move applied; separately, simply toggling the
+        Active sort button back off did the same thing, since visibility
+        filters and ordering are independent — "turn ordering off" must
+        not look like "also reorder to something else."
+        """
+        visible_ids = {t.id for t in self._visible}
+        new_order_iter = iter(new_visible_order)
+        self._tasks = [
+            next(new_order_iter) if t.id in visible_ids else t
+            for t in self._tasks
+        ]
+
+    def _reposition(self, moved_task: Task, target_task: Task, after: bool):
+        """Places moved_task immediately before/after target_task in the
+        manual order (self._tasks) — the one mechanism shared by moveTask
+        (drag&drop) and _move_by_one (the "^"/"v" row controls).
+
+        If a status sort is currently active, this ALSO switches ordering
+        back to Manual (r-7.md), rebasing first — see _rebase_manual_order.
+        Otherwise (already manual), self._tasks already IS the current
+        order, so it's spliced directly.
+        """
+        if self._status_sort:
+            new_visible = [t for t in self._visible if t.id != moved_task.id]
+            insert_at = next(i for i, t in enumerate(new_visible) if t.id == target_task.id)
+            if after:
+                insert_at += 1
+            new_visible.insert(insert_at, moved_task)
+
+            self._rebase_manual_order(new_visible)
+
+            self._status_sort = ""
+            self._settings.setValue("filters/statusSortMode", "")
+            self._settings.sync()
+            self.statusSortModeChanged.emit()
+        else:
+            self._tasks.remove(moved_task)
+            pos = self._tasks.index(target_task)
+            self._tasks.insert(pos + 1 if after else pos, moved_task)
+
     @Slot(int, int)
     def moveTask(self, from_index: int, to_index: int):
         if not self._get_can_reorder():
@@ -311,17 +369,52 @@ class TaskListModel(QAbstractListModel):
                     year=target_day.year, month=target_day.month, day=target_day.day
                 ).isoformat()
 
-        # Reposition within the manual-order source list too, so plain
-        # (non-grouped, non-sorted) view reflects the same drag. Inserted
-        # AFTER target_task, not at its index (i.e. before it) — matches
-        # TaskDelegate.qml's drop placeholder, which renders *below* the
-        # hovered row (see its showGapBelow), meaning "drop it right after
-        # this one".
-        self._tasks.remove(moved_task)
-        self._tasks.insert(self._tasks.index(target_task) + 1, moved_task)
-
+        # Inserted AFTER target_task, not at its index (i.e. before it) —
+        # matches TaskDelegate.qml's drop placeholder, which renders
+        # *below* the hovered row (see its showGapBelow), meaning "drop it
+        # right after this one".
+        self._reposition(moved_task, target_task, after=True)
         self._recompute()
         self._save()
+
+    def _move_by_one(self, task_id: str, delta: int):
+        """Shared body of moveTaskUp/moveTaskDown (r-7.md's "^"/"v" row
+        controls) — always exactly one VISIBLE position, unlike moveTask
+        (tuned for drag&drop's drop-below-row placeholder, where the target
+        is wherever the pointer happens to be hovering)."""
+        if not self._get_can_reorder():
+            return
+        index = next((i for i, t in enumerate(self._visible) if t.id == task_id), None)
+        if index is None:
+            return
+        new_index = index + delta
+        if not (0 <= new_index < len(self._visible)):
+            return
+        moved_task = self._visible[index]
+        neighbor_task = self._visible[new_index]
+
+        if self._group_by_day:
+            moved_day = datetime.fromisoformat(moved_task.created_at).date()
+            neighbor_day = datetime.fromisoformat(neighbor_task.created_at).date()
+            if moved_day != neighbor_day:
+                old_dt = datetime.fromisoformat(moved_task.created_at)
+                moved_task.created_at = old_dt.replace(
+                    year=neighbor_day.year, month=neighbor_day.month, day=neighbor_day.day
+                ).isoformat()
+
+        # Moving up (delta < 0): land right before the neighbor (push it
+        # down). Moving down (delta > 0): land right after it.
+        self._reposition(moved_task, neighbor_task, after=delta > 0)
+        self._recompute()
+        self._save()
+
+    @Slot(str)
+    def moveTaskUp(self, task_id: str):
+        self._move_by_one(task_id, -1)
+
+    @Slot(str)
+    def moveTaskDown(self, task_id: str):
+        self._move_by_one(task_id, 1)
 
     @Slot(str)
     def setSearchText(self, text: str):
@@ -339,6 +432,12 @@ class TaskListModel(QAbstractListModel):
         if mode == self._status_sort:
             return
         was_reorderable = self._get_can_reorder()
+        if mode == "" and self._status_sort:
+            # r-7.md: explicitly turning the sort back off (FilterBar's
+            # Active/Done/Cancel button toggling itself off, as opposed to
+            # a move switching it off) must freeze the sorted order just
+            # shown as manual too — see _rebase_manual_order.
+            self._rebase_manual_order(self._visible)
         self._status_sort = mode
         self._settings.setValue("filters/statusSortMode", mode)
         self._settings.sync()

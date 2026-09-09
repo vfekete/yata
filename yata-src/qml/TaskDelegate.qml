@@ -127,8 +127,9 @@ Item {
         onTapped: itemMenu.popup()
     }
 
-    // Press-and-drag from anywhere on the row (not just the "⋮⋮" handle
-    // glyph below, which is now purely a visual hint) — a DragHandler
+    // Press-and-drag from anywhere on the row (not just the up/down
+    // orderControls buttons below, which are now purely a click
+    // affordance) — a DragHandler
     // rather than a MouseArea specifically because it only takes the
     // exclusive grab once the pointer crosses the platform's real drag
     // threshold. A plain click/double-click (edit), a link tap, a
@@ -343,17 +344,96 @@ Item {
         anchors.rightMargin: 4
         spacing: 4
 
-        Text {
-            id: dragHandle
-            text: "⋮⋮"
-            color: Theme.mutedTextColor
-            font.family: Theme.fontFamily
-            // Purely a visual hint now — the actual drag gesture (rowDrag
-            // above) works from anywhere on the row, not just this glyph.
+        Column {
+            id: orderControls
+            // r-7.md: replaces the old "⋮⋮" drag-handle glyph with explicit
+            // up/down icon buttons (real coloredSvgUri icons — a plain "^"/
+            // "v" ASCII pair, tried first, read as illustrative shorthand
+            // rather than an actual UI spec and was too easy to misread at
+            // a glance; same iconProvider.coloredSvgUri recolor pipeline as
+            // every other themed icon in this app, e.g. noteIconImg below).
+            // Moving a task this way switches ordering back to Manual
+            // exactly like drag&drop does (see
+            // TaskListModel.moveTaskUp/moveTaskDown). Purely a visual/click
+            // affordance, same as the glyph it replaces: the row-wide drag
+            // gesture (rowDrag above) still works from anywhere on the row,
+            // not just here.
             visible: root.hovered && taskModel.canReorder
             Layout.alignment: Qt.AlignVCenter
+            // A clear gap between the two, not a cramped stack — explicit
+            // request ("bigger, and vertically a little bit apart, so it is
+            // easier to spot them and know which is which").
+            spacing: Math.round(Theme.taskFontPixelSize * 0.4)
 
-            HoverHandler { cursorShape: Qt.SizeVerCursor }
+            readonly property bool canMoveUp: root.index > 0
+            readonly property bool canMoveDown: root.index < root.ListView.view.count - 1
+            // Bigger than a normal glyph on purpose (same "easier to spot"
+            // request) — noteIconImg/deleteBtn-sized icons elsewhere in
+            // this row are tuned to sit quietly next to task text; these
+            // two are the only controls a user needs to find at a glance
+            // while skimming a whole list.
+            readonly property int iconSize: Math.round(Theme.taskFontPixelSize * 1.15)
+
+            Image {
+                id: upIcon
+                width: orderControls.iconSize
+                height: orderControls.iconSize
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                opacity: orderControls.canMoveUp ? 1.0 : 0.35
+                source: iconProvider.coloredSvgUri("move_up",
+                    (upHover.hovered && orderControls.canMoveUp ? Theme.effectiveGlowColor : Theme.mutedTextColor).toString())
+                layer.enabled: upHover.hovered && orderControls.canMoveUp
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: Theme.effectiveGlowShadowColor
+                    shadowBlur: 1.0
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 0
+                    shadowOpacity: 1.0
+                    shadowScale: 1.1
+                }
+
+                HoverHandler {
+                    id: upHover
+                    enabled: orderControls.canMoveUp
+                    cursorShape: Qt.PointingHandCursor
+                }
+                TapHandler {
+                    enabled: orderControls.canMoveUp
+                    onTapped: taskModel.moveTaskUp(root.taskId)
+                }
+            }
+            Image {
+                id: downIcon
+                width: orderControls.iconSize
+                height: orderControls.iconSize
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                opacity: orderControls.canMoveDown ? 1.0 : 0.35
+                source: iconProvider.coloredSvgUri("move_down",
+                    (downHover.hovered && orderControls.canMoveDown ? Theme.effectiveGlowColor : Theme.mutedTextColor).toString())
+                layer.enabled: downHover.hovered && orderControls.canMoveDown
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: Theme.effectiveGlowShadowColor
+                    shadowBlur: 1.0
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 0
+                    shadowOpacity: 1.0
+                    shadowScale: 1.1
+                }
+
+                HoverHandler {
+                    id: downHover
+                    enabled: orderControls.canMoveDown
+                    cursorShape: Qt.PointingHandCursor
+                }
+                TapHandler {
+                    enabled: orderControls.canMoveDown
+                    onTapped: taskModel.moveTaskDown(root.taskId)
+                }
+            }
         }
 
         Column {

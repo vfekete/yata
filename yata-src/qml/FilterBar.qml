@@ -177,33 +177,68 @@ Item {
             }
         }
 
-        // ── Manual / Active / Done / Cancel (sort order) ────────────────
-        // statusSortMode is single-valued (""|"active"|"done"|"cancelled"),
-        // so each button always selects its own value on tap rather than
-        // toggling — clicking the already-active one is a harmless no-op.
-        RowLayout {
+        // ── Active / Done / Cancel (sort order) ──────────────────────────
+        // r-7.md: no more separate "Manual" button — statusSortMode is
+        // still single-valued (""|"active"|"done"|"cancelled"), but each of
+        // these three now toggles (tapping the already-active one clears
+        // back to "", i.e. Manual — same pattern as the Yatas Active/
+        // Deleted group below) instead of always selecting its own value.
+        // Disabled (not hidden) during Month/Year: those views have no
+        // per-task order for this to apply to (spec: "ordering has no
+        // meaning and cannot be changed"). Deliberately NOT done via plain
+        // `enabled: false` on orderRow itself: an Item.enabled=false is
+        // excluded from hit-testing entirely rather than "present but
+        // inert", so the press/hover would simply fall through to whatever
+        // is BEHIND it in the z-stack — here, this whole bar's own
+        // background MouseArea (above, "doubles as drag handle") — letting
+        // a click-drag over these dimmed buttons drag the WHOLE WINDOW
+        // around, and letting FilterButton's own HoverHandler still glow on
+        // mouseover. Confirmed live as an actual reported bug. Fixed with
+        // the same "enabled hover-claiming blocker stacked on top" idiom
+        // already used for the glass lock's contentBlocker (Main.qml) —
+        // orderBlocker below, not orderRow.enabled, is what's actually
+        // disabled/enabled here.
+        Item {
+            id: orderGroup
             visible: !root.yatasActive
-            spacing: root.buttonSpacing
-            IconIndicator { iconName: "order"; sizeScale: 0.9 }
-            FilterButton {
-                label: qsTr("Manual")
-                active: taskModel.statusSortMode === ""
-                onToggled: taskModel.setStatusSortMode("")
+            implicitWidth: orderRow.implicitWidth
+            implicitHeight: orderRow.implicitHeight
+            opacity: orderBlocker.enabled ? 0.4 : 1.0
+
+            RowLayout {
+                id: orderRow
+                anchors.fill: parent
+                spacing: root.buttonSpacing
+                IconIndicator { iconName: "order"; sizeScale: 0.9 }
+                FilterButton {
+                    label: qsTr("Active")
+                    active: taskModel.statusSortMode === "active"
+                    onToggled: (checked) => taskModel.setStatusSortMode(checked ? "active" : "")
+                }
+                FilterButton {
+                    label: qsTr("Done")
+                    active: taskModel.statusSortMode === "done"
+                    onToggled: (checked) => taskModel.setStatusSortMode(checked ? "done" : "")
+                }
+                FilterButton {
+                    label: qsTr("Cancel")
+                    active: taskModel.statusSortMode === "cancelled"
+                    onToggled: (checked) => taskModel.setStatusSortMode(checked ? "cancelled" : "")
+                }
             }
-            FilterButton {
-                label: qsTr("Active")
-                active: taskModel.statusSortMode === "active"
-                onToggled: taskModel.setStatusSortMode("active")
-            }
-            FilterButton {
-                label: qsTr("Done")
-                active: taskModel.statusSortMode === "done"
-                onToggled: taskModel.setStatusSortMode("done")
-            }
-            FilterButton {
-                label: qsTr("Cancel")
-                active: taskModel.statusSortMode === "cancelled"
-                onToggled: taskModel.setStatusSortMode("cancelled")
+
+            // While enabled, grabs and swallows every press/click/hover
+            // over this group before orderRow's buttons OR this bar's own
+            // background drag-handle MouseArea (behind everything, see
+            // above) ever see it. While disabled, excluded from
+            // hit-testing entirely, same as everywhere else this pattern
+            // is used.
+            MouseArea {
+                id: orderBlocker
+                anchors.fill: parent
+                enabled: root.monthActive || root.yearActive
+                hoverEnabled: true
+                onPressed: {}
             }
         }
 

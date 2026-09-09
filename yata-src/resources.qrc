@@ -17,5 +17,7 @@
     <file alias="lock_locked.svg">../resources/assets/lock_locked_outline.svg</file>
     <file alias="lock_autolocked.svg">../resources/assets/lock_locked_filled.svg</file>
     <file alias="lock_unlocked.svg">../resources/assets/lock_unlocked_outline.svg</file>
+    <file alias="move_up.svg">../resources/assets/move_up.svg</file>
+    <file alias="move_down.svg">../resources/assets/move_down.svg</file>
 </qresource>
 </RCC>

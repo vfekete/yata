@@ -15,12 +15,17 @@ sticky note.
 
 - Add, edit, cancel, mark done, re-open and delete tasks
 - Task text supports Markdown (bold, italic, ...)
-- Drag and drop to reorder tasks (grip icon on hover) — works in day-grouped
-  view too, and dragging a task onto a different day's section reassigns it
-  to that day
+- Reorder tasks manually by dragging a row (from anywhere on it), or with
+  the up/down icon buttons that appear on hover (each disabled at its end
+  of the list) — both work while a status sort is active too (switching
+  ordering back to manual, keeping the order just shown rather than
+  reshuffling it), and in day-grouped view, where dragging a task onto a
+  different day's section reassigns it to that day
 - Group the list by day (with a bigger day-heading font and indented tasks),
-  or sort with a chosen status first — status sort also applies within each
-  day when both are active
+  or sort with a chosen status first via the Active/Done/Cancel buttons
+  (mutually exclusive — tapping the active one clears back to manual order,
+  same as moving a task any other way) — status sort also applies within
+  each day when both are active
 - Non-active tasks show a small check (done) or cross (cancelled) icon in
   front of their text, colored green/red in the plain theme or tint-native
   colors under a CRT tint
