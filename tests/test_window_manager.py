@@ -302,6 +302,32 @@ def test_open_window_count_emits_windows_changed(tmp_path):
     assert received == [1]
 
 
+def test_register_window_emits_windows_changed_so_earlier_windows_see_the_final_count(tmp_path):
+    """Regression test: at startup, windows are registered one at a time
+    (main.py's restore loop calls register_window for each restored window
+    in turn). Main.qml's canCloseThisWindow binding reads openWindowCount
+    once, at the moment its own window is constructed — so if register_window
+    doesn't emit windowsChanged, a window registered early (while the live
+    count was still <= 1) never finds out later windows joined, and its
+    close button stays stuck looking disabled. Reproduced live: with 4
+    windows restored in sequence, the first two kept disabled-looking close
+    buttons while the last two did not, even though all 4 were open."""
+    manager = make_manager(tmp_path)
+    counts_seen_by_first_window = []
+    manager.windowsChanged.connect(
+        lambda: counts_seen_by_first_window.append(manager.openWindowCount)
+    )
+
+    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600))
+    for i in range(3):
+        manager.register_window(f"extra-{i}", FakeWindow(0, 0, 400, 600))
+
+    # The first window's listener must have been notified of every later
+    # registration, ending on the true final count — not stuck at 1.
+    assert counts_seen_by_first_window[-1] == 4
+    assert manager.openWindowCount == 4
+
+
 def test_open_window_rebuilds_it_via_restore_factory(tmp_path):
     manager = make_manager(tmp_path)
     manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600))

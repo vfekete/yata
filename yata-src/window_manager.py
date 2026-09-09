@@ -86,6 +86,17 @@ class WindowManager(QObject):
         window.visibleChanged.connect(
             lambda visible, wid=window_id: (not visible) and self._on_window_closed(wid)
         )
+        # Without this, a window created earlier in a multi-window startup
+        # (each restored one at a time via _make_window) has already read
+        # openWindowCount's QML binding by the time later windows register
+        # here, and that binding then never gets a notify signal to
+        # re-evaluate against the now-larger count — so its close button
+        # stays stuck looking disabled forever, even once several windows
+        # are open. Confirmed live: with 4 windows restored at startup, the
+        # first two (whose bindings evaluated while the live count was
+        # still <= 1) kept disabled-looking close buttons while the last
+        # two (evaluated once the count had already grown past 1) did not.
+        self.windowsChanged.emit()
 
     def _on_window_closed(self, window_id: str) -> None:
         if window_id in self._windows:
@@ -307,10 +318,10 @@ class WindowManager(QObject):
         width, height = int(caller_state["width"]), int(caller_state["height"])
         x, y = self._find_free_position(width, height, int(caller_state["x"]), int(caller_state["y"]))
         # The factory (main.py) is responsible for actually constructing the
-        # window and calling register_window() on it — this class stays
-        # agnostic of QQmlComponent/context mechanics.
+        # window and calling register_window() on it (which itself emits
+        # windowsChanged) — this class stays agnostic of QQmlComponent/
+        # context mechanics.
         self._window_factory(window_id, dict(caller_state, x=x, y=y))
-        self.windowsChanged.emit()
         return window_id
 
     @Slot(str, str)

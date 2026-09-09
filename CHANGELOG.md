@@ -7,6 +7,23 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.38.4] - 2026-09-09
+
+### Fixed
+- **Close ("X") button could stay stuck looking disabled on windows that
+  were not the last one open** — e.g. 2 of 4 windows disabled at startup.
+  `WindowManager.openWindowCount` (see 0.38.3 below) is a `Property`
+  notified only by `windowsChanged`, but `register_window()` never emitted
+  it. At startup, windows are registered one at a time; each window's
+  `Main.qml` reads `openWindowCount` once, at the moment it's constructed
+  — so a window registered early (while the live count was still <= 1)
+  never got notified once later windows joined, and its close button
+  stayed dimmed even with several windows open. `register_window()` now
+  emits `windowsChanged` too, so every already-open window's binding
+  re-evaluates against the true count as each new window registers.
+  (`createWindow()`'s own now-redundant emit — it calls the factory, which
+  calls `register_window()` — was removed to avoid a double emit.)
+
 ## [0.38.3] - 2026-09-09
 
 ### Fixed
