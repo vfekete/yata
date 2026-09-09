@@ -7,6 +7,29 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.39.0] - 2026-09-10
+
+### Added
+- **First groundwork for r-9.md's plugin-capable window architecture** —
+  purely additive, no behavior change yet:
+  - `window_registry.py` entries now carry a `plugin` field (which plugin
+    owns a window's content), defaulting every existing/new entry to
+    `"simple_task_list"` via the same upgrade-safe pattern already used for
+    `open`/`deleted`.
+  - New `yata-src/plugin_api.py`: the `Plugin`/`PluginContent` contract a
+    future plugin package implements, plus an `API_VERSION` constant the
+    host bumps only on an incompatible contract change.
+  - New `yata-src/plugin_data.py`: a versioned data-block envelope for
+    plugin-owned files. A plugin only ever reads the newest block whose
+    `model_version`/`api_version` floors it satisfies, and only ever writes
+    the block matching its own current floors — any block it can't read
+    (e.g. left by a newer plugin/API version, then downgraded) is skipped,
+    never deleted, so nothing is ever silently lost across a
+    plugin/host version change.
+  - Nothing in the app wires either of these in yet — `simple_task_list`
+    isn't a real plugin package yet, and `tasks.json`/settings storage are
+    unchanged. That's the next step.
+
 ## [0.38.4] - 2026-09-09
 
 ### Fixed

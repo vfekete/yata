@@ -18,6 +18,11 @@ from storage import data_dir
 
 DEFAULT_WINDOW_ID = "default"
 DEFAULT_TAG = "YATA"
+# r-9.md: which plugin owns a window's content. Every window has exactly one
+# plugin for its whole lifetime (no in-place content-type switching). Only
+# one plugin exists so far, so this is also every entry's default —
+# including ones written before this field existed at all (see _load below).
+DEFAULT_PLUGIN_ID = "simple_task_list"
 
 
 def config_dir() -> str:
@@ -56,7 +61,10 @@ class WindowRegistry:
             # Seed with the legacy/default window only on a true first run —
             # never re-add it just because it's later missing, or an
             # explicit delete of it would silently undo itself on restart.
-            self._entries = [{"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": True, "deleted": False}]
+            self._entries = [{
+                "id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG,
+                "open": True, "deleted": False, "plugin": DEFAULT_PLUGIN_ID,
+            }]
             self._save()
 
     def _load(self) -> list[dict]:
@@ -71,6 +79,7 @@ class WindowRegistry:
         for e in entries:
             e.setdefault("open", True)
             e.setdefault("deleted", False)
+            e.setdefault("plugin", DEFAULT_PLUGIN_ID)
         return entries
 
     def _save(self) -> None:
@@ -86,11 +95,20 @@ class WindowRegistry:
                 return e["tag"]
         return ""
 
-    def add(self, tag: str = DEFAULT_TAG) -> str:
+    def add(self, tag: str = DEFAULT_TAG, plugin: str = DEFAULT_PLUGIN_ID) -> str:
         window_id = uuid.uuid4().hex
-        self._entries.append({"id": window_id, "tag": tag, "open": True, "deleted": False})
+        self._entries.append({
+            "id": window_id, "tag": tag,
+            "open": True, "deleted": False, "plugin": plugin,
+        })
         self._save()
         return window_id
+
+    def get_plugin(self, window_id: str) -> str:
+        for e in self._entries:
+            if e["id"] == window_id:
+                return e["plugin"]
+        return DEFAULT_PLUGIN_ID
 
     def next_available_tag(self, base_tag: str) -> str:
         """base_tag unchanged if no non-deleted window already has it,

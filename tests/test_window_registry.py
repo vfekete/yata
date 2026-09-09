@@ -3,6 +3,7 @@ import os
 import pytest
 
 from window_registry import (
+    DEFAULT_PLUGIN_ID,
     DEFAULT_TAG,
     DEFAULT_WINDOW_ID,
     WindowRegistry,
@@ -20,7 +21,10 @@ def isolated_xdg(tmp_path, monkeypatch):
 def test_first_run_seeds_default_window(tmp_path):
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     assert registry.list() == [
-        {"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": True, "deleted": False}
+        {
+            "id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG,
+            "open": True, "deleted": False, "plugin": DEFAULT_PLUGIN_ID,
+        }
     ]
 
 
@@ -127,7 +131,10 @@ def test_entries_written_before_open_field_existed_default_to_open(tmp_path):
 
     registry = WindowRegistry(path=str(path))
     assert registry.list() == [
-        {"id": "legacy-id", "tag": "Legacy", "open": True, "deleted": False}
+        {
+            "id": "legacy-id", "tag": "Legacy",
+            "open": True, "deleted": False, "plugin": DEFAULT_PLUGIN_ID,
+        }
     ]
 
 
@@ -149,6 +156,32 @@ def test_next_available_tag_ignores_deleted_entries(tmp_path):
     registry.set_deleted(DEFAULT_WINDOW_ID, True)
 
     assert registry.next_available_tag(DEFAULT_TAG) == DEFAULT_TAG
+
+
+def test_add_defaults_to_default_plugin(tmp_path):
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    window_id = registry.add("Work")
+    assert registry.get_plugin(window_id) == DEFAULT_PLUGIN_ID
+
+
+def test_add_records_given_plugin(tmp_path):
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    window_id = registry.add("Timesheet", plugin="timesheet")
+    assert registry.get_plugin(window_id) == "timesheet"
+
+
+def test_plugin_persists_across_instances(tmp_path):
+    path = str(tmp_path / "windows.json")
+    registry = WindowRegistry(path=path)
+    window_id = registry.add("Timesheet", plugin="timesheet")
+
+    restarted = WindowRegistry(path=path)
+    assert restarted.get_plugin(window_id) == "timesheet"
+
+
+def test_get_plugin_unknown_id_falls_back_to_default(tmp_path):
+    registry = WindowRegistry(path=str(tmp_path / "windows.json"))
+    assert registry.get_plugin("no-such-window") == DEFAULT_PLUGIN_ID
 
 
 def test_other_windows_get_dedicated_paths(tmp_path):

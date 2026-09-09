@@ -4,7 +4,7 @@ import pytest
 from PySide6.QtCore import QRect
 
 from window_manager import WindowManager
-from window_registry import DEFAULT_TAG, DEFAULT_WINDOW_ID, WindowRegistry
+from window_registry import DEFAULT_PLUGIN_ID, DEFAULT_TAG, DEFAULT_WINDOW_ID, WindowRegistry
 
 
 @pytest.fixture(autouse=True)
@@ -80,7 +80,10 @@ def test_list_windows_starts_with_default(tmp_path):
     manager = make_manager(tmp_path)
     windows = manager.listWindows()
     assert windows == [
-        {"id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": False, "deleted": False, "borderColor": ""}
+        {
+            "id": DEFAULT_WINDOW_ID, "tag": DEFAULT_TAG, "open": False, "deleted": False,
+            "plugin": DEFAULT_PLUGIN_ID, "borderColor": "",
+        }
     ]
 
 
