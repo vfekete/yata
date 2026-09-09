@@ -195,6 +195,13 @@ Window {
     // at the extremes.
     readonly property int lockCloseIconGap: Math.round(Theme.taskFontPixelSize * 0.4)
 
+    // Mirrors WindowManager.closeWindow()'s own "at least one must stay
+    // open" guard, so the close button LOOKS disabled (dimmed, no hover
+    // reaction, not clickable) rather than silently no-op-ing while still
+    // appearing fully interactive — explicit request after that looked
+    // like a bug on its own.
+    readonly property bool canCloseThisWindow: windowManager.openWindowCount > 1
+
     function nextLockState() {
         if (appSettings.lockState === "unlocked") return "auto-locked"
         if (appSettings.lockState === "auto-locked") return "locked"
@@ -957,6 +964,14 @@ Window {
             y: 0
             height: tagLabelBg.height
             radius: 3
+            // Dimmed and inert once this is the only open window — closing
+            // it would already be a no-op server-side (WindowManager.
+            // closeWindow's own guard), but it must also LOOK disabled
+            // rather than fully interactive-looking while quietly doing
+            // nothing (explicit request). closeMouseArea.enabled below
+            // being false makes containsMouse never turn true on its own,
+            // so no extra guarding is needed in the color/glow bindings.
+            opacity: root.canCloseThisWindow ? 1.0 : 0.35
             // Brightens slightly on hover (same lift as the glow below),
             // so the box itself visibly reacts, not just an icon inside it —
             // see closeMouseArea's own comment for why both together.
@@ -1001,6 +1016,7 @@ Window {
                 id: closeMouseArea
                 anchors.fill: parent
                 anchors.margins: -4
+                enabled: root.canCloseThisWindow
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: windowManager.closeWindow(windowId)

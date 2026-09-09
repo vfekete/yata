@@ -33,7 +33,7 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.38.2"
+APP_VERSION = "0.38.3"
 
 # Nuitka injects a module-level "__compiled__" global into every compiled
 # module -- this is the standard way to tell a packaged build.sh binary

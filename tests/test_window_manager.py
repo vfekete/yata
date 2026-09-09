@@ -273,6 +273,35 @@ def test_close_window_is_a_no_op_if_it_is_the_only_open_window(tmp_path):
     assert persisted["open"] is True
 
 
+def test_open_window_count_reflects_currently_open_windows(tmp_path):
+    """Exposed for Main.qml's close ("X") button to look/behave disabled
+    once it's the only window left, mirroring closeWindow()'s own guard —
+    see the button's own comment for why this needs to be a real reactive
+    Property rather than a plain listWindows().length call in a binding."""
+    manager = make_manager(tmp_path)
+    assert manager.openWindowCount == 0
+
+    window1 = FakeWindow(0, 0, 400, 600)
+    manager.register_window(DEFAULT_WINDOW_ID, window1)
+    assert manager.openWindowCount == 1
+
+    manager.createWindow({"x": 0, "y": 0, "width": 400, "height": 600})
+    assert manager.openWindowCount == 2
+
+    manager.closeWindow(DEFAULT_WINDOW_ID)
+    assert manager.openWindowCount == 1
+
+
+def test_open_window_count_emits_windows_changed(tmp_path):
+    manager = make_manager(tmp_path)
+    received = []
+    manager.windowsChanged.connect(lambda: received.append(manager.openWindowCount))
+
+    manager.createWindow({"x": 0, "y": 0, "width": 400, "height": 600})
+
+    assert received == [1]
+
+
 def test_open_window_rebuilds_it_via_restore_factory(tmp_path):
     manager = make_manager(tmp_path)
     manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600))

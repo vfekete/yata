@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import Property, QObject, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QJSValue
 
@@ -94,6 +94,20 @@ class WindowManager(QObject):
 
     def is_open(self, window_id: str) -> bool:
         return window_id in self._windows
+
+    def _get_open_window_count(self) -> int:
+        return len(self._windows)
+
+    # Reactive QML-facing count of currently open windows — same "at least
+    # one must stay open" number closeWindow() itself guards on, exposed so
+    # Main.qml's close ("X") button can look/behave disabled (not just
+    # silently no-op) once it's the only one left. A plain
+    # windowManager.listWindows().length inside a QML binding would NOT do
+    # this reactively — a method call inside a binding expression doesn't
+    # register as a tracked dependency (see getBorderColor's own comment on
+    # listWindows(), same underlying gotcha) — hence a real Property here,
+    # notified by the same windowsChanged signal every mutator already emits.
+    openWindowCount = Property(int, _get_open_window_count, notify=windowsChanged)
 
     @Slot(result="QVariant")
     def listWindows(self):

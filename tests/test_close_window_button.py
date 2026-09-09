@@ -43,7 +43,7 @@ def _find_by_class_prefix(item, prefix, results=None):
     return results
 
 
-def _close_button_center(window):
+def _close_icon_box(window):
     """The close ("X") icon's background box: the rightmost QQuickRectangle
     straddling the top border line (y ~ 0) — same "read the live layout"
     technique used elsewhere in this test suite (e.g. test_lock_feature.py's
@@ -55,9 +55,22 @@ def _close_button_center(window):
     ]
     assert rects, "close icon background box not found near the top-right corner"
     rects.sort(key=lambda r: -r.mapToItem(window.contentItem(), 0, 0).x())
-    box = rects[0]
-    center = box.mapToItem(window.contentItem(), box.width() / 2, box.height() / 2)
+    return rects[0]
+
+
+def _center_point(window, item):
+    center = item.mapToItem(window.contentItem(), item.width() / 2, item.height() / 2)
     return QPoint(round(center.x()), round(center.y()))
+
+
+def _close_button_center(window):
+    return _center_point(window, _close_icon_box(window))
+
+
+def _close_mouse_area(box):
+    areas = [c for c in box.childItems() if c.metaObject().className().startswith("QQuickMouseArea")]
+    assert len(areas) == 1, f"expected exactly one MouseArea on the close icon box, found {len(areas)}"
+    return areas[0]
 
 
 @pytest.fixture()
@@ -146,3 +159,29 @@ def test_close_button_is_a_noop_on_the_last_open_window(two_windows):
     app.processEvents()
 
     assert window_manager.is_open(id2), "closing the only remaining window must be a no-op"
+
+
+def test_close_button_looks_disabled_once_it_is_the_only_window(two_windows):
+    """Explicit request: closing the last window was already a safe no-op
+    (the test above), but the button still looked fully interactive
+    regardless — dim it and stop it reacting to hover/clicks once there's
+    only one window left, rather than quietly no-op-ing behind a normal-
+    looking control."""
+    app, window_manager, window1, id1, window2, id2 = two_windows
+
+    box1 = _close_icon_box(window1)
+    assert box1.property("opacity") == 1.0
+    assert _close_mouse_area(box1).property("enabled") is True
+
+    QTest.mouseClick(window1, Qt.LeftButton, Qt.NoModifier, _center_point(window1, box1))
+    app.processEvents()
+    assert not window_manager.is_open(id1)
+
+    box2 = _close_icon_box(window2)
+    assert box2.property("opacity") < 1.0, "the remaining window's close button must look disabled"
+    mouse_area2 = _close_mouse_area(box2)
+    assert mouse_area2.property("enabled") is False
+
+    QTest.mouseMove(window2, _center_point(window2, box2))
+    app.processEvents()
+    assert mouse_area2.property("containsMouse") is False, "must not hover-react while disabled"

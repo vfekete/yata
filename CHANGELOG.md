@@ -7,6 +7,32 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.38.3] - 2026-09-09
+
+### Fixed
+- **Close ("X") button looked fully interactive even on the only open
+  window**, where clicking it is already a safe no-op
+  (`WindowManager.closeWindow`'s own "at least one must stay open" guard)
+  — it just didn't LOOK disabled: full brightness, hover color change,
+  pointer cursor. Added `WindowManager.openWindowCount` (a real reactive
+  `Property`, notified by the same `windowsChanged` every mutator already
+  emits — a plain `windowManager.listWindows().length` inside a QML
+  binding would NOT update reactively, per the exact same gotcha already
+  documented on `getBorderColor`/`listWindows`) and a
+  `root.canCloseThisWindow` in `Main.qml` bound to it. The close icon's
+  `MouseArea` is now `enabled: root.canCloseThisWindow` (so hover/click
+  stop reaching it entirely once it's the last window) and its background
+  box dims to 0.35 opacity to match.
+
+### Testing
+- New `tests/test_window_manager.py` cases for `openWindowCount` tracking
+  and emitting `windowsChanged`.
+- New live-QML `tests/test_close_window_button.py` case
+  (`test_close_button_looks_disabled_once_it_is_the_only_window`) checking
+  the button's actual `opacity`/`MouseArea.enabled`/`containsMouse` after
+  closing down to one window — verified to fail without the fix before
+  trusting it green.
+
 ## [0.38.2] - 2026-09-09
 
 ### Fixed
