@@ -7,6 +7,36 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.40.0] - 2026-09-10
+
+### Changed
+- **r-9.md step 2: task-list code relocated into `plugins/simple_task_list/`.**
+  `yata-src/models.py`/`storage.py` moved to
+  `plugins/simple_task_list/{model.py,storage.py}` (all imports across
+  `main.py`, tests, and `scripts/capture_screenshots.py` updated
+  accordingly; repo root added to `sys.path` in `main.py`/
+  `tests/conftest.py` so the `plugins` package resolves).
+  `window_registry.py` gains its own `data_dir()` (previously imported
+  from `storage.py`) — host code depending on a plugin's internals would
+  be backwards, so `plugins/simple_task_list/storage.py` keeps its own
+  private copy for its legacy-default-window fallback instead.
+- **`tasks.json` now uses `plugin_data.py`'s versioned block envelope.**
+  `TaskStore` reads/writes through it (`model_version`/`api_version` both
+  `"1.0"` for now); a pre-existing bare-JSON-array file (every file that
+  existed before this change) still loads correctly and is transparently
+  upgraded to the enveloped format on its next save — verified against
+  real task data, not just tests.
+- Fixed a bug in `plugin_data.write_block()` found while testing this:
+  it crashed (`AttributeError`) writing into a file that predates the
+  envelope entirely (a bare list, e.g. old `tasks.json`), since it assumed
+  any existing file content was already a dict. Now treats non-dict
+  existing content as "no envelope yet" and starts a fresh one.
+- The `AppSettings`/theme/filter settings split into a plugin-owned
+  versioned file (also planned for this step) is deferred to step 4,
+  when the QML that reads those properties moves into the plugin package
+  anyway — splitting the Python object now would need a throwaway
+  QML-compatibility shim in the meantime for no benefit.
+
 ## [0.39.1] - 2026-09-10
 
 ### Added

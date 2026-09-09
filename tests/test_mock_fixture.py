@@ -8,8 +8,8 @@ from collections import Counter
 
 import pytest
 
-from models import TaskListModel
-from storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, TaskStore
+from plugins.simple_task_list.model import TaskListModel
+from plugins.simple_task_list.storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, TaskStore
 
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "mock_tasks.json")
 

@@ -14,8 +14,6 @@ import json
 import os
 import uuid
 
-from storage import data_dir
-
 DEFAULT_WINDOW_ID = "default"
 DEFAULT_TAG = "YATA"
 # r-9.md: which plugin owns a window's content. Every window has exactly one
@@ -23,6 +21,21 @@ DEFAULT_TAG = "YATA"
 # one plugin exists so far, so this is also every entry's default —
 # including ones written before this field existed at all (see _load below).
 DEFAULT_PLUGIN_ID = "simple_task_list"
+
+
+def data_dir() -> str:
+    # r-9.md: this is host infrastructure (also used by main.py's
+    # --backup and by every window's registry/instance paths below), not
+    # plugin-owned data — kept here rather than in a plugin package.
+    # plugins/simple_task_list/storage.py keeps its own private copy for
+    # its legacy-default-window fallback, rather than importing this one:
+    # a plugin depending on host internals it doesn't need would be
+    # backwards (the host may pass a plugin its data directory, but a
+    # plugin has no business reaching into window_registry.py directly).
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    path = os.path.join(base, "yata")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def config_dir() -> str:

@@ -358,8 +358,8 @@ def test_open_window_is_a_no_op_if_already_open(tmp_path):
 def _make_task_model(tmp_path, name):
     from PySide6.QtCore import QSettings
 
-    from models import TaskListModel
-    from storage import TaskStore
+    from plugins.simple_task_list.model import TaskListModel
+    from plugins.simple_task_list.storage import TaskStore
 
     settings = QSettings(str(tmp_path / f"{name}.ini"), QSettings.IniFormat)
     return TaskListModel(TaskStore(path=str(tmp_path / f"{name}.json")), settings=settings)

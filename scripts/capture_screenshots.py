@@ -284,7 +284,7 @@ def _build_window(engine, registry, manager, icon_provider, app_icon, *, tag, th
     Theme context. Returns (window_id, QQuickWindow, TaskListModel)."""
     from main import _make_window, _open_settings
     from settings import AppSettings
-    from storage import TaskStore
+    from plugins.simple_task_list.storage import TaskStore
     from window_registry import tasks_path_for
 
     window_id = registry.add(tag)

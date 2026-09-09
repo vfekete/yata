@@ -7,7 +7,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QSettings, Qt, Signal, Slot, Property
 
-from storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, Task, TaskStore
+from plugins.simple_task_list.storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, Task, TaskStore
 
 # Matches Markdown [label](url) links — same syntax TaskDelegate.qml's
 # mdToHtml() already renders as clickable, so "a URL mentioned in a task"

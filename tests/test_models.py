@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 import pytest
 from PySide6.QtCore import QSettings
 
-from models import TaskListModel, day_label
-from storage import TaskStore
+from plugins.simple_task_list.model import TaskListModel, day_label
+from plugins.simple_task_list.storage import TaskStore
 
 
 def _make_model(tmp_path, name="tasks.json", settings_name="settings.ini"):
@@ -884,7 +884,7 @@ def test_take_task_persists_removal(tmp_path):
 
 
 def test_insert_task_adds_it_preserving_fields(model):
-    from storage import Task
+    from plugins.simple_task_list.storage import Task
 
     task = Task(text="Imported", status="done", created_at="2026-01-02T03:04:05", id="fixed-id")
 
@@ -896,7 +896,7 @@ def test_insert_task_adds_it_preserving_fields(model):
 
 
 def test_insert_task_reassigns_id_on_collision(model):
-    from storage import Task
+    from plugins.simple_task_list.storage import Task
 
     existing = model.addTask()
     model.setText(existing, "Existing")
@@ -923,7 +923,7 @@ def test_take_and_insert_moves_a_task_between_two_models(tmp_path):
 
 
 def test_insert_task_at_target_index_lands_right_after_that_row(model):
-    from storage import Task
+    from plugins.simple_task_list.storage import Task
 
     a = model.addTask()
     model.setText(a, "A")
@@ -940,7 +940,7 @@ def test_insert_task_at_target_index_lands_right_after_that_row(model):
 
 
 def test_insert_task_with_out_of_range_index_falls_back_to_top(model):
-    from storage import Task
+    from plugins.simple_task_list.storage import Task
 
     a = model.addTask()
     model.setText(a, "A")

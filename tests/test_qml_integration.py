@@ -47,7 +47,7 @@ def engine_and_model(qml_app, tmp_path, monkeypatch):
     from icons import IconProvider  # noqa: PLC0415
     from main import _make_window  # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
-    from storage import TaskStore  # noqa: PLC0415
+    from plugins.simple_task_list.storage import TaskStore  # noqa: PLC0415
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
 
@@ -135,7 +135,7 @@ def engine_and_window(qml_app, tmp_path, monkeypatch):
     from icons import IconProvider  # noqa: PLC0415
     from main import _make_window  # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
-    from storage import TaskStore  # noqa: PLC0415
+    from plugins.simple_task_list.storage import TaskStore  # noqa: PLC0415
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
 

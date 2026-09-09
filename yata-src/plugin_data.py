@@ -65,7 +65,13 @@ def write_block(path: str, plugin_id: str, model_version: str, api_version: str,
     api_version), appending it if no block with those floors exists yet.
     Every other block already in the file is left exactly as-is —
     incompatible blocks are never touched, let alone deleted, by a write."""
-    doc = _load(path) or {"plugin_id": plugin_id, "blocks": []}
+    existing = _load(path)
+    # A file written before it ever gained this envelope (e.g. a plain JSON
+    # array) isn't an enveloped doc to merge into — the caller (having
+    # already read whatever it could from that old format) is about to
+    # give us its full, current data, so starting a fresh envelope here is
+    # exactly what upgrades the file on this first save.
+    doc = existing if isinstance(existing, dict) else {"plugin_id": plugin_id, "blocks": []}
     blocks = doc.setdefault("blocks", [])
     for block in blocks:
         if block["model_version"] == model_version and block["api_version"] == api_version:

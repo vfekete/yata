@@ -12,6 +12,12 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+# Repo root, so `plugins.simple_task_list...` (r-9.md) is importable
+# alongside this file's own directory (yata-src, Python's default
+# sys.path[0] for a script run directly), which every other import below
+# already relies on for its own flat imports (icons, settings, ...).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
 from PySide6.QtCore import QFile, QIODevice, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QFontDatabase, QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext, QQmlEngine
@@ -19,21 +25,22 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 import resources_rc  # noqa: F401 — registers :/fonts/VT323-Regular.ttf and :/icon/icon.png
 from icons import IconProvider
-from models import TaskListModel
+from plugins.simple_task_list.model import TaskListModel
+from plugins.simple_task_list.storage import TaskStore
 from settings import AppSettings
-from storage import TaskStore, data_dir
 from window_manager import WindowManager
 from window_registry import (
     DEFAULT_TAG,
     WindowRegistry,
     config_dir,
+    data_dir,
     settings_path_for,
     tasks_path_for,
 )
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.39.1"
+APP_VERSION = "0.40.0"
 
 # Nuitka injects a module-level "__compiled__" global into every compiled
 # module -- this is the standard way to tell a packaged build.sh binary

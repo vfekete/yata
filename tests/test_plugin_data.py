@@ -56,6 +56,18 @@ def test_read_picks_newest_compatible_block_when_several_qualify(tmp_path):
     assert read_compatible(path, model_version="1.1", api_version="1.0") == {"gen": 2}
 
 
+def test_write_block_upgrades_a_pre_envelope_bare_list_file(tmp_path):
+    """Regression guard: a file predating this envelope entirely (e.g. a
+    plain JSON array, as tasks.json used to be) must not crash write_block
+    — it should just be replaced by a fresh envelope on the first save."""
+    path = tmp_path / "data.json"
+    path.write_text(json.dumps([{"legacy": True}]))
+
+    write_block(path, "simple_task_list", "1.0", "1.0", {"tasks": ["a"]})
+
+    assert read_compatible(path, model_version="1.0", api_version="1.0") == {"tasks": ["a"]}
+
+
 def test_incompatible_api_version_is_also_skipped(tmp_path):
     path = str(tmp_path / "data.json")
     write_block(path, "simple_task_list", "1.0", "2.0", {"data": "needs newer host"})
