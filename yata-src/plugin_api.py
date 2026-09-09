@@ -49,3 +49,4 @@ class Plugin:
     display_name: str
     min_api_version: str
     create_content: Callable[[str, str, object], PluginContent]
+    copyright: str

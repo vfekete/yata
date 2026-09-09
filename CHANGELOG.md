@@ -7,6 +7,13 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.39.1] - 2026-09-10
+
+### Added
+- `plugin_api.Plugin` gains a required `copyright` string field (e.g.
+  `"(C) 2026, Vladimir Fekete, MIT License"`) — every plugin declares its
+  own copyright/license notice as part of its registration.
+
 ## [0.39.0] - 2026-09-10
 
 ### Added
