@@ -89,7 +89,7 @@ def two_windows(tmp_path, monkeypatch):
     from icons import IconProvider  # noqa: PLC0415
     from main import _make_window  # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
-    from plugins.simple_task_list.storage import TaskStore  # noqa: PLC0415
+    from plugins.simple_task_list.plugin import create_content  # noqa: PLC0415
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
     from PySide6.QtCore import QSettings  # noqa: PLC0415
@@ -100,16 +100,17 @@ def two_windows(tmp_path, monkeypatch):
     engine.addImportPath(os.path.join(src, "qml"))
 
     def window_factory(window_id, caller_state):
-        task_store = TaskStore(str(tmp_path / f"tasks-{window_id}.json"))
         settings = AppSettings(QSettings(str(tmp_path / f"app-{window_id}.ini"), QSettings.IniFormat))
-        _make_window(engine, icon_provider, window_manager, QIcon(), window_id, task_store, settings)
+        plugin_content = create_content(window_id, str(tmp_path / f"tasks-{window_id}.json"), settings)
+        _make_window(engine, icon_provider, window_manager, QIcon(), window_id, plugin_content, settings)
 
     window_manager = WindowManager(registry, window_factory=window_factory)
 
     app_settings1 = AppSettings(QSettings(str(tmp_path / "app-default.ini"), QSettings.IniFormat))
+    plugin_content1 = create_content(DEFAULT_WINDOW_ID, str(tmp_path / "tasks-default.json"), app_settings1)
     window1 = _make_window(
         engine, icon_provider, window_manager, QIcon(),
-        DEFAULT_WINDOW_ID, TaskStore(str(tmp_path / "tasks-default.json")), app_settings1,
+        DEFAULT_WINDOW_ID, plugin_content1, app_settings1,
     )
     app.processEvents()
     app.processEvents()

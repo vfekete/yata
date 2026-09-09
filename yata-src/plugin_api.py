@@ -23,7 +23,10 @@ class PluginContent:
     """Everything main.py needs to build one window's content area.
 
     qml_source: absolute path to the plugin's root content QML file, loaded
-    into Main.qml's content Loader.
+    into Main.qml's content Loader. Optional/unused for now — r-9.md's
+    delivery plan doesn't move any QML into a plugin-owned Loader until its
+    step 4; until then, Main.qml itself is still the only QML loaded, so
+    this is None until a plugin actually has a content file of its own.
     context_properties: name -> QObject, set on the window's QQmlContext
     alongside the host's own (e.g. "borderColor").
     take_item/insert_item: optional cross-window drag&drop hooks (see
@@ -33,8 +36,8 @@ class PluginContent:
     lifecycle notifications from the host. Never called to ask permission —
     the plugin cannot veto either transition.
     """
-    qml_source: str
     context_properties: dict
+    qml_source: str | None = None
     take_item: Callable[[str], object] | None = None
     insert_item: Callable[[object, int], None] | None = None
     on_lock_state_changed: Callable[[str], None] | None = None

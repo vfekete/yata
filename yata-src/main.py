@@ -24,9 +24,8 @@ from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext, QQm
 from PySide6.QtQuickControls2 import QQuickStyle
 
 import resources_rc  # noqa: F401 — registers :/fonts/VT323-Regular.ttf and :/icon/icon.png
+import plugins_registry
 from icons import IconProvider
-from plugins.simple_task_list.model import TaskListModel
-from plugins.simple_task_list.storage import TaskStore
 from settings import AppSettings
 from window_manager import WindowManager
 from window_registry import (
@@ -40,7 +39,7 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.40.0"
+APP_VERSION = "0.41.0"
 
 # Nuitka injects a module-level "__compiled__" global into every compiled
 # module -- this is the standard way to tell a packaged build.sh binary
@@ -202,18 +201,23 @@ def _ensure_desktop_entry(
     )
 
 
-def _make_window(engine, icon_provider, window_manager, app_icon, window_id, task_store, app_settings):
+def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plugin_content, app_settings):
     """Builds one fully independent window: its own QQmlContext with its own
-    taskModel/appSettings/Theme (see window_manager.py's module docstring
-    and ThemeImpl.qml's own comment for why Theme can no longer be a
-    pragma-Singleton once multiple windows exist in one engine, and why that
-    file specifically isn't named Theme.qml). Used for both the very first
-    window and every window created later via YATAS.
-    """
-    task_model = TaskListModel(task_store)
+    plugin content/appSettings/Theme (see window_manager.py's module
+    docstring and ThemeImpl.qml's own comment for why Theme can no longer be
+    a pragma-Singleton once multiple windows exist in one engine, and why
+    that file specifically isn't named Theme.qml). Used for both the very
+    first window and every window created later via YATAS.
 
+    plugin_content: a plugin_api.PluginContent, built by the window's own
+    plugin (see plugins_registry.py) — its context_properties (e.g.
+    "taskModel") are set here alongside the host's own, so existing QML
+    keeps working unchanged (QML doesn't move into a plugin-owned Loader
+    until r-9.md's plan's step 4).
+    """
     context = QQmlContext(engine.rootContext())
-    context.setContextProperty("taskModel", task_model)
+    for name, obj in plugin_content.context_properties.items():
+        context.setContextProperty(name, obj)
     context.setContextProperty("appSettings", app_settings)
     context.setContextProperty("iconProvider", icon_provider)
     context.setContextProperty("windowManager", window_manager)
@@ -263,7 +267,12 @@ def _make_window(engine, icon_provider, window_manager, app_icon, window_id, tas
     # when it's the window that requested its own deletion.
     window_manager.register_window(
         window_id, window,
-        task_model=task_model, app_settings=app_settings, context=context, theme=theme,
+        # "task_model" here is transitional: WindowManager.moveTaskToWindow
+        # still reaches into this entry by that exact name (unchanged since
+        # before r-9.md) — generalizing it to plugin_content's own
+        # take_item/insert_item hooks is r-9.md's plan's step 5, not this one.
+        task_model=plugin_content.context_properties.get("taskModel"),
+        app_settings=app_settings, context=context, theme=theme,
         theme_component=theme_component, main_component=main_component,
     )
     return window
@@ -430,12 +439,15 @@ def main() -> int:
 
     registry = WindowRegistry()
 
+    def _plugin_content_for(window_id, app_settings):
+        plugin = plugins_registry.get(registry.get_plugin(window_id))
+        return plugin.create_content(window_id, tasks_path_for(window_id), app_settings)
+
     def window_factory(window_id, caller_state):
         # Used for windows created via the YATAS view's ADD button — clones
         # the creating window's theme (explicit requirement: "new window has
         # same theme as the actual window") and a non-overlapping position
         # WindowManager already computed into caller_state's x/y.
-        task_store = TaskStore(tasks_path_for(window_id))
         app_settings = AppSettings(_open_settings(window_id))
         app_settings.themeMode = caller_state["themeMode"]
         app_settings.themeTint = caller_state["themeTint"]
@@ -446,9 +458,10 @@ def main() -> int:
         app_settings.height = int(caller_state["height"])
         app_settings.x = int(caller_state["x"])
         app_settings.y = int(caller_state["y"])
+        plugin_content = _plugin_content_for(window_id, app_settings)
         return _make_window(
             engine, icon_provider, window_manager, app_icon,
-            window_id, task_store, app_settings,
+            window_id, plugin_content, app_settings,
         )
 
     def restore_factory(window_id):
@@ -457,11 +470,11 @@ def main() -> int:
         # already has its own persisted position/theme/content. Used both
         # for every window at startup and for WindowManager.openWindow()
         # (YatasView's SHOW toggle, on) reopening one later in the session.
-        task_store = TaskStore(tasks_path_for(window_id))
         app_settings = AppSettings(_open_settings(window_id))
+        plugin_content = _plugin_content_for(window_id, app_settings)
         _make_window(
             engine, icon_provider, window_manager, app_icon,
-            window_id, task_store, app_settings,
+            window_id, plugin_content, app_settings,
         )
 
     drag_ghost, drag_ghost_component = _make_drag_ghost(engine)

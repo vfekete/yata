@@ -7,6 +7,33 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.41.0] - 2026-09-10
+
+### Changed
+- **r-9.md step 3: window creation now routes through the plugin
+  registry.** New `yata-src/plugins_registry.py` (`build_registry()`,
+  `AVAILABLE_PLUGINS`, `get()`) statically registers
+  `plugins/simple_task_list`, filtering out any plugin whose declared
+  `min_api_version` this host's `plugin_api.API_VERSION` can't satisfy.
+  New `plugins/simple_task_list/plugin.py` exposes `PLUGIN`/
+  `create_content()`, building the same `TaskListModel`/`TaskStore` pair
+  as before behind the `Plugin.create_content(window_id, tasks_path,
+  settings)` contract, plus `take_item`/`insert_item` hooks (wired for
+  `WindowManager.moveTaskToWindow` to adopt in step 5).
+- `main.py`'s `_make_window`/`window_factory`/`restore_factory` no longer
+  construct `TaskListModel`/`TaskStore` directly — they ask the registry
+  for the window's plugin (`WindowRegistry.get_plugin`) and set whatever
+  context properties `create_content()` returns. QML is completely
+  unaffected (still binds `taskModel` etc. exactly as before) — no `.qml`
+  file was touched by this step.
+- `plugin_api.PluginContent.qml_source` is now optional (`None` by
+  default): it isn't consumed anywhere until step 4 moves QML into a
+  plugin-owned `Loader`.
+- Verified live (mocked `XDG_DATA_HOME`/`XDG_CONFIG_HOME`, not real data):
+  multi-window creation via YATAS, theme-cloning onto the new window, and
+  full restore of both windows (tags, theme, content) across an app
+  restart — all unchanged from before this step.
+
 ## [0.40.0] - 2026-09-10
 
 ### Changed

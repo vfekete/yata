@@ -48,7 +48,7 @@ def qml_window(tmp_path, monkeypatch):
     from icons import IconProvider    # noqa: PLC0415
     from main import _make_window     # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
-    from plugins.simple_task_list.storage import TaskStore     # noqa: PLC0415
+    from plugins.simple_task_list.plugin import create_content     # noqa: PLC0415
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
 
@@ -67,7 +67,7 @@ def qml_window(tmp_path, monkeypatch):
 
     window = _make_window(
         engine, icon_provider, window_manager, QIcon(),
-        DEFAULT_WINDOW_ID, TaskStore(), app_settings,
+        DEFAULT_WINDOW_ID, create_content(DEFAULT_WINDOW_ID, None, app_settings), app_settings,
     )
     task_model = window_manager._windows[DEFAULT_WINDOW_ID]["task_model"]
 
