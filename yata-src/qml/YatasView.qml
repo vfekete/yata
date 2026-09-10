@@ -58,6 +58,27 @@ Item {
         function onWindowsChanged() { if (root.visible) root.refresh() }
     }
 
+    // Every statically-registered plugin (r-10.md: added once a second
+    // one, "timesheet", existed to actually choose between) — backs the
+    // Add button's own plugin picker below. Fetched once; the set of
+    // available plugins is fixed for the lifetime of one running process
+    // (statically linked, see plugins_registry.py), no need to react to
+    // windowsChanged for this.
+    readonly property var availablePlugins: windowManager.listPlugins()
+
+    // Defaults to whichever plugin THIS window itself runs — most "add
+    // another window" clicks want the same kind — re-derived from
+    // allWindows (which already carries each entry's own "plugin" field,
+    // see WindowRegistry.list()) rather than duplicating that lookup via
+    // a separate host call. Re-picking a different value in the combo box
+    // below overrides this until YatasView is closed and reopened.
+    property string selectedPluginId: ""
+    readonly property string _thisWindowPluginId: {
+        var mine = root.allWindows.find(function(w) { return w.id === windowId })
+        return mine ? mine.plugin : (root.availablePlugins.length > 0 ? root.availablePlugins[0].id : "")
+    }
+    onAllWindowsChanged: if (root.selectedPluginId === "") root.selectedPluginId = root._thisWindowPluginId
+
     // Passed down to every row so it can hide its own SHOW toggle when
     // it's the last open window — closing it would leave nothing on
     // screen and no YatasView left to reopen anything from.
@@ -134,6 +155,7 @@ Item {
                 HoverHandler { id: addHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
                     onTapped: windowManager.createWindow({
+                        plugin: root.selectedPluginId,
                         themeMode: appSettings.themeMode,
                         themeTint: appSettings.themeTint,
                         opacityPercent: appSettings.opacityPercent,
@@ -148,6 +170,45 @@ Item {
                         height: root.Window.window.height
                     })
                 }
+            }
+
+            // Which plugin the next ADD creates — r-10.md: previously
+            // always simple_task_list regardless of what this window
+            // itself was running. Only shown once there's an actual
+            // choice to make.
+            ComboBox {
+                id: pluginCombo
+                visible: root.availablePlugins.length > 1
+                model: root.availablePlugins
+                textRole: "displayName"
+                valueRole: "id"
+                Layout.preferredWidth: Math.max(120, implicitWidth)
+                font.family: root.chromeFontFamily
+                font.pixelSize: root.chromeFontPixelSize
+
+                // A plain search over root.availablePlugins/selectedPluginId
+                // directly, NOT indexOfValue(root.selectedPluginId) (tried
+                // first): QML's binding dependency tracker doesn't see
+                // through a method call into what THAT method reads
+                // internally (pluginCombo's own model/valueRole), so a
+                // currentIndex binding built on indexOfValue() never
+                // re-evaluated once those settled into place — confirmed
+                // live, currentIndex stayed -1 no matter what
+                // selectedPluginId held. Reading availablePlugins/
+                // selectedPluginId directly in this expression makes both
+                // real, tracked dependencies instead.
+                //
+                // ComboBox's own internal click-handling sets currentIndex
+                // imperatively once the user actually picks something,
+                // which breaks this binding going forward — harmless here,
+                // since onActivated below is what keeps selectedPluginId in
+                // sync after that point, not the other way around.
+                currentIndex: {
+                    for (var i = 0; i < root.availablePlugins.length; i++)
+                        if (root.availablePlugins[i].id === root.selectedPluginId) return i
+                    return -1
+                }
+                onActivated: root.selectedPluginId = currentValue
             }
 
             TextField {

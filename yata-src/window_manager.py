@@ -20,7 +20,9 @@ from PySide6.QtCore import Property, QObject, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QJSValue
 
+import plugins_registry
 from window_registry import (
+    DEFAULT_PLUGIN_ID,
     DEFAULT_TAG,
     WindowRegistry,
     instance_dir_for,
@@ -141,6 +143,17 @@ class WindowManager(QObject):
         return [
             dict(e, open=self.is_open(e["id"]), borderColor=self.getBorderColor(e["id"]))
             for e in self._registry.list()
+        ]
+
+    @Slot(result="QVariant")
+    def listPlugins(self):
+        """Every statically-registered, API-compatible plugin (id +
+        display_name) — backs YatasView's own Add-button plugin picker
+        (r-10.md, added once a second plugin existed to actually choose
+        between)."""
+        return [
+            {"id": p.id, "displayName": p.display_name}
+            for p in plugins_registry.AVAILABLE_PLUGINS.values()
         ]
 
     @Slot(str, result=str)
@@ -325,7 +338,13 @@ class WindowManager(QObject):
         if isinstance(caller_state, QJSValue):
             caller_state = caller_state.toVariant()
         caller_state = dict(caller_state)
-        window_id = self._registry.add(self._registry.next_available_tag(DEFAULT_TAG))
+        # "plugin": which plugin the new window runs — YatasView's own Add
+        # picker (r-10.md, once a second plugin existed to actually choose
+        # between). Falls back to DEFAULT_PLUGIN_ID for any caller that
+        # doesn't specify one (e.g. existing tests), same as
+        # WindowRegistry.add()'s own default already does.
+        plugin_id = caller_state.get("plugin", DEFAULT_PLUGIN_ID)
+        window_id = self._registry.add(self._registry.next_available_tag(DEFAULT_TAG), plugin=plugin_id)
         width, height = int(caller_state["width"]), int(caller_state["height"])
         x, y = self._find_free_position(width, height, int(caller_state["x"]), int(caller_state["y"]))
         # The factory (main.py) is responsible for actually constructing the

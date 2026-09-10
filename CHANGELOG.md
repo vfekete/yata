@@ -7,6 +7,37 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.48.0] - 2026-09-10
+
+### Added
+- **New "Timesheet" plugin (r-10.md): a work-time tracker.** A window
+  running this plugin tracks named work items, each with its own history
+  of start/stop sessions (only one running at a time per window),
+  manually adjustable start/stop timestamps, and a per-day ON-SITE/REMOTE
+  marker. A session left running when YATA closes is marked abandoned and
+  bounded to the day it started on, the moment the window reopens.
+  - **Summary**: per-day/week/month/year, replacing the work-item list
+    when selected — worked vs. target time (default 8h × working days,
+    adjustable), remaining/overtime, with public holidays (see below)
+    excluded from the target the same way weekends already are.
+  - **Holidays**: fetched from the OpenHolidays API
+    (openholidaysapi.org), keyed by a per-window country setting
+    (defaults from the system locale; asks once if that can't be
+    determined), cached to disk so a window works offline after the
+    first fetch.
+  - **PDF export**: day/week/month timesheet via Qt's own
+    QTextDocument/QPdfWriter (no new dependency) — optional customer/
+    contractor header, a day-by-day table with ON-SITE/REMOTE, and
+    optional signature lines.
+  - Settings (country, customer/contractor identity, PDF part toggles,
+    target daily hours) are per-window, alongside the same theme/opacity
+    settings every plugin shares — a new window clones its creator's
+    theme regardless of which plugin either one runs.
+- **YatasView's "Add" button now lets you pick which plugin a new window
+  runs**, rather than always creating a Simple Task List window —
+  meaningful now that a second plugin exists. Defaults to whichever
+  plugin the window you're adding from is itself running.
+
 ## [0.47.0] - 2026-09-10
 
 ### Changed

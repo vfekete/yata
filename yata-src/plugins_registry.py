@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from plugin_api import API_VERSION, Plugin
 from plugins.simple_task_list.plugin import PLUGIN as SIMPLE_TASK_LIST
+from plugins.timesheet.plugin import PLUGIN as TIMESHEET
 
 # Every statically-registered plugin this build was compiled with,
 # regardless of whether it's actually usable — see build_registry() for
 # the compatibility filter applied to this list.
-ALL_PLUGINS: list[Plugin] = [SIMPLE_TASK_LIST]
+ALL_PLUGINS: list[Plugin] = [SIMPLE_TASK_LIST, TIMESHEET]
 
 
 def _version_tuple(v: str) -> tuple:
