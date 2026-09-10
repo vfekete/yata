@@ -7,6 +7,20 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.46.1] - 2026-09-10
+
+### Fixed
+- **Zoom didn't affect the window-management view ("Y")** — it scaled the
+  plugin's own content correctly, but `YatasView`'s font/icon sizes were
+  still bound to `Main.qml`'s fixed, unscaled `chromeFontPixelSize`
+  constant (deliberately kept fixed for the outer frame chrome: tag/lock/
+  close/Y icon). Now `Main.qml` passes a zoom-scaled value into
+  `YatasView` specifically (`chromeFontPixelSize * hostSettings.
+  zoomLevel`, the same formula `ThemeImpl.qml`'s `taskFontPixelSize`
+  already uses), so the window list's own text/icons scale with zoom the
+  same way the plugin's content does, while the frame chrome around it
+  stays fixed-size as before.
+
 ## [0.46.0] - 2026-09-10
 
 ### Fixed

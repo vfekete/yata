@@ -390,15 +390,11 @@ Window {
         // siblings, and contentLoader is nested one level deeper inside
         // frostedContent.
         //
-        // yatasView.qml paints its own solid background (not "transparent"
-        // like the plugin content panel's own wash) — deliberately, so it
-        // fully occludes frostedContent's blur/tint scrim behind it
-        // regardless of lock state. Confirmed live: without an opaque
-        // background here, locking the window WHILE this view was showing
-        // still visibly bled the glass-lock tint through around/behind its
-        // content, even though input/blur were already correctly bypassed —
-        // window management must be unaffected by the lock in every
-        // respect, visual included.
+        // yatasView.qml has no background of its own — it sits directly on
+        // frostedContent's own themed wash, deliberately (see its own
+        // header) — this is safe because blurAmount above is forced to 0
+        // whenever yatasActive is true, so there's no blur/tint left to
+        // bleed through in the first place.
         YatasView {
             id: yatasView
             x: contentLoader.x
@@ -410,7 +406,14 @@ Window {
             chromeMutedTextColor: root.chromeMutedTextColor
             chromeAccentColor: root.chromeAccentColor
             chromeFontFamily: root.chromeFontFamily
-            chromeFontPixelSize: root.chromeFontPixelSize
+            // Scaled by the same generic zoom the plugin's own content
+            // uses (see ThemeImpl.qml's taskFontPixelSize) — explicit
+            // follow-up request: zoom applies to whatever's on screen,
+            // this view included, not just the plugin's content. root's
+            // own chromeFontPixelSize stays the fixed, unscaled constant
+            // it always was for the OUTER frame chrome (tag/lock/close/Y
+            // icon) — only what's passed into this content view scales.
+            chromeFontPixelSize: Math.round(root.chromeFontPixelSize * hostSettings.zoomLevel)
             chromeBoxColor: root.chromeBoxColor
             chromeFieldColor: root.chromeFieldColor
             chromeHoverColor: root.chromeHoverColor

@@ -183,3 +183,44 @@ def test_plugin_font_size_reflects_host_zoom_level(yata_window):
     texts = find_by_class(window.contentItem(), "QQuickText")
     sizes = {t.property("font").pixelSize() for t in texts if t.property("font")}
     assert 28 in sizes, f"expected some text at round(14*2.0)=28px, got {sorted(sizes)}"
+
+
+def test_yatas_view_font_size_reflects_host_zoom_level(yata_window):
+    """The window list ("YATAS") is host content too, not frame chrome --
+    it must scale with zoom the same way the plugin's own content does.
+    Follow-up bug: it was left bound to the fixed, unscaled
+    chromeFontPixelSize Main.qml's own outer frame (tag/lock/close/Y icon)
+    uses, so zoom visibly worked for the plugin's content but silently did
+    nothing for this view."""
+    app, window, host_settings = yata_window
+
+    def find_by_class(item, prefix, results=None):
+        if results is None:
+            results = []
+        if item.metaObject().className().startswith(prefix):
+            results.append(item)
+        for child in item.childItems():
+            find_by_class(child, prefix, results)
+        return results
+
+    window.setProperty("yatasActive", True)
+    app.processEvents()
+
+    yatas_view = next(
+        w for w in find_by_class(window.contentItem(), "YatasView")
+    )
+
+    # Explicit, not relative to whatever zoomLevel happened to already be
+    # (QSettings can carry a value over between tests sharing one process
+    # even with a fresh XDG_*_HOME per test -- Qt caches the resolved ini
+    # path the first time it's asked, before a later test's monkeypatch
+    # takes effect) -- pin both ends instead of comparing before/after.
+    host_settings.zoomLevel = 1.0
+    app.processEvents()
+    default_sizes = {t.property("font").pixelSize() for t in find_by_class(yatas_view, "QQuickText") if t.property("font")}
+    assert 14 in default_sizes, f"expected some text at 14px, got {sorted(default_sizes)}"
+
+    host_settings.zoomLevel = 2.0
+    app.processEvents()
+    zoomed_sizes = {t.property("font").pixelSize() for t in find_by_class(yatas_view, "QQuickText") if t.property("font")}
+    assert 28 in zoomed_sizes, f"expected some text at round(14*2.0)=28px, got {sorted(zoomed_sizes)}"
