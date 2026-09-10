@@ -85,7 +85,17 @@ Item {
         anchors.rightMargin: 6
         spacing: 10
 
-        ColumnLayout {
+        // Column, NOT ColumnLayout — confirmed via a minimal reproduction
+        // that a ColumnLayout nested inside this RowLayout silently
+        // ignores Layout.fillWidth entirely (stays at its own implicit
+        // content width, e.g. 41px, regardless of how much space the
+        // RowLayout actually has), while a plain Column honors it
+        // correctly. This is what pushed the action-icon Row into the
+        // middle of the row instead of flush against the right edge —
+        // the "column" here consuming only ~45px left the icons sitting
+        // wherever 45px-plus-spacing happened to land, not at the true
+        // right edge the fillWidth was supposed to push them to.
+        Column {
             Layout.fillWidth: true
             spacing: 0
             visible: !root.editing
@@ -161,7 +171,7 @@ Item {
         // Action buttons — hover-only (explicit follow-up request: "the
         // icons... should not [be] always visible, the visual behavior
         // should mimic task row"), and pushed to the row's right edge by
-        // the ColumnLayout's own Layout.fillWidth above rather than an
+        // the Column's own Layout.fillWidth above rather than an
         // anchors.right (same mechanism TaskDelegate.qml's own trailing
         // action Row relies on — nothing here needs anchoring, RowLayout
         // does it once the fillWidth sibling consumes the rest of the

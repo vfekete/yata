@@ -7,6 +7,23 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.48.2] - 2026-09-10
+
+### Fixed
+- **Work-item row action icons sat in the middle of the row instead of
+  flush against its right edge** (screenshot comparison from the user
+  pinpointed exactly this). Root-caused via a minimal isolated
+  reproduction: a `ColumnLayout` given `Layout.fillWidth: true` as a
+  child of a `RowLayout` silently ignores it and stays at its own
+  implicit content width — confirmed reproducible with zero other
+  siblings involved, so it's a genuine Qt Quick Layouts quirk, not
+  anything specific to this row's structure. A plain `Column` in the
+  same spot honors `Layout.fillWidth` correctly. `WorkItemRow.qml`'s
+  name/duration wrapper is now a `Column`, which is what actually pushes
+  the trailing action-icon `Row` out to the true right edge. Scanned the
+  rest of the codebase for the same `ColumnLayout` + `Layout.fillWidth`
+  + nested-in-`RowLayout` pattern — no other occurrences found.
+
 ## [0.48.1] - 2026-09-10
 
 ### Fixed
