@@ -46,6 +46,7 @@ Window {
         return hovered ? "#1f2937" : "#111827"
     }
     readonly property color chromeTextColor: "#f3f4f6"
+    readonly property color chromeMutedTextColor: "#9ca3af"
     readonly property color chromeAccentColor: hostSettings.borderColor !== "" ? hostSettings.borderColor : "#64748b"
     readonly property color chromeDragHoverColor: "#00FFFF"
     readonly property string chromeFontFamily: "Noto Sans"
@@ -142,11 +143,19 @@ Window {
     readonly property bool editingTaskDescription: root.activeFocusItem !== null
         && root.activeFocusItem.objectName === "taskDescriptionField"
 
+    // Window management (the "Y" chrome icon below, toggling yatasView in
+    // place of the plugin's own content) is host-owned, unlike everything
+    // the Loader shows — see yatasView's own YatasView.qml header for why.
+    property bool yatasActive: false
+
     readonly property bool contentLocked: {
         if (hostSettings.lockState === "unlocked") return false
         if (hostSettings.lockState === "locked") return true
         if (root.editingTaskDescription) return false
-        var hovered = contentLoader.item ? contentLoader.item.contentHovered : false
+        // Whichever of the two is actually showing right now — auto-locked
+        // must unlock on hover regardless of which one that is.
+        var hovered = root.yatasActive ? yatasView.contentHovered
+            : (contentLoader.item ? contentLoader.item.contentHovered : false)
         return !hovered && !root.dragHoverActive
     }
 
@@ -227,12 +236,35 @@ Window {
             // used to have — applied here rather than inside the plugin's own
             // content, since only the host knows tagLabelBg's height (the
             // plugin has no visibility into host-owned chrome geometry).
+            //
+            // Stays loaded (never re-sourced) while yatasView is showing
+            // instead — just hidden, so switching back to it is instant and
+            // doesn't lose any in-progress plugin state (e.g. a half-typed
+            // task, a scroll position).
             Loader {
                 id: contentLoader
                 anchors.fill: parent
                 anchors.margins: 15
                 anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
                 source: pluginContentUrl
+                visible: !root.yatasActive
+            }
+
+            // Window management (r-3.md's original "YATAS" feature) — host
+            // chrome, not plugin content, see YatasView.qml's own header.
+            // Same geometry as contentLoader so contentOverlay's lock-time
+            // input blocker (below, anchored off contentLoader's own x/y/
+            // width/height) already covers this too with no extra wiring.
+            YatasView {
+                id: yatasView
+                anchors.fill: contentLoader
+                visible: root.yatasActive
+                chromeTextColor: root.chromeTextColor
+                chromeMutedTextColor: root.chromeMutedTextColor
+                chromeAccentColor: root.chromeAccentColor
+                chromeFontFamily: root.chromeFontFamily
+                chromeFontPixelSize: root.chromeFontPixelSize
+                chromeBoxColor: root.chromeBoxColor
             }
         }
 
@@ -545,6 +577,60 @@ Window {
                 ToolTip.text: lockIcon.iconName === "lock_locked" ? qsTr("Locked — click to unlock")
                     : lockIcon.iconName === "lock_autolocked" ? qsTr("Auto-locked — click to lock")
                     : qsTr("Unlocked — click to auto-lock")
+            }
+        }
+
+        // Window management (r-3.md's original "YATAS" feature) toggle —
+        // host chrome, always available regardless of which plugin this
+        // window is running (see YatasView.qml's own header for why this
+        // moved out of the plugin). Same box style/size as the lock icon,
+        // sitting just to its left. "Y" is a placeholder glyph (explicit
+        // request) — swap for a real icon later the same way lock/close
+        // already use iconProvider.coloredSvgUri().
+        Rectangle {
+            id: yatasIconBg
+            y: 0
+            height: tagLabelBg.height
+            radius: 3
+            // Active state lights the BOX, not the glyph — same convention
+            // lock/close already use (their own glyph color never changes;
+            // only the box reacts, to hover there). Matches the old
+            // plugin-owned Yatas toolbar button's own look before this
+            // moved to host chrome.
+            color: root.yatasActive ? root.chromeAccentColor : root.chromeBoxColor(yatasMouseArea.containsMouse)
+            width: yatasGlyph.implicitWidth + 16
+            x: lockIconBg.x - root.lockCloseIconGap - width
+
+            layer.enabled: yatasMouseArea.containsMouse || root.yatasActive
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: root.chromeAccentColor
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowOpacity: 1.0
+                shadowScale: 1.08
+            }
+
+            Text {
+                id: yatasGlyph
+                anchors.centerIn: parent
+                text: "Y"
+                font.bold: true
+                font.family: root.chromeFontFamily
+                font.pixelSize: Math.round(yatasIconBg.height * 0.6)
+                color: root.chromeTextColor
+            }
+
+            MouseArea {
+                id: yatasMouseArea
+                anchors.fill: parent
+                anchors.margins: -4
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.yatasActive = !root.yatasActive
+                ToolTip.visible: containsMouse
+                ToolTip.text: qsTr("Manage windows")
             }
         }
     }

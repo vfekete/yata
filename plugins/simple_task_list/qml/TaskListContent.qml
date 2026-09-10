@@ -41,13 +41,15 @@ Item {
 
     // r-6.md: true precisely when NoteEditorView should be the on-screen
     // content — not merely whenever a task's note is "pending" (i.e. it
-    // stays covered-but-mounted, not this), which is why Links/Yatas are
-    // excluded here: clicking either while the editor is open shows their
-    // own view on top instead (see listView.visible/NoteEditorView.visible
-    // below, and FilterBar's subToolbarDisabled), and clicking them off
-    // again brings this back automatically since noteEditorTaskId itself
-    // is never cleared by that round trip.
-    readonly property bool noteEditorVisible: listView.noteEditorTaskId !== "" && !filterBar.linksActive && !filterBar.yatasActive
+    // stays covered-but-mounted, not this), which is why Links is excluded
+    // here: clicking it while the editor is open shows LinksView on top
+    // instead (see listView.visible/NoteEditorView.visible below, and
+    // FilterBar's subToolbarDisabled), and clicking it off again brings
+    // this back automatically since noteEditorTaskId itself is never
+    // cleared by that round trip. Window management (formerly Yatas here)
+    // no longer needs a mention — it's host chrome now, entirely outside
+    // this whole Loader's content when active (see Main.qml).
+    readonly property bool noteEditorVisible: listView.noteEditorTaskId !== "" && !filterBar.linksActive
 
     // Right-click anywhere on the content for theme + quit. No lock guard
     // needed here (unlike before r-9.md) — Main.qml's own input-blocking
@@ -162,7 +164,7 @@ Item {
         // separate overlay Item stacked on top of it — precisely because a
         // HoverHandler on a sibling placed above contentColumn was
         // confirmed to exclusively claim hover and block it from ever
-        // reaching TaskDelegate rows/LinksView/YatasView's own hover-driven
+        // reaching TaskDelegate rows/LinksView's own hover-driven
         // highlighting underneath. A HoverHandler nested as a PARENT of
         // items that have their own HoverHandlers coexists with all of
         // them correctly — confirmed live.
@@ -175,19 +177,6 @@ Item {
             Layout.fillWidth: true
             linksActive: filterBar.linksActive
             onLinksToggled: filterBar.setGrouping("links", !filterBar.linksActive)
-            yatasActive: filterBar.yatasActive
-            onYatasToggled: filterBar.setGrouping("yatas", !filterBar.yatasActive)
-            onAddWindowRequested: windowManager.createWindow({
-                themeMode: appSettings.themeMode,
-                themeTint: appSettings.themeTint,
-                opacityPercent: appSettings.opacityPercent,
-                fontScale: appSettings.fontScale,
-                wheelZoomInverted: appSettings.wheelZoomInverted,
-                x: Window.window.x,
-                y: Window.window.y,
-                width: Window.window.width,
-                height: Window.window.height
-            })
         }
 
         FilterBar {
@@ -203,7 +192,7 @@ Item {
             ListView {
                 id: listView
                 anchors.fill: parent
-                visible: !filterBar.monthActive && !filterBar.yearActive && !filterBar.linksActive && !filterBar.yatasActive && listView.noteEditorTaskId === ""
+                visible: !filterBar.monthActive && !filterBar.yearActive && !filterBar.linksActive && listView.noteEditorTaskId === ""
                 clip: true
                 spacing: 0
                 model: taskModel
@@ -284,9 +273,9 @@ Item {
                 // dragActive/flashTaskId above: a custom property added
                 // directly onto listView, read/written via
                 // root.ListView.view.xxx from the delegate). Stays set
-                // while Links/Yatas cover it (see noteEditorVisible above),
-                // so returning from them restores the editor instead of
-                // the plain list.
+                // while Links covers it (see noteEditorVisible above), so
+                // returning from it restores the editor instead of the
+                // plain list.
                 property string noteEditorTaskId: ""
 
                 // The scrollbar is an overlay (doesn't reserve its own width),
@@ -394,23 +383,9 @@ Item {
                 }
             }
 
-            // Replaces the task list entirely while active, same as
-            // Links/Month/Year (r-3.md). Row click intentionally does
-            // nothing beyond rename (double-click) and delete (trash
-            // icon) — there's no "switch to that window" affordance, by
-            // explicit design choice.
-            YatasView {
-                anchors.fill: parent
-                visible: filterBar.yatasActive
-                showActive: filterBar.yatasShowActive
-                showDeleted: filterBar.yatasShowDeleted
-                sortMode: filterBar.yatasSortMode
-                searchText: toolbar.searchText
-            }
-
             // r-6.md: replaces the task list while a note is being
             // viewed/edited. Stays mounted (visible: false, not
-            // destroyed) while Links/Yatas cover it, so in-progress edits
+            // destroyed) while Links covers it, so in-progress edits
             // survive that round trip — see contentRoot.noteEditorVisible
             // above and listView.noteEditorTaskId's own comment.
             NoteEditorView {

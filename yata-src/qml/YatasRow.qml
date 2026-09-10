@@ -13,6 +13,13 @@ import QtQuick.Effects
 // back to ACTIVE and reopens it from its still-on-disk data) and "Purge"
 // (permanently discards its registry entry and data) — never both sets at
 // once, per r-3.md's follow-up spec.
+//
+// Host-owned (window management is master-application chrome, not plugin
+// content — see yata-src/qml/YatasView.qml's own header) — styled off the
+// fixed chrome palette passed down from Main.qml, not any plugin's Theme.
+// Icons use plain Image + iconProvider.coloredSvgUri() directly (not the
+// plugin's IconIndicator.qml, which sizes itself off Theme.taskFontPixelSize
+// — a plugin-owned, zoomable value chrome must not depend on).
 Item {
     id: root
     required property string windowId
@@ -20,27 +27,30 @@ Item {
     required property bool open
     required property bool deleted
     required property int openWindowCount
-    // This window's own custom border color (r-4.md), "" if unset — set
-    // from YatasView's modelData.borderColor (windowManager.listWindows()
-    // now includes it), a genuine reactive property binding rather than
-    // calling windowManager.getBorderColor() directly from inside
-    // tagText's color binding, which wouldn't pick up a later change (a
-    // plain method call inside a QML binding expression isn't a tracked
-    // dependency, so it never re-evaluates on its own).
+    // This window's own custom border color (r-4.md), "" if unset.
     required property string borderColor
     signal renamed(string windowId, string newTag)
     signal deleteRequested(string windowId, string tag)
     signal showToggled(string windowId, bool show)
     signal recreateRequested(string windowId)
     signal purgeRequested(string windowId, string tag)
-    // r-4.md: a custom border/tag-name color for this window, picked via
-    // colorBtn below — fires once the ColorDialog is accepted (confirm-to-
-    // apply; QtQuick.Dialogs' ColorDialog only reports a final selection,
-    // not a continuous live one — see colorBtn's own comment).
     signal borderColorPicked(string windowId, color newColor)
+
+    required property color chromeTextColor
+    required property color chromeMutedTextColor
+    required property color chromeAccentColor
+    required property string chromeFontFamily
+    required property int chromeFontPixelSize
+    required property var chromeBoxColor
 
     property bool editing: false
     readonly property bool hovered: hoverHandler.hovered
+
+    // Matches IconIndicator.qml's own boxHeight formula (1.15 * a 0.65
+    // sizeScale, applied to the font size chrome equivalent uses here) —
+    // same visual proportions, just off chromeFontPixelSize instead of the
+    // plugin's own (zoomable) Theme.taskFontPixelSize.
+    readonly property int iconBoxHeight: Math.round(root.chromeFontPixelSize * 0.86)
 
     width: ListView.view.width
     height: Math.max(30, mainRow.implicitHeight + 12)
@@ -50,7 +60,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 4
-        color: root.hovered ? Theme.hoverColor : "transparent"
+        color: root.hovered ? root.chromeBoxColor(true) : "transparent"
     }
 
     RowLayout {
@@ -68,17 +78,12 @@ Item {
             visible: !root.editing
             text: root.tag
             // Shows in that window's own custom border color (r-4.md) when
-            // it has one — mirrors its own border/tag-name text exactly
-            // (not tint-gated either, same as the border itself). This is
-            // a DIFFERENT window than the one this YATAS list lives in, so
-            // it can't use this window's own Theme.effectiveGlowColor
-            // (that's this window's identity color, not row's) — uses
-            // root.borderColor (a real reactive property, see its own
-            // declaration above) instead. No glow — explicit follow-up
-            // request, color only.
-            color: root.borderColor !== "" ? root.borderColor : Theme.textColor
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.taskFontPixelSize
+            // it has one — this is a DIFFERENT window than the one this
+            // list lives in, so it uses root.borderColor (this row's own
+            // reactive property), not this window's own chromeAccentColor.
+            color: root.borderColor !== "" ? root.borderColor : root.chromeTextColor
+            font.family: root.chromeFontFamily
+            font.pixelSize: root.chromeFontPixelSize
 
             TapHandler {
                 onDoubleTapped: root.editing = true
@@ -90,12 +95,12 @@ Item {
             Layout.fillWidth: true
             visible: root.editing
             text: root.tag
-            color: Theme.textColor
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.taskFontPixelSize
+            color: root.chromeTextColor
+            font.family: root.chromeFontFamily
+            font.pixelSize: root.chromeFontPixelSize
             background: Rectangle {
                 radius: 4
-                color: Theme.fieldColor
+                color: root.chromeBoxColor(false)
             }
 
             onVisibleChanged: if (visible) { selectAll(); forceActiveFocus() }
@@ -113,37 +118,27 @@ Item {
 
         // ── ACTIVE row: SHOW toggle + soft-delete ────────────────────────
 
-        IconIndicator {
+        Image {
             id: showBtn
             // Hidden (not just disabled) when this is the only window open
             // right now — closing it would leave nothing on screen and no
             // YatasView left to reopen anything from. A closed window's row
-            // always keeps its button (reopening is always safe). Never
-            // shown at all for a DELETED row — SHOW/hide doesn't apply
-            // there, that's what Re-create is for.
+            // always keeps its button. Never shown for a DELETED row.
             visible: !root.deleted && !root.editing && (!root.open || root.openWindowCount > 1)
-            iconName: "visibility"
-            // 65% of the original 1.15 size, per explicit user request after
-            // it rendered far larger than deleteBtn and not vertically
-            // centered with it — height follows width via IconIndicator's
-            // own aspect-ratio sizing.
-            sizeScale: 1.15 * 0.65
+            source: iconProvider.coloredSvgUri("visibility",
+                (showHover.hovered ? root.chromeAccentColor : (root.open ? root.chromeTextColor : root.chromeMutedTextColor)).toString())
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            height: root.iconBoxHeight
+            width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
+            Layout.preferredWidth: width
+            Layout.preferredHeight: height
             Layout.alignment: Qt.AlignVCenter
-            // Even with matching AlignVCenter, the eye's tightly-cropped SVG
-            // box and deleteBtn's emoji glyph (which renders with descender
-            // padding baked into its own line-height box, pushing the
-            // visible glyph higher than its box's true center) don't share
-            // the same optical center — this nudges the eye to match
-            // deleteBtn's visible glyph position rather than its box.
-            // Started as +0.2*taskFontPixelSize (too far down per live
-            // screenshot); pulled back up 15px per direct user feedback.
-            Layout.topMargin: Math.round(Theme.taskFontPixelSize * 0.2) - 15
-            tint: showHover.hovered ? Theme.effectiveGlowColor : (root.open ? Theme.textColor : Theme.mutedTextColor)
             opacity: root.open ? 1.0 : 0.4
             layer.enabled: showHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: Theme.effectiveGlowShadowColor
+                shadowColor: root.chromeAccentColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -155,25 +150,23 @@ Item {
         }
 
         // Custom border/tag-name color picker (r-4.md) — same "ACTIVE row
-        // only" visibility as showBtn/deleteBtn above; a deleted window
-        // isn't rendered, so there's nothing to preview a color change on.
-        // Hover tint/glow now follows the window's own custom color too
-        // (r-5.md, via Theme.effectiveGlowColor), same as every other icon
-        // in this row — this WAS deliberately kept neutral cyan-only
-        // before r-5.md existed, since "match the picked color" wasn't a
-        // thing yet at the time.
-        IconIndicator {
+        // only" visibility as showBtn/deleteBtn above.
+        Image {
             id: colorBtn
             visible: !root.deleted && !root.editing
-            iconName: "paintbucket"
-            sizeScale: 1.15 * 0.65
+            source: iconProvider.coloredSvgUri("paintbucket",
+                (colorHover.hovered ? root.chromeAccentColor : root.chromeTextColor).toString())
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            height: root.iconBoxHeight
+            width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
+            Layout.preferredWidth: width
+            Layout.preferredHeight: height
             Layout.alignment: Qt.AlignVCenter
-            Layout.topMargin: Math.round(Theme.taskFontPixelSize * 0.2) - 15
-            tint: colorHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
             layer.enabled: colorHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: Theme.effectiveGlowShadowColor
+                shadowColor: root.chromeAccentColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -189,11 +182,8 @@ Item {
                 }
             }
 
-            // QtQuick.Dialogs' ColorDialog (the native platform dialog when
-            // one is available) only reports a final choice via
-            // selectedColor/accepted — unlike, say, a Slider's onMoved,
-            // there's no continuous "still picking" signal to preview
-            // against, so this is confirm-to-apply rather than live-preview
+            // QtQuick.Dialogs' ColorDialog only reports a final choice via
+            // selectedColor/accepted — confirm-to-apply, not live-preview
             // (native OS color pickers work the same way).
             ColorDialog {
                 id: colorDialog
@@ -209,13 +199,13 @@ Item {
             // for an already-DELETED row; that's purgeBtn's job below.
             visible: !root.deleted && !root.editing
             text: "🗑"
-            color: deleteHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.taskFontPixelSize * 1.3
+            color: deleteHover.hovered ? root.chromeAccentColor : root.chromeMutedTextColor
+            font.family: root.chromeFontFamily
+            font.pixelSize: Math.round(root.chromeFontPixelSize * 1.3)
             layer.enabled: deleteHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: Theme.effectiveGlowShadowColor
+                shadowColor: root.chromeAccentColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -230,20 +220,19 @@ Item {
 
         Text {
             id: recreateBtn
-            // Same glyph/style as TaskDelegate.qml's reopenBtn ("re-active"
-            // for a done/cancelled task) — same icon, same meaning: bring
-            // this back to its normal (here: ACTIVE) state. A direct action,
-            // no confirmation — same precedent as reopenBtn, and unlike
-            // delete/purge this one isn't destructive at all.
+            // Same glyph/meaning as TaskDelegate.qml's reopenBtn ("re-
+            // active" for a done/cancelled task): bring this back to its
+            // normal (here: ACTIVE) state. A direct action, no
+            // confirmation — unlike delete/purge this one isn't destructive.
             visible: root.deleted && !root.editing
             text: "↺"
-            color: recreateHover.hovered ? Theme.effectiveGlowColor : Theme.accentColor
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.taskFontPixelSize * 1.3
+            color: recreateHover.hovered ? root.chromeAccentColor : root.chromeTextColor
+            font.family: root.chromeFontFamily
+            font.pixelSize: Math.round(root.chromeFontPixelSize * 1.3)
             layer.enabled: recreateHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: Theme.effectiveGlowShadowColor
+                shadowColor: root.chromeAccentColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
@@ -262,13 +251,13 @@ Item {
             // always confirms first.
             visible: root.deleted && !root.editing
             text: "🗑"
-            color: purgeHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.taskFontPixelSize * 1.3
+            color: purgeHover.hovered ? root.chromeAccentColor : root.chromeMutedTextColor
+            font.family: root.chromeFontFamily
+            font.pixelSize: Math.round(root.chromeFontPixelSize * 1.3)
             layer.enabled: purgeHover.hovered
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: Theme.effectiveGlowShadowColor
+                shadowColor: root.chromeAccentColor
                 shadowBlur: 1.0
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0

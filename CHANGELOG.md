@@ -7,6 +7,60 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.44.0] - 2026-09-10
+
+### Changed
+- **Window management ("YATAS": the window list, rename, show/hide,
+  soft-delete/recreate, purge, and per-window border color) moved out of
+  `plugins/simple_task_list/` and into host chrome.** r-9.md's step 4
+  initially carried it into the plugin along with everything else, but
+  window management is inherently the master application's own job (r-9's
+  own original framing: "main window layouter... group window action
+  executioner"), not any one plugin's — it must stay available no matter
+  which plugin a window happens to be running. New `yata-src/qml/
+  YatasView.qml`/`YatasRow.qml` (recycled from the plugin's own, now
+  removed), toggled by a new "Y" chrome icon in `Main.qml` (placeholder
+  glyph, sitting left of the lock icon) instead of the plugin toolbar's
+  old "Yatas" button. Clicking it swaps `Main.qml`'s content area between
+  the plugin's `Loader` and this new host-owned view — the `Loader` stays
+  loaded (just hidden), so switching back is instant and loses no
+  in-progress plugin state.
+- Styled off `Main.qml`'s own fixed chrome palette (`chromeTextColor`/
+  `chromeAccentColor`/`chromeBoxColor()`/...), not any plugin's `Theme` —
+  same "chrome must look the same regardless of plugin" principle
+  `Main.qml`'s border/lock/close/title already follow. New
+  `yata-src/qml/HostDialogWindow.qml` (a chrome-styled twin of the
+  plugin's own `DialogWindow.qml`) backs the also-relocated
+  `DeleteWindowDialog.qml`/`PurgeWindowDialog.qml` — kept separate from
+  the plugin's Theme-coupled version (still used by its own
+  `NoteDialog.qml`) rather than shared across the host/plugin ownership
+  boundary.
+- "Add a new window" moved from the plugin toolbar's dual-purpose ADD
+  button (context-sensitive: task normally, window while YATAS was
+  active) into a dedicated button inside the new host view itself — the
+  plugin's ADD button is unconditionally "add task" again. Still clones
+  the creating window's own theme/zoom onto the new window (unchanged
+  requirement), reading `appSettings.*` off the same shared `QQmlContext`
+  the host chrome always had access to.
+- The host view keeps its own small search field (word on this: dropped
+  the *shared* field the plugin toolbar used to relay into it, per
+  explicit decision — simpler than plumbing a cross-boundary relay for a
+  feature that no longer shares a toolbar at all) and the same Active/
+  Deleted visibility+sort toggles as before, now built from a small
+  inline chrome-styled toggle component rather than the plugin's own
+  `FilterButton.qml`.
+- Verified live (offscreen `QTest`, real construction path): the plugin
+  toolbar no longer has a Yatas button and its ADD button always adds a
+  task; the "Y" icon correctly swaps content and back with plugin state
+  intact; the add-window button clones theme onto a real new window;
+  double-click-to-rename enters edit mode; the full delete → recreate →
+  delete → purge round trip works end to end through the new host
+  dialogs. New `tests/test_yatas_host.py`. Also fixed
+  `scripts/capture_screenshots.py`'s multiwindow scenario, which drove
+  the old plugin-level "yatas" grouping mode directly and would have
+  silently done nothing once that mode was removed — now sets the host's
+  own `yatasActive` property instead.
+
 ## [0.43.2] - 2026-09-10
 
 ### Fixed

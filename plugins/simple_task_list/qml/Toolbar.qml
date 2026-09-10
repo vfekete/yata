@@ -15,25 +15,18 @@ Item {
     property bool linksActive: false
     signal linksToggled()
 
-    // Same relay pattern as linksActive/linksToggled above, for the YATAS
-    // window-list view (r-3.md).
-    property bool yatasActive: false
-    signal yatasToggled()
-
-    // ADD's meaning is context-sensitive: a new task normally, but a new
-    // YATA window while the YATAS view is showing (explicit requirement —
-    // "when ADD is clicked, instead of new task, new window is created").
-    signal addWindowRequested()
-
-    // Relayed to LinksView/YatasView by Main.qml while each is active — see
-    // searchField below for why the same field drives all three contexts.
+    // Relayed to LinksView by Main.qml while it's active — see searchField
+    // below for why the same field drives both contexts. Window management
+    // (formerly YATAS here) moved to host chrome — see yata-src/qml/
+    // YatasView.qml's own header — so ADD is unconditionally "add task"
+    // again and this field no longer needs a window-search mode.
     readonly property string searchText: searchField.text
 
-    // Sum of ADD/RELOAD/THEME/LINKS/YATAS's own widths plus the spacing
-    // between them — i.e. "the width of the upper toolbar buttons one after
+    // Sum of ADD/RELOAD/THEME/LINKS's own widths plus the spacing between
+    // them — i.e. "the width of the upper toolbar buttons one after
     // another", scaling with font zoom same as the buttons themselves. Used
     // by Main.qml to set the window's minimumWidth.
-    readonly property real actionButtonsWidth: addButton.width + reloadButton.width + themeButton.width + linksButton.width + yatasButton.width + row.spacing * 4
+    readonly property real actionButtonsWidth: addButton.width + reloadButton.width + themeButton.width + linksButton.width + row.spacing * 3
 
     // Empty toolbar background doubles as a window drag handle, since the
     // window has no title bar. Buttons/fields declared below sit on top and
@@ -55,8 +48,8 @@ Item {
             font.bold: true
             focusPolicy: Qt.NoFocus
             ToolTip.visible: hovered
-            ToolTip.text: root.yatasActive ? qsTr("Add window") : qsTr("Add task")
-            onClicked: root.yatasActive ? root.addWindowRequested() : taskModel.addTask()
+            ToolTip.text: qsTr("Add task")
+            onClicked: taskModel.addTask()
             background: Rectangle {
                 radius: 4
                 color: parent.hovered ? Theme.hoverColor : "transparent"
@@ -142,40 +135,16 @@ Item {
             }
         }
 
-        ToolButton {
-            id: yatasButton
-            text: qsTr("Yatas")
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Manage YATA windows")
-            onClicked: root.yatasToggled()
-            background: Rectangle {
-                radius: 4
-                color: root.yatasActive ? Theme.accentColor
-                       : (yatasButton.hovered ? Theme.hoverColor : "transparent")
-                opacity: root.yatasActive ? 0.5 : 1.0
-            }
-            contentItem: Text {
-                text: yatasButton.text
-                color: Theme.textColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize
-                font.capitalization: Font.AllUppercase
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-
         TextField {
             id: searchField
             Layout.fillWidth: true
-            // One shared field for all three contexts — its text always
-            // feeds taskModel's search (harmless while Links/Yatas is
-            // active, since neither view uses taskModel._visible) and is
-            // separately relayed to LinksView/YatasView for their own
-            // filtering there; the placeholder is what actually tells the
-            // user which context they're currently searching.
-            placeholderText: root.yatasActive ? qsTr("Search for window")
-                             : (root.linksActive ? qsTr("Search for link") : qsTr("Search for task"))
+            // One shared field for both contexts — its text always feeds
+            // taskModel's search (harmless while Links is active, since
+            // that view doesn't use taskModel._visible) and is separately
+            // relayed to LinksView for its own filtering there; the
+            // placeholder is what actually tells the user which context
+            // they're currently searching.
+            placeholderText: root.linksActive ? qsTr("Search for link") : qsTr("Search for task")
             placeholderTextColor: Theme.mutedTextColor
             leftPadding: searchIcon.width + 12
             rightPadding: clearIcon.width + 14

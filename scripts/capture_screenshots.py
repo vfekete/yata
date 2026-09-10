@@ -538,14 +538,11 @@ def run_yatas_multiwindow_scenario(out_dir: Path):
 
         @guarded
         def open_yatas(front_win):
-            from PySide6.QtCore import QMetaObject, Q_ARG, Qt as QtNS
-
-            content = front_win.contentItem()
-            filter_bars = find_by_class(content, "FilterBar")
-            QMetaObject.invokeMethod(
-                filter_bars[0], "setGrouping", QtNS.DirectConnection,
-                Q_ARG("QVariant", "yatas"), Q_ARG("QVariant", True),
-            )
+            # Window management ("YATAS") is host chrome now (r-9.md
+            # follow-up), toggled by Main.qml's own "Y" icon — a plain
+            # property on the window itself (root.yatasActive), not
+            # something reached through the plugin's FilterBar anymore.
+            front_win.setProperty("yatasActive", True)
             front_win_id = int(front_win.winId())
             subprocess.run(["xdotool", "windowactivate", str(front_win_id)], check=False)
             subprocess.run(["xdotool", "windowraise", str(front_win_id)], check=False)
