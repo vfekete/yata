@@ -1,11 +1,7 @@
 from PySide6.QtCore import QSettings
 
 from settings import (
-    DEFAULT_FONT_SCALE,
-    DEFAULT_OPACITY_PERCENT,
     LOCK_STATES,
-    MAX_FONT_SCALE,
-    MIN_FONT_SCALE,
     AppSettings,
     first_run_geometry,
     monitor_signature,
@@ -122,35 +118,6 @@ def test_monitor_signature_ignores_screen_order(monkeypatch):
     assert signature_ab == signature_ba
 
 
-def test_theme_defaults(tmp_path):
-    settings = AppSettings(settings=ini_settings(tmp_path))
-    assert settings.themeMode == "dark"
-    assert settings.themeTint == "none"
-
-
-def test_theme_setters_persist(tmp_path):
-    backing = ini_settings(tmp_path)
-    settings = AppSettings(settings=backing)
-
-    settings.themeMode = "light"
-    settings.themeTint = "goldenrod"
-    backing.sync()
-
-    restarted = AppSettings(settings=ini_settings(tmp_path))
-    assert restarted.themeMode == "light"
-    assert restarted.themeTint == "goldenrod"
-
-
-def test_invalid_theme_values_are_ignored(tmp_path):
-    settings = AppSettings(settings=ini_settings(tmp_path))
-
-    settings.themeMode = "psychedelic"
-    settings.themeTint = "chartreuse"
-
-    assert settings.themeMode == "dark"
-    assert settings.themeTint == "none"
-
-
 def test_border_color_defaults_to_empty(tmp_path):
     """Empty string means "no custom color, follow the theme" (r-4.md)."""
     settings = AppSettings(settings=ini_settings(tmp_path))
@@ -176,67 +143,6 @@ def test_border_color_can_be_reset_to_empty(tmp_path):
     settings.borderColor = ""
 
     assert settings.borderColor == ""
-
-
-def test_opacity_and_font_scale_defaults(tmp_path):
-    settings = AppSettings(settings=ini_settings(tmp_path))
-    assert settings.opacityPercent == DEFAULT_OPACITY_PERCENT == 65
-    assert settings.fontScale == DEFAULT_FONT_SCALE == 1.0
-    assert settings.defaultOpacityPercent == DEFAULT_OPACITY_PERCENT
-    assert settings.defaultFontScale == DEFAULT_FONT_SCALE
-
-
-def test_opacity_and_font_scale_persist(tmp_path):
-    backing = ini_settings(tmp_path)
-    settings = AppSettings(settings=backing)
-
-    settings.opacityPercent = 42
-    settings.fontScale = 1.5
-    backing.sync()
-
-    restarted = AppSettings(settings=ini_settings(tmp_path))
-    assert restarted.opacityPercent == 42
-    assert restarted.fontScale == 1.5
-
-
-def test_opacity_percent_clamps_to_5_100_and_is_integer(tmp_path):
-    settings = AppSettings(settings=ini_settings(tmp_path))
-
-    settings.opacityPercent = 200
-    assert settings.opacityPercent == 100
-
-    settings.opacityPercent = -10
-    assert settings.opacityPercent == 5
-
-    settings.opacityPercent = 50.9
-    assert settings.opacityPercent == 51
-    assert isinstance(settings.opacityPercent, int)
-
-
-def test_font_scale_clamps_to_min_and_max(tmp_path):
-    settings = AppSettings(settings=ini_settings(tmp_path))
-
-    settings.fontScale = MAX_FONT_SCALE + 100.0
-    assert settings.fontScale == MAX_FONT_SCALE
-
-    settings.fontScale = MIN_FONT_SCALE - 0.1
-    assert settings.fontScale == MIN_FONT_SCALE
-
-    assert settings.minFontScale == MIN_FONT_SCALE
-    assert settings.maxFontScale == MAX_FONT_SCALE
-
-
-def test_wheel_zoom_inverted_defaults_false_and_persists(tmp_path):
-    backing = ini_settings(tmp_path)
-    s = AppSettings(settings=backing)
-
-    assert s.wheelZoomInverted is False
-
-    s.wheelZoomInverted = True
-    assert s.wheelZoomInverted is True
-
-    s2 = AppSettings(settings=backing)
-    assert s2.wheelZoomInverted is True
 
 
 def test_lock_state_defaults_to_unlocked_and_persists(tmp_path):
@@ -290,7 +196,7 @@ def test_settings_persist_to_disk_without_explicit_caller_sync(tmp_path):
     them."""
     ini_path = tmp_path / "settings.ini"
     s = AppSettings(settings=QSettings(str(ini_path), QSettings.IniFormat))
-    s.wheelZoomInverted = True
+    s.borderColor = "#ff8800"
 
     assert ini_path.exists()
-    assert "wheelZoomInverted=true" in ini_path.read_text()
+    assert "borderColor=#ff8800" in ini_path.read_text()

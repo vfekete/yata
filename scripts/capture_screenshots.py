@@ -261,6 +261,15 @@ def _bootstrap_app(tmp_dir: str):
 
     engine = QQmlApplicationEngine()
     engine.addImportPath(str(REPO_ROOT / "yata-src" / "qml"))
+    # Same per-plugin import path registration main.py's own main() does —
+    # without it, the plugin's QML files (e.g. TaskListContent.qml's
+    # ThemeMenu/Toolbar/etc references) can't be resolved the same way a
+    # real launch resolves them.
+    import plugins_registry  # noqa: PLC0415
+
+    for plugin in plugins_registry.AVAILABLE_PLUGINS.values():
+        if plugin.qml_import_dir:
+            engine.addImportPath(plugin.qml_import_dir)
 
     registry = WindowRegistry(path=str(Path(tmp_dir) / "windows.json"))
 
@@ -281,31 +290,41 @@ def _build_window(engine, registry, manager, icon_provider, app_icon, *, tag, th
     the shared mock fixture, unless seed_tasks=False), and builds it via
     main._make_window() — the exact same construction path a real launch
     uses, so it always has a correctly-populated windowManager/windowId/
-    Theme context. Returns (window_id, QQuickWindow, TaskListModel)."""
+    Theme context. Returns (window_id, QQuickWindow, TaskListModel).
+
+    r-9.md step 4: theme/opacity/font-scale/wheel-zoom are plugin-owned
+    settings now (plugins/simple_task_list/settings.py's TaskListSettings,
+    reached via the plugin's own "appSettings" content property), not the
+    host's settings.AppSettings — same split main.py's own window_factory/
+    restore_factory apply. Window geometry/borderColor stay host-owned.
+    """
+    import plugins_registry
     from main import _make_window, _open_settings
     from settings import AppSettings
-    from plugins.simple_task_list.storage import TaskStore
     from window_registry import tasks_path_for
 
     window_id = registry.add(tag)
     tasks_path = tasks_path_for(window_id)
     if seed_tasks:
         shutil.copy(FIXTURE, tasks_path)
-    task_store = TaskStore(tasks_path)
 
-    settings = AppSettings(_open_settings(window_id))
+    legacy_qsettings = _open_settings(window_id)
+    plugin = plugins_registry.get(registry.get_plugin(window_id))
+    plugin_content = plugin.create_content(window_id, tasks_path, legacy_qsettings)
+    plugin_content.context_properties["appSettings"].themeMode = theme_mode
+    plugin_content.context_properties["appSettings"].themeTint = theme_tint
+    plugin_content.context_properties["appSettings"].opacityPercent = opacity
+    plugin_content.context_properties["appSettings"].fontScale = font_scale
+    plugin_content.context_properties["appSettings"].wheelZoomInverted = wheel_zoom_inverted
+
+    settings = AppSettings(legacy_qsettings)
     settings.width = width
     settings.height = height
     settings.x = x
     settings.y = y
-    settings.themeMode = theme_mode
-    settings.themeTint = theme_tint
-    settings.opacityPercent = opacity
-    settings.fontScale = font_scale
-    settings.wheelZoomInverted = wheel_zoom_inverted
     settings.borderColor = border_color
 
-    win = _make_window(engine, icon_provider, manager, app_icon, window_id, task_store, settings)
+    win = _make_window(engine, icon_provider, manager, app_icon, window_id, plugin_content, settings)
     task_model = manager._windows[window_id]["task_model"]
     return window_id, win, task_model
 

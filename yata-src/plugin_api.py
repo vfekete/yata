@@ -23,10 +23,16 @@ class PluginContent:
     """Everything main.py needs to build one window's content area.
 
     qml_source: absolute path to the plugin's root content QML file, loaded
-    into Main.qml's content Loader. Optional/unused for now — r-9.md's
-    delivery plan doesn't move any QML into a plugin-owned Loader until its
-    step 4; until then, Main.qml itself is still the only QML loaded, so
-    this is None until a plugin actually has a content file of its own.
+    into Main.qml's content Loader.
+    theme_qml_source: absolute path to the plugin's Theme QML file (a
+    QtObject exposing whatever color/font properties the plugin's own
+    content QML wants under the bare "Theme" identifier). Constructed by
+    the host (main.py) and set as the "Theme" context property *before*
+    qml_source is loaded, same as before r-9.md — cross-file QML id lookup
+    doesn't reach across separate documents, so this has to stay a context
+    property rather than something qml_source's own file declares locally.
+    Both of these are None only for a plugin with no visual content at all
+    (nothing in this codebase yet needs that).
     context_properties: name -> QObject, set on the window's QQmlContext
     alongside the host's own (e.g. "borderColor").
     take_item/insert_item: optional cross-window drag&drop hooks (see
@@ -38,6 +44,7 @@ class PluginContent:
     """
     context_properties: dict
     qml_source: str | None = None
+    theme_qml_source: str | None = None
     take_item: Callable[[str], object] | None = None
     insert_item: Callable[[object, int], None] | None = None
     on_lock_state_changed: Callable[[str], None] | None = None
@@ -53,3 +60,8 @@ class Plugin:
     min_api_version: str
     create_content: Callable[[str, str, object], PluginContent]
     copyright: str
+    # Added once to the QQmlEngine's import path (see main.py) so this
+    # plugin's own QML files can reference each other by bare type name
+    # (e.g. "Toolbar { ... }") the same way yata-src/qml's own files do —
+    # None for a plugin with no QML of its own.
+    qml_import_dir: str | None = None

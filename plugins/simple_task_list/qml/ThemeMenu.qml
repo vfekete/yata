@@ -58,7 +58,7 @@ Menu {
             appSettings.fontScale = appSettings.defaultFontScale
             // r-4.md: RESET also clears any custom border/tag-name color
             // back to following the theme.
-            appSettings.borderColor = ""
+            hostSettings.borderColor = ""
         }
         padding: 10
     }

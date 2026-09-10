@@ -173,11 +173,11 @@ QtObject {
     // and a user-picked color can clash with them arbitrarily. Per explicit
     // follow-up request: under any tint, only the border itself takes the
     // custom color (Main.qml's windowBorder/tagLabelText — untouched by
-    // this file, always follows appSettings.borderColor regardless of
+    // this file, always follows hostSettings.borderColor regardless of
     // tint); buttons/links keep the tint's own color exactly as they did
     // before r-5.md existed.
-    readonly property color effectiveGlowColor: (tintName === "none" && appSettings.borderColor !== "") ? appSettings.borderColor : filterGlowColor
-    readonly property color effectiveLinkColor: (tintName === "none" && appSettings.borderColor !== "") ? appSettings.borderColor : linkColor
+    readonly property color effectiveGlowColor: (tintName === "none" && hostSettings.borderColor !== "") ? hostSettings.borderColor : filterGlowColor
+    readonly property color effectiveLinkColor: (tintName === "none" && hostSettings.borderColor !== "") ? hostSettings.borderColor : linkColor
 
     // Shadow-only variants, lightened the same way filterHoverColor already
     // lightens its own base accent (Qt.lighter(..., 1.4)) — a custom border

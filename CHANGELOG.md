@@ -7,6 +7,68 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.42.0] - 2026-09-10
+
+### Changed
+- **r-9.md step 4: the plugin's own QML content now loads through a
+  `Loader`, not inline in `Main.qml`.** `Main.qml` is now a thin ~540-line
+  host shell owning only what the master application actually controls:
+  border color, the lock state machine + glass/blur effect, the close
+  button, and the window title (tag display + rename). Everything else —
+  toolbar, filters, the task list, calendar views, links/notes, and the
+  whole theme system — moved into `plugins/simple_task_list/qml/
+  TaskListContent.qml`, loaded via `Main.qml`'s `contentLoader` from a new
+  `pluginContentUrl` context property (`plugin_api.PluginContent.
+  qml_source`). Host chrome now uses fixed dark-mode/"none"-tint colors
+  instead of the plugin's `Theme` — a different plugin could look
+  completely different, and the host chrome must not depend on it.
+- `plugin_api.PluginContent` gained `theme_qml_source` (the plugin's own
+  Theme QML file, built by the host before `qml_source` — cross-file QML
+  id lookup can't reach across separate documents, so this stays a
+  host-loaded context property) and `Plugin.qml_import_dir` (added to the
+  `QQmlEngine`'s import path so a plugin's own QML files can reference
+  each other by bare type name).
+- **Settings split**: `yata-src/settings.py`'s `AppSettings` now keeps only
+  host-owned keys (window geometry, `borderColor`, `lockState`). The
+  content-facing five (`themeMode`, `themeTint`, `opacityPercent`,
+  `fontScale`, `wheelZoomInverted`) moved to new `plugins/simple_task_list/
+  settings.py` (`TaskListSettings`), backed by `plugin_data.py`'s versioned
+  envelope in its own file, with a one-time migration off the old shared
+  QSettings keys for existing installs. `main.py`'s window construction
+  passes the window's raw legacy `QSettings` through to the plugin once,
+  for that migration only.
+- `plugin_api.PluginContent` also gained two informational lifecycle hooks
+  a plugin may set (`on_lock_state_changed`, `on_window_closing`) — neither
+  can veto the transition, they just let a plugin react. Unused by
+  `simple_task_list` today.
+
+### Fixed
+- **The plugin's own settings object (`appSettings`/`TaskListSettings`,
+  and in principle any other plugin `context_properties` value) could be
+  garbage-collected shortly after a window was built**, since nothing kept
+  a Python reference to `plugin_content` past `_make_window()`'s own return
+  — unlike `task_model`, which was already protected via an explicit
+  `register_window(task_model=...)` kwarg. Confirmed live: every
+  `appSettings.*` QML binding (theme mode/tint, opacity, font scale,
+  wheel-zoom) started reading back `null` the moment the event loop got a
+  chance to run garbage collection. `main.py`'s `_make_window()` now also
+  passes `plugin_content=plugin_content` to `register_window()`, keeping
+  the whole `PluginContent` (and every QObject it references) alive for
+  the window's lifetime — same pattern already used for
+  `theme_component`/`main_component`.
+- `scripts/capture_screenshots.py` (README screenshot regeneration) still
+  called the pre-step-4 `_make_window()` signature (a raw `TaskStore` +
+  `AppSettings` pair) and would have failed outright the next time someone
+  ran it. Updated `_build_window()` to build a real `PluginContent` via
+  `plugins_registry` (matching `main.py`'s own `window_factory`/
+  `restore_factory` split of host- vs. plugin-owned settings), and added
+  the same per-plugin `engine.addImportPath()` registration `main()` does.
+- Verified live: full test suite (241 tests) green; a real, on-screen
+  `main.py` launch (isolated `XDG_DATA_HOME`/`XDG_CONFIG_HOME`, no real
+  data touched) ran for several seconds with zero QML console errors;
+  `capture_screenshots.py --scenario main-green` produces a correctly
+  rendered, visually unchanged screenshot.
+
 ## [0.41.0] - 2026-09-10
 
 ### Changed

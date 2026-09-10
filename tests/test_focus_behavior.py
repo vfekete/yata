@@ -51,8 +51,10 @@ def qml_window(tmp_path, monkeypatch):
     from plugins.simple_task_list.plugin import create_content     # noqa: PLC0415
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
+    from PySide6.QtCore import QSettings  # noqa: PLC0415
 
-    app_settings = AppSettings()
+    raw_settings = QSettings("yata", "yata")
+    app_settings = AppSettings(raw_settings)
     icon_provider = IconProvider()
     # Reuses main.py's real window-construction path — see
     # test_qml_integration.py's engine_and_model fixture for why a
@@ -67,7 +69,7 @@ def qml_window(tmp_path, monkeypatch):
 
     window = _make_window(
         engine, icon_provider, window_manager, QIcon(),
-        DEFAULT_WINDOW_ID, create_content(DEFAULT_WINDOW_ID, None, app_settings), app_settings,
+        DEFAULT_WINDOW_ID, create_content(DEFAULT_WINDOW_ID, None, raw_settings), app_settings,
     )
     task_model = window_manager._windows[DEFAULT_WINDOW_ID]["task_model"]
 

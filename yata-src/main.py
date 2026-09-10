@@ -201,31 +201,36 @@ def _ensure_desktop_entry(
     )
 
 
-def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plugin_content, app_settings):
+def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plugin_content, host_settings):
     """Builds one fully independent window: its own QQmlContext with its own
-    plugin content/appSettings/Theme (see window_manager.py's module
-    docstring and ThemeImpl.qml's own comment for why Theme can no longer be
-    a pragma-Singleton once multiple windows exist in one engine, and why
+    plugin content/Theme (see window_manager.py's module docstring and
+    ThemeImpl.qml's own comment for why Theme can no longer be a
+    pragma-Singleton once multiple windows exist in one engine, and why
     that file specifically isn't named Theme.qml). Used for both the very
     first window and every window created later via YATAS.
 
     plugin_content: a plugin_api.PluginContent, built by the window's own
     plugin (see plugins_registry.py) — its context_properties (e.g.
-    "taskModel") are set here alongside the host's own, so existing QML
-    keeps working unchanged (QML doesn't move into a plugin-owned Loader
-    until r-9.md's plan's step 4).
+    "taskModel", "appSettings") are set here alongside the host's own
+    ("hostSettings", "windowManager", ...). host_settings: this window's
+    trimmed, host-owned settings.AppSettings (geometry/borderColor/
+    lockState only — see that module's own docstring for why the rest
+    moved to the plugin).
     """
     context = QQmlContext(engine.rootContext())
     for name, obj in plugin_content.context_properties.items():
         context.setContextProperty(name, obj)
-    context.setContextProperty("appSettings", app_settings)
+    context.setContextProperty("hostSettings", host_settings)
     context.setContextProperty("iconProvider", icon_provider)
     context.setContextProperty("windowManager", window_manager)
     context.setContextProperty("windowId", window_id)
 
     # Theme must be created (and set as a context property) before Main.qml,
-    # since Main.qml's whole tree references the bare "Theme" identifier
-    # from the moment it's constructed.
+    # since the plugin's whole content tree references the bare "Theme"
+    # identifier from the moment it's constructed — see plugin_api.py's
+    # PluginContent.theme_qml_source docstring for why this has to stay a
+    # context property (loaded by the host) rather than something the
+    # plugin's own qml_source file could declare locally.
     #
     # IMPORTANT: the QQmlComponent objects themselves (theme_component,
     # main_component below) must stay alive for as long as the objects they
@@ -238,18 +243,37 @@ def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plu
     # it — even with the context and the created object both still
     # referenced elsewhere. register_window() below is what keeps every one
     # of these alive for the window's whole lifetime.
-    theme_component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "ThemeImpl.qml")))
+    theme_component = QQmlComponent(engine, QUrl.fromLocalFile(plugin_content.theme_qml_source))
     theme = theme_component.create(context)
     if theme is None:
-        raise RuntimeError(f"ThemeImpl.qml failed to load: {theme_component.errorString()}")
+        raise RuntimeError(f"{plugin_content.theme_qml_source} failed to load: {theme_component.errorString()}")
     QQmlEngine.setObjectOwnership(theme, QQmlEngine.CppOwnership)
     context.setContextProperty("Theme", theme)
+
+    # The plugin's own root content file, loaded by Main.qml's own
+    # contentLoader (a plain QML Loader reading this context property) —
+    # set before Main.qml is constructed so that Loader has a source from
+    # its very first evaluation.
+    context.setContextProperty("pluginContentUrl", QUrl.fromLocalFile(plugin_content.qml_source))
 
     main_component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "Main.qml")))
     window = main_component.create(context)
     if window is None:
         raise RuntimeError(f"Main.qml failed to load: {main_component.errorString()}")
     QQmlEngine.setObjectOwnership(window, QQmlEngine.CppOwnership)
+
+    # Informational-only lifecycle notifications (see PluginContent's own
+    # docstring) — the plugin can't veto either transition, it just
+    # optionally reacts. No-ops for a plugin that leaves either hook None
+    # (true of simple_task_list today).
+    if plugin_content.on_lock_state_changed:
+        host_settings.lockStateChanged.connect(
+            lambda: plugin_content.on_lock_state_changed(host_settings.lockState)
+        )
+    if plugin_content.on_window_closing:
+        window.visibleChanged.connect(
+            lambda visible: (not visible) and plugin_content.on_window_closing()
+        )
 
     # Deferred so the platform window is actually mapped before we touch WM
     # properties. enable_always_below sends _NET_WM_STATE_BELOW; setIcon
@@ -272,8 +296,21 @@ def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plu
         # before r-9.md) — generalizing it to plugin_content's own
         # take_item/insert_item hooks is r-9.md's plan's step 5, not this one.
         task_model=plugin_content.context_properties.get("taskModel"),
-        app_settings=app_settings, context=context, theme=theme,
+        app_settings=host_settings, context=context, theme=theme,
         theme_component=theme_component, main_component=main_component,
+        # plugin_content itself (kept alive here for the whole window's
+        # lifetime) — same "must outlive this function" reasoning as
+        # theme_component/main_component above, just for a different
+        # failure mode: none of its context_properties QObjects (e.g.
+        # "appSettings"/TaskListSettings) has a C++ parent or CppOwnership,
+        # so with no Python reference surviving past this function's own
+        # return, Python's refcount-based GC deletes the *entire* underlying
+        # C++ object shortly after construction — not just leaking it, but
+        # leaving context.setContextProperty()'s raw pointer dangling.
+        # Confirmed live: every "appSettings.*" QML binding (theme mode/
+        # tint, opacity, font scale, wheel-zoom) silently read back null
+        # the moment the event loop got a chance to run garbage collection.
+        plugin_content=plugin_content,
     )
     return window
 
@@ -436,29 +473,46 @@ def main() -> int:
 
     engine = QQmlApplicationEngine()
     engine.addImportPath(QML_DIR)
+    for plugin in plugins_registry.AVAILABLE_PLUGINS.values():
+        if plugin.qml_import_dir:
+            engine.addImportPath(plugin.qml_import_dir)
 
     registry = WindowRegistry()
 
-    def _plugin_content_for(window_id, app_settings):
+    def _plugin_content_for(window_id, legacy_qsettings):
+        # legacy_qsettings: the window's own raw per-window QSettings (also
+        # what AppSettings itself wraps) — passed through unchanged so the
+        # plugin's own settings object can migrate its old theme/* keys off
+        # of it once, the first time this window's plugin-state file is
+        # created (see TaskListSettings). Not otherwise touched here; the
+        # plugin owns whatever it does with it.
         plugin = plugins_registry.get(registry.get_plugin(window_id))
-        return plugin.create_content(window_id, tasks_path_for(window_id), app_settings)
+        return plugin.create_content(window_id, tasks_path_for(window_id), legacy_qsettings)
 
     def window_factory(window_id, caller_state):
         # Used for windows created via the YATAS view's ADD button — clones
         # the creating window's theme (explicit requirement: "new window has
         # same theme as the actual window") and a non-overlapping position
-        # WindowManager already computed into caller_state's x/y.
-        app_settings = AppSettings(_open_settings(window_id))
-        app_settings.themeMode = caller_state["themeMode"]
-        app_settings.themeTint = caller_state["themeTint"]
-        app_settings.opacityPercent = int(caller_state["opacityPercent"])
-        app_settings.fontScale = float(caller_state["fontScale"])
-        app_settings.wheelZoomInverted = bool(caller_state["wheelZoomInverted"])
+        # WindowManager already computed into caller_state's x/y. Theme/zoom
+        # cloning lands on the new plugin content's own "appSettings" (not
+        # this function's own host app_settings — those keys are plugin-
+        # owned, see settings.py's module docstring), read back generically
+        # by name since main.py stays plugin-agnostic about what object
+        # that actually is.
+        legacy_qsettings = _open_settings(window_id)
+        app_settings = AppSettings(legacy_qsettings)
         app_settings.width = int(caller_state["width"])
         app_settings.height = int(caller_state["height"])
         app_settings.x = int(caller_state["x"])
         app_settings.y = int(caller_state["y"])
-        plugin_content = _plugin_content_for(window_id, app_settings)
+        plugin_content = _plugin_content_for(window_id, legacy_qsettings)
+        plugin_settings = plugin_content.context_properties.get("appSettings")
+        if plugin_settings is not None:
+            plugin_settings.themeMode = caller_state["themeMode"]
+            plugin_settings.themeTint = caller_state["themeTint"]
+            plugin_settings.opacityPercent = int(caller_state["opacityPercent"])
+            plugin_settings.fontScale = float(caller_state["fontScale"])
+            plugin_settings.wheelZoomInverted = bool(caller_state["wheelZoomInverted"])
         return _make_window(
             engine, icon_provider, window_manager, app_icon,
             window_id, plugin_content, app_settings,
@@ -470,8 +524,9 @@ def main() -> int:
         # already has its own persisted position/theme/content. Used both
         # for every window at startup and for WindowManager.openWindow()
         # (YatasView's SHOW toggle, on) reopening one later in the session.
-        app_settings = AppSettings(_open_settings(window_id))
-        plugin_content = _plugin_content_for(window_id, app_settings)
+        legacy_qsettings = _open_settings(window_id)
+        app_settings = AppSettings(legacy_qsettings)
+        plugin_content = _plugin_content_for(window_id, legacy_qsettings)
         _make_window(
             engine, icon_provider, window_manager, app_icon,
             window_id, plugin_content, app_settings,

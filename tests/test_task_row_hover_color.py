@@ -57,7 +57,8 @@ def qml_window(tmp_path, monkeypatch):
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
     from PySide6.QtCore import QSettings  # noqa: PLC0415
 
-    app_settings = AppSettings(QSettings(str(tmp_path / "app.ini"), QSettings.IniFormat))
+    raw_settings = QSettings(str(tmp_path / "app.ini"), QSettings.IniFormat)
+    app_settings = AppSettings(raw_settings)
     icon_provider = IconProvider()
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     window_manager = WindowManager(registry, window_factory=lambda *a: None)
@@ -66,9 +67,10 @@ def qml_window(tmp_path, monkeypatch):
     qml_dir = os.path.join(src, "qml")
     engine.addImportPath(qml_dir)
 
+    plugin_content = create_content(DEFAULT_WINDOW_ID, None, raw_settings)
     window = _make_window(
         engine, icon_provider, window_manager, QIcon(),
-        DEFAULT_WINDOW_ID, create_content(DEFAULT_WINDOW_ID, None, app_settings), app_settings,
+        DEFAULT_WINDOW_ID, plugin_content, app_settings,
     )
     task_model = window_manager._windows[DEFAULT_WINDOW_ID]["task_model"]
 
@@ -79,7 +81,11 @@ def qml_window(tmp_path, monkeypatch):
     QTest.qWait(200)
     app.processEvents()
 
-    yield app, window, app_settings, task_model
+    # app_settings: host-owned (borderColor/lockState/geometry). The
+    # plugin's own settings (themeMode/themeTint/...) are a separate
+    # object — see plugin_content's own "appSettings" entry.
+    plugin_settings = plugin_content.context_properties["appSettings"]
+    yield app, window, app_settings, task_model, plugin_settings
 
     del engine
     app.processEvents()
@@ -103,7 +109,7 @@ def _row(window):
 
 
 def test_hover_color_stays_grey_without_a_custom_color(qml_window):
-    app, window, app_settings, task_model = qml_window
+    app, window, app_settings, task_model, plugin_settings = qml_window
     row = _row(window)
 
     assert app_settings.borderColor == ""
@@ -115,7 +121,7 @@ def test_hover_color_stays_grey_without_a_custom_color(qml_window):
 
 
 def test_hover_color_follows_custom_border_color_under_none_tint(qml_window):
-    app, window, app_settings, task_model = qml_window
+    app, window, app_settings, task_model, plugin_settings = qml_window
     row = _row(window)
 
     app_settings.borderColor = "#2563eb"  # a distinct blue, unlikely to collide with any theme default
@@ -134,11 +140,11 @@ def test_hover_color_ignores_custom_border_color_under_a_crt_tint(qml_window):
     each already tints its own Theme.hoverColor to its own phosphor color
     (ThemeImpl.qml's palettes), so a custom border color must not override
     that."""
-    app, window, app_settings, task_model = qml_window
+    app, window, app_settings, task_model, plugin_settings = qml_window
     row = _row(window)
 
     app_settings.borderColor = "#2563eb"
-    app_settings.themeTint = "green"
+    plugin_settings.themeTint = "green"
     app.processEvents()
 
     from PySide6.QtQml import QQmlEngine

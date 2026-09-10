@@ -28,18 +28,18 @@ Item {
     // assigned to it in YATAS list", so absent that assignment there's no
     // such color to use and the original grey stands.
     //
-    // effectiveBorderColor exists purely to coerce appSettings.borderColor
+    // effectiveBorderColor exists purely to coerce hostSettings.borderColor
     // (a plain string) into a real `color` value so .r/.g/.b are readable —
     // its "#000000" fallback is never actually used for that (rowHoverColor
     // only reads it in the branch where borderColor is already known
     // non-empty).
-    readonly property color effectiveBorderColor: appSettings.borderColor !== "" ? appSettings.borderColor : "#000000"
+    readonly property color effectiveBorderColor: hostSettings.borderColor !== "" ? hostSettings.borderColor : "#000000"
     // Alpha 0.18, the author's own preference after trying a few values
     // live — noticeably more than the grey/white overlay it replaces
     // (Theme.hoverColor's own 0.06–0.08 for the "none" tint) needs, since a
     // specific hue has to work harder than grey to register as "this
     // window's color" rather than just a slightly different shade of grey.
-    readonly property color rowHoverColor: (Theme.tintName === "none" && appSettings.borderColor !== "")
+    readonly property color rowHoverColor: (Theme.tintName === "none" && hostSettings.borderColor !== "")
         ? Qt.rgba(effectiveBorderColor.r, effectiveBorderColor.g, effectiveBorderColor.b, 0.18)
         : Theme.hoverColor
     // Set briefly by ListView.flashTaskId after "to task" navigation (see

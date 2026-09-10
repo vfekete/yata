@@ -100,14 +100,16 @@ def two_windows(tmp_path, monkeypatch):
     engine.addImportPath(os.path.join(src, "qml"))
 
     def window_factory(window_id, caller_state):
-        settings = AppSettings(QSettings(str(tmp_path / f"app-{window_id}.ini"), QSettings.IniFormat))
-        plugin_content = create_content(window_id, str(tmp_path / f"tasks-{window_id}.json"), settings)
+        raw = QSettings(str(tmp_path / f"app-{window_id}.ini"), QSettings.IniFormat)
+        settings = AppSettings(raw)
+        plugin_content = create_content(window_id, str(tmp_path / f"tasks-{window_id}.json"), raw)
         _make_window(engine, icon_provider, window_manager, QIcon(), window_id, plugin_content, settings)
 
     window_manager = WindowManager(registry, window_factory=window_factory)
 
-    app_settings1 = AppSettings(QSettings(str(tmp_path / "app-default.ini"), QSettings.IniFormat))
-    plugin_content1 = create_content(DEFAULT_WINDOW_ID, str(tmp_path / "tasks-default.json"), app_settings1)
+    raw_settings1 = QSettings(str(tmp_path / "app-default.ini"), QSettings.IniFormat)
+    app_settings1 = AppSettings(raw_settings1)
+    plugin_content1 = create_content(DEFAULT_WINDOW_ID, str(tmp_path / "tasks-default.json"), raw_settings1)
     window1 = _make_window(
         engine, icon_provider, window_manager, QIcon(),
         DEFAULT_WINDOW_ID, plugin_content1, app_settings1,

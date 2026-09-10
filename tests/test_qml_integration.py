@@ -50,8 +50,10 @@ def engine_and_model(qml_app, tmp_path, monkeypatch):
     from plugins.simple_task_list.plugin import create_content  # noqa: PLC0415
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
+    from PySide6.QtCore import QSettings  # noqa: PLC0415
 
-    app_settings = AppSettings()
+    raw_settings = QSettings("yata", "yata")
+    app_settings = AppSettings(raw_settings)
     icon_provider = IconProvider()
     # Reuses main.py's real window-construction path (not a hand-rolled
     # equivalent) specifically because it's the one already proven to build
@@ -69,7 +71,7 @@ def engine_and_model(qml_app, tmp_path, monkeypatch):
 
     window = _make_window(
         engine, icon_provider, window_manager, QIcon(),
-        DEFAULT_WINDOW_ID, create_content(DEFAULT_WINDOW_ID, None, app_settings), app_settings,
+        DEFAULT_WINDOW_ID, create_content(DEFAULT_WINDOW_ID, None, raw_settings), app_settings,
     )
     task_model = window_manager._windows[DEFAULT_WINDOW_ID]["task_model"]
 
@@ -123,10 +125,10 @@ def test_delete_task_removes_it(engine_and_model):
 
 @pytest.fixture()
 def engine_and_window(qml_app, tmp_path, monkeypatch):
-    """Like engine_and_model, but yields (window, app_settings) instead of
-    just the task model — needed for r-5.md's Theme.effectiveGlowColor/
-    effectiveLinkColor, which live on the per-window Theme context property,
-    not on the task model."""
+    """Like engine_and_model, but yields (window, app_settings,
+    plugin_settings) instead of just the task model — needed for r-5.md's
+    Theme.effectiveGlowColor/effectiveLinkColor, which live on the
+    per-window Theme context property, not on the task model."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -152,7 +154,8 @@ def engine_and_window(qml_app, tmp_path, monkeypatch):
     # env-var-resolution/caching question entirely — see feedback_test_data_safety.
     from PySide6.QtCore import QSettings  # noqa: PLC0415
 
-    app_settings = AppSettings(QSettings(str(tmp_path / "app.ini"), QSettings.IniFormat))
+    raw_settings = QSettings(str(tmp_path / "app.ini"), QSettings.IniFormat)
+    app_settings = AppSettings(raw_settings)
     icon_provider = IconProvider()
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     window_manager = WindowManager(registry, window_factory=lambda *a: None)
@@ -161,14 +164,20 @@ def engine_and_window(qml_app, tmp_path, monkeypatch):
     qml_dir = os.path.join(os.path.dirname(__file__), "..", "yata-src", "qml")
     engine.addImportPath(qml_dir)
 
+    plugin_content = create_content(DEFAULT_WINDOW_ID, None, raw_settings)
     window = _make_window(
         engine, icon_provider, window_manager, QIcon(),
-        DEFAULT_WINDOW_ID, create_content(DEFAULT_WINDOW_ID, None, app_settings), app_settings,
+        DEFAULT_WINDOW_ID, plugin_content, app_settings,
     )
     qml_app.processEvents()
     qml_app.processEvents()
 
-    yield window, app_settings
+    # app_settings: host-owned (borderColor/lockState/geometry). The
+    # plugin's own settings (themeMode/themeTint/opacityPercent/fontScale/
+    # wheelZoomInverted) are a separate object — see plugin_content's own
+    # "appSettings" context-properties entry.
+    plugin_settings = plugin_content.context_properties["appSettings"]
+    yield window, app_settings, plugin_settings
 
     del engine
     qml_app.processEvents()
@@ -185,7 +194,7 @@ def test_effective_glow_color_follows_custom_border_color(engine_and_window):
     """r-5.md: FilterButton's pushed-state glow and markdown link color/glow
     should follow the window's custom border color (r-4.md) once one is
     set, falling back to each one's own theme default otherwise."""
-    window, app_settings = engine_and_window
+    window, app_settings, plugin_settings = engine_and_window
     theme = _theme_for(window)
 
     default_glow = theme.property("effectiveGlowColor")
@@ -202,7 +211,7 @@ def test_effective_glow_color_falls_back_after_reset(engine_and_window):
     """Resetting the custom border color (ThemeMenu's Reset, or clearing it
     any other way) must bring the button/link colors back to their own
     theme defaults, not leave them stuck on the last custom color."""
-    window, app_settings = engine_and_window
+    window, app_settings, plugin_settings = engine_and_window
     theme = _theme_for(window)
 
     app_settings.borderColor = "#39ff14"
@@ -219,16 +228,16 @@ def test_effective_glow_color_ignores_custom_color_under_a_tint(engine_and_windo
     color — only the border itself (Main.qml, not Theme) takes the raw
     custom color under a tint. Only the "none" tint lets buttons/links
     follow the custom color."""
-    window, app_settings = engine_and_window
+    window, app_settings, plugin_settings = engine_and_window
     theme = _theme_for(window)
 
-    app_settings.themeTint = "green"
+    plugin_settings.themeTint = "green"
     app_settings.borderColor = "#ff3db2"
     assert theme.property("effectiveGlowColor") == theme.property("filterGlowColor")
     assert theme.property("effectiveLinkColor") == theme.property("linkColor")
     assert theme.property("effectiveGlowColor").name().lower() != "#ff3db2"
 
-    app_settings.themeTint = "none"
+    plugin_settings.themeTint = "none"
     assert theme.property("effectiveGlowColor").name().lower() == "#ff3db2"
     assert theme.property("effectiveLinkColor").name().lower() == "#ff3db2"
 
