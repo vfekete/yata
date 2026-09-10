@@ -1,11 +1,20 @@
-"""Window geometry and host-owned (border/lock) settings persistence.
+"""Window geometry and host-owned settings persistence.
 
-r-9.md step 4: theme/opacity/font-scale/wheel-zoom-inversion used to live
-here too, but those are plugin-owned content concerns, not host ones — see
-plugins/simple_task_list/settings.py (TaskListSettings), which now owns
-them (backed by its own versioned file, migrated once off this class's old
-QSettings keys). This class keeps only what the host chrome itself
-(Main.qml's border/tag/lock/close, window geometry) actually needs.
+r-9.md step 4 moved theme/opacity/font-scale/wheel-zoom-inversion out to
+plugins/simple_task_list/settings.py (TaskListSettings) as plugin-owned
+content concerns. A later follow-up moved zoom (zoomLevel/
+wheelZoomInverted specifically) back here: zoom is generic host-owned
+window state — "zoom level should be 1 per window" (explicit request),
+Ctrl+scroll/Ctrl+=/Ctrl+-/Ctrl+0 are handled once in Main.qml regardless
+of what's currently showing (plugin content or the host's own YatasView),
+not per-plugin — while theme/tint/opacity stay genuinely plugin-owned
+(a different plugin could reasonably have no concept of "theme" at all).
+zoomLevel is the host↔plugin zoom API: reachable from any plugin's own
+QML as the already-globally-visible "hostSettings" context property (the
+same channel borderColor/lockState already use) — a plugin decides
+entirely on its own what to actually do with the value (simple_task_list
+multiplies its own base font size by it), so this class doesn't know or
+care whether anything is even listening.
 """
 from __future__ import annotations
 
@@ -22,6 +31,31 @@ FIRST_RUN_WIDTH_RATIO = 0.20
 # by clicking the lock icon (Main.qml). "unlocked" is the default so a brand
 # new window is never born blurred/frozen.
 LOCK_STATES = ("unlocked", "auto-locked", "locked")
+
+DEFAULT_ZOOM_LEVEL = 1.0
+MIN_ZOOM_LEVEL = 0.5
+# Not literally unbounded — Qt's font.pixelSize is still a real int under
+# the hood, and an astronomically large value risks overflow/undefined
+# behavior there. 200x is effectively "as far as you'd ever actually zoom"
+# while staying nowhere near that ceiling (matches the plugin-owned
+# fontScale's old ceiling, picked for the same reason before this moved
+# here — see git history for the original request this came from).
+MAX_ZOOM_LEVEL = 200.0
+
+
+def _read_bool(s: QSettings, key: str, default: bool) -> bool:
+    """Read a boolean from QSettings, correctly handling stored 'false'
+    strings — QSettings' native/INI backend round-trips bools as the
+    literal text "true"/"false", and reading one back without a type hint
+    can hand you the *string* "false" (any non-empty string is truthy in
+    Python). Same helper plugins/simple_task_list/settings.py keeps its
+    own copy of, for the same reason."""
+    v = s.value(key, default)
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.lower() not in ("false", "0", "no")
+    return bool(v)
 
 
 def monitor_signature() -> str:
@@ -91,6 +125,8 @@ class AppSettings(QObject):
     heightChanged = Signal()
     borderColorChanged = Signal()
     lockStateChanged = Signal()
+    zoomLevelChanged = Signal()
+    wheelZoomInvertedChanged = Signal()
 
     def __init__(self, settings: QSettings | None = None, parent=None):
         super().__init__(parent)
@@ -99,6 +135,14 @@ class AppSettings(QObject):
         self._border_color = str(self._settings.value("theme/borderColor", ""))
         lock_state = self._settings.value("theme/lockState", "unlocked")
         self._lock_state = lock_state if lock_state in LOCK_STATES else "unlocked"
+        self._zoom_level = self._clamp_zoom_level(
+            self._settings.value("window/zoomLevel", DEFAULT_ZOOM_LEVEL)
+        )
+        self._wheel_zoom_inverted = _read_bool(self._settings, "window/wheelZoomInverted", False)
+
+    @staticmethod
+    def _clamp_zoom_level(value) -> float:
+        return max(MIN_ZOOM_LEVEL, min(MAX_ZOOM_LEVEL, float(value)))
 
     def _load_geometry(self) -> tuple[int, int, int, int]:
         current_signature = monitor_signature()
@@ -214,3 +258,44 @@ class AppSettings(QObject):
         self.lockStateChanged.emit()
 
     lockState = Property(str, _get_lock_state, _set_lock_state, notify=lockStateChanged)
+
+    def _get_zoom_level(self) -> float:
+        return self._zoom_level
+
+    def _set_zoom_level(self, value: float):
+        value = self._clamp_zoom_level(value)
+        if value == self._zoom_level:
+            return
+        self._zoom_level = value
+        self._settings.setValue("window/zoomLevel", value)
+        self._settings.sync()
+        self.zoomLevelChanged.emit()
+
+    # Host↔plugin zoom API (see this module's own docstring) — a plugin
+    # reads this off the "hostSettings" context property already reachable
+    # from anywhere in the window's tree; entirely up to the plugin what
+    # it does with the value.
+    zoomLevel = Property(float, _get_zoom_level, _set_zoom_level, notify=zoomLevelChanged)
+
+    def _get_wheel_zoom_inverted(self) -> bool:
+        return self._wheel_zoom_inverted
+
+    def _set_wheel_zoom_inverted(self, value: bool):
+        value = bool(value)
+        if value == self._wheel_zoom_inverted:
+            return
+        self._wheel_zoom_inverted = value
+        self._settings.setValue("window/wheelZoomInverted", value)
+        self._settings.sync()
+        self.wheelZoomInvertedChanged.emit()
+
+    wheelZoomInverted = Property(
+        bool, _get_wheel_zoom_inverted, _set_wheel_zoom_inverted, notify=wheelZoomInvertedChanged
+    )
+
+    # Read-only so QML can reset to these without hardcoding the values
+    # itself in more than one place (ThemeMenu's own Reset item and
+    # Main.qml's Ctrl+0 shortcut both need them).
+    defaultZoomLevel = Property(float, lambda self: DEFAULT_ZOOM_LEVEL, constant=True)
+    minZoomLevel = Property(float, lambda self: MIN_ZOOM_LEVEL, constant=True)
+    maxZoomLevel = Property(float, lambda self: MAX_ZOOM_LEVEL, constant=True)

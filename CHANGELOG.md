@@ -7,6 +7,51 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.45.0] - 2026-09-10
+
+### Changed
+- **Zoom (Ctrl+scroll/Ctrl+=/Ctrl+-/Ctrl+0) is now generic, host-owned
+  window state, not a plugin-specific feature.** Explicit request: it
+  "does not work" while the window list was showing, since zoom input
+  handling lived entirely inside `plugins/simple_task_list/qml/
+  TaskListContent.qml` — a `Shortcut`/`WheelHandler` pair that only
+  existed within the plugin's own (now sometimes-hidden) content, so it
+  had no effect while `YatasView` was active instead. Moved the input
+  handling to `Main.qml` (host chrome), which now owns Ctrl+scroll/
+  Ctrl+=/Ctrl+-/Ctrl+0 unconditionally, regardless of what's currently
+  showing — "it is possible that in the future more global buttons will
+  be added and zoom in/out functionality to their content will be
+  expected", so this needed to be a real host-level mechanism, not
+  something bolted onto one plugin.
+- New `zoomLevel`/`wheelZoomInverted` properties on `yata-src/settings.py`'s
+  host-owned `AppSettings` (persisted per-window, default `zoomLevel`
+  `1.0` — "zoom level should be 1 per window", explicit request) — this
+  is the formal host↔plugin zoom API: a plugin reads `hostSettings.
+  zoomLevel` off the same globally-shared context property `hostSettings.
+  borderColor` already used, and decides entirely on its own what to do
+  with it. `plugin_api.py`'s own module docstring now documents this
+  explicitly, since it's contract-level even though the actual channel is
+  a QML context property rather than a new `PluginContent` field.
+  `plugins/simple_task_list/settings.py`'s `TaskListSettings` no longer
+  has `fontScale`/`wheelZoomInverted` at all — `ThemeImpl.qml`'s
+  `taskFontPixelSize` now reads `hostSettings.zoomLevel` directly, the
+  plugin's own choice to apply it to its font size. `ThemeMenu.qml`'s
+  Reset item and "Switch zoom direction" toggle rebind to the same
+  host-owned properties, no UI relocation needed (host settings are
+  already reachable from any plugin's own QML). No migration of existing
+  per-window zoom preferences off the old plugin-owned value — zoom
+  simply starts fresh at the new default for existing windows going
+  forward, a deliberate simplification.
+
+### Fixed
+- Verified live: Ctrl+=, Ctrl+0, and Ctrl+wheel all correctly change
+  `hostSettings.zoomLevel` whether the plugin's own content or the host's
+  `YatasView` is currently showing, `wheelZoomInverted` correctly flips
+  scroll direction, and the plugin's own font size genuinely reflects the
+  host-provided value end to end. New `tests/test_zoom.py`. Fixed
+  `scripts/capture_screenshots.py`'s `_build_window()`, which still set
+  the old plugin-owned `fontScale`/`wheelZoomInverted` fields.
+
 ## [0.44.3] - 2026-09-10
 
 ### Fixed

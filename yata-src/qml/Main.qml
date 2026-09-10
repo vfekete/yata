@@ -195,6 +195,28 @@ Window {
         return "unlocked"
     }
 
+    // Zoom (Ctrl+=/Ctrl+-/Ctrl+0) — host-owned and generic, not tied to
+    // whatever plugin this window happens to be running: it works
+    // regardless of whether the plugin's own content or the host's own
+    // YatasView is currently showing, since Shortcut items key off the
+    // Window's active focus, not any one visible Item. Was plugin-owned
+    // (simple_task_list's own TaskListContent.qml) before this follow-up —
+    // see yata-src/settings.py's own docstring for the host↔plugin zoom
+    // API this now drives (hostSettings.zoomLevel, read back by whichever
+    // plugin's Theme cares to use it).
+    Shortcut {
+        sequences: [StandardKey.ZoomIn]
+        onActivated: hostSettings.zoomLevel = Math.min(hostSettings.zoomLevel + 0.1, hostSettings.maxZoomLevel)
+    }
+    Shortcut {
+        sequences: [StandardKey.ZoomOut]
+        onActivated: hostSettings.zoomLevel = Math.max(hostSettings.zoomLevel - 0.1, hostSettings.minZoomLevel)
+    }
+    Shortcut {
+        sequence: "Ctrl+0"
+        onActivated: hostSettings.zoomLevel = hostSettings.defaultZoomLevel
+    }
+
     // Content wrapper: opacity applied here keeps popup menus (which render
     // in the Window Overlay above this Item) always at full opacity.
     // windowOpacity is plugin-owned (appSettings.opacityPercent) — read
@@ -675,6 +697,33 @@ Window {
                 onClicked: root.yatasActive = !root.yatasActive
                 ToolTip.visible: containsMouse
                 ToolTip.text: qsTr("Manage windows")
+            }
+        }
+
+        // Ctrl+Wheel zoom interceptor — host-owned and generic (see the
+        // Shortcut items above for why). Item wrapper (not anchors
+        // directly on WheelHandler, which isn't a visual Item and has no
+        // such property) covering the whole window, declared last
+        // (topmost) so it sees Ctrl+Wheel before either the plugin's own
+        // ListView/Flickable or yatasView's own ListView could consume it
+        // for scrolling. Normal (no-modifier) wheel events aren't matched
+        // by acceptedModifiers and propagate through to whichever of
+        // those is actually showing, untouched.
+        Item {
+            anchors.fill: parent
+
+            WheelHandler {
+                acceptedModifiers: Qt.ControlModifier
+                onWheel: (event) => {
+                    event.accepted = true
+                    var scrollingUp = event.angleDelta.y > 0
+                    // Default (not inverted): scroll up → zoom in, scroll down → zoom out.
+                    var zoomIn = hostSettings.wheelZoomInverted ? !scrollingUp : scrollingUp
+                    if (zoomIn)
+                        hostSettings.zoomLevel = Math.min(hostSettings.zoomLevel + 0.1, hostSettings.maxZoomLevel)
+                    else
+                        hostSettings.zoomLevel = Math.max(hostSettings.zoomLevel - 0.1, hostSettings.minZoomLevel)
+                }
             }
         }
     }

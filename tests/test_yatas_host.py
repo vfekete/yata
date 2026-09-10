@@ -222,12 +222,12 @@ def test_add_window_button_in_yatas_view_clones_theme(yata_window):
         host_settings.y = int(caller_state["y"])
         host_settings.width = int(caller_state["width"])
         host_settings.height = int(caller_state["height"])
+        host_settings.zoomLevel = float(caller_state["zoomLevel"])
+        host_settings.wheelZoomInverted = bool(caller_state["wheelZoomInverted"])
         new_plugin_settings = plugin_content.context_properties["appSettings"]
         new_plugin_settings.themeMode = caller_state["themeMode"]
         new_plugin_settings.themeTint = caller_state["themeTint"]
         new_plugin_settings.opacityPercent = int(caller_state["opacityPercent"])
-        new_plugin_settings.fontScale = float(caller_state["fontScale"])
-        new_plugin_settings.wheelZoomInverted = bool(caller_state["wheelZoomInverted"])
         return _make_window(
             engine, icon_provider, window_manager, QIcon(),
             new_window_id, plugin_content, host_settings,

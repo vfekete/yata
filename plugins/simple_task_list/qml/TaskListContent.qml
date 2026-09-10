@@ -66,41 +66,11 @@ Item {
         showQuit: true
     }
 
-    Shortcut {
-        sequences: [StandardKey.ZoomIn]
-        onActivated: appSettings.fontScale = Math.min(appSettings.fontScale + 0.1, appSettings.maxFontScale)
-    }
-    Shortcut {
-        sequences: [StandardKey.ZoomOut]
-        onActivated: appSettings.fontScale = Math.max(appSettings.fontScale - 0.1, appSettings.minFontScale)
-    }
-    Shortcut {
-        sequence: "Ctrl+0"
-        onActivated: appSettings.fontScale = appSettings.defaultFontScale
-    }
-
-    // Ctrl+Wheel zoom interceptor. Sits above all content (z:999) so its
-    // WheelHandler sees Ctrl+Wheel events before the ListView's Flickable
-    // can consume them for scrolling. Normal (no-modifier) wheel events are
-    // not matched by acceptedModifiers and propagate to the ListView as usual.
-    Item {
-        z: 999
-        anchors.fill: parent
-
-        WheelHandler {
-            acceptedModifiers: Qt.ControlModifier
-            onWheel: (event) => {
-                event.accepted = true
-                var scrollingUp = event.angleDelta.y > 0
-                // Default (not inverted): scroll up → zoom in, scroll down → zoom out.
-                var zoomIn = appSettings.wheelZoomInverted ? !scrollingUp : scrollingUp
-                if (zoomIn)
-                    appSettings.fontScale = Math.min(appSettings.fontScale + 0.1, appSettings.maxFontScale)
-                else
-                    appSettings.fontScale = Math.max(appSettings.fontScale - 0.1, appSettings.minFontScale)
-            }
-        }
-    }
+    // Zoom (Ctrl+scroll/Ctrl+=/Ctrl+-/Ctrl+0) is handled once, generically,
+    // in Main.qml now — not per-plugin, and not only while this content is
+    // showing (it must also work while the host's own YatasView is
+    // active). See yata-src/settings.py's own docstring for the
+    // host-owned zoomLevel this plugin reads back via hostSettings.
 
     // True while another window's task drag is hovering over THIS window —
     // computed independently of Main.qml's own copy (used there for its

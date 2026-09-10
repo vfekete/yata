@@ -55,7 +55,10 @@ Menu {
         font.capitalization: Font.AllUppercase
         onTriggered: {
             appSettings.opacityPercent = appSettings.defaultOpacityPercent
-            appSettings.fontScale = appSettings.defaultFontScale
+            // Zoom is host-owned now (generic, not plugin-specific — see
+            // yata-src/settings.py's own docstring), reached the same way
+            // borderColor already is.
+            hostSettings.zoomLevel = hostSettings.defaultZoomLevel
             // r-4.md: RESET also clears any custom border/tag-name color
             // back to following the theme.
             hostSettings.borderColor = ""
@@ -65,8 +68,8 @@ Menu {
     MenuItem {
         text: qsTr("Switch zoom direction")
         checkable: true
-        checked: appSettings.wheelZoomInverted
-        onTriggered: appSettings.wheelZoomInverted = checked
+        checked: hostSettings.wheelZoomInverted
+        onTriggered: hostSettings.wheelZoomInverted = checked
         padding: 10
     }
 

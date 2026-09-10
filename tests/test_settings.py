@@ -2,6 +2,8 @@ from PySide6.QtCore import QSettings
 
 from settings import (
     LOCK_STATES,
+    MAX_ZOOM_LEVEL,
+    MIN_ZOOM_LEVEL,
     AppSettings,
     first_run_geometry,
     monitor_signature,
@@ -200,3 +202,48 @@ def test_settings_persist_to_disk_without_explicit_caller_sync(tmp_path):
 
     assert ini_path.exists()
     assert "borderColor=#ff8800" in ini_path.read_text()
+
+
+def test_zoom_level_defaults_to_1_and_persists(tmp_path):
+    """Zoom moved here from the plugin's own settings in a follow-up to
+    r-9.md step 4 — it's generic per-window host state now (Ctrl+scroll/
+    Ctrl+=/Ctrl+-/Ctrl+0, handled once in Main.qml regardless of which
+    plugin is running), not plugin-owned. "Zoom level should be 1 per
+    window" (explicit request)."""
+    backing = ini_settings(tmp_path)
+    s = AppSettings(settings=backing)
+
+    assert s.zoomLevel == 1.0
+    assert s.defaultZoomLevel == 1.0
+
+    s.zoomLevel = 1.5
+    assert s.zoomLevel == 1.5
+
+    s2 = AppSettings(settings=backing)
+    assert s2.zoomLevel == 1.5
+
+
+def test_zoom_level_clamps_to_min_and_max(tmp_path):
+    s = AppSettings(settings=ini_settings(tmp_path))
+
+    s.zoomLevel = MAX_ZOOM_LEVEL + 100.0
+    assert s.zoomLevel == MAX_ZOOM_LEVEL
+
+    s.zoomLevel = MIN_ZOOM_LEVEL - 0.1
+    assert s.zoomLevel == MIN_ZOOM_LEVEL
+
+    assert s.minZoomLevel == MIN_ZOOM_LEVEL
+    assert s.maxZoomLevel == MAX_ZOOM_LEVEL
+
+
+def test_wheel_zoom_inverted_defaults_false_and_persists(tmp_path):
+    backing = ini_settings(tmp_path)
+    s = AppSettings(settings=backing)
+
+    assert s.wheelZoomInverted is False
+
+    s.wheelZoomInverted = True
+    assert s.wheelZoomInverted is True
+
+    s2 = AppSettings(settings=backing)
+    assert s2.wheelZoomInverted is True

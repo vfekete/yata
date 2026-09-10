@@ -39,11 +39,15 @@ QtObject {
     readonly property bool dark: appSettings.themeMode === "dark"
     readonly property string tintName: appSettings.themeTint
 
-    // Base task text size, scaled by the user's Ctrl+/Ctrl- font zoom
-    // (appSettings.fontScale). The day-section header (1.5x this) and the
-    // status/hover icons (2x this) size themselves off this same value, so
-    // zooming scales the whole task list together.
-    readonly property int taskFontPixelSize: Math.round(14 * appSettings.fontScale)
+    // Base task text size, scaled by the host's own generic zoom level
+    // (hostSettings.zoomLevel — Ctrl+scroll/Ctrl+=/Ctrl+-/Ctrl+0, handled
+    // once in Main.qml regardless of which plugin is running; this
+    // plugin just decides to apply it to its own font size, which is
+    // entirely its own choice, not something the host mandates). The
+    // day-section header (1.5x this) and the status/hover icons (2x this)
+    // size themselves off this same value, so zooming scales the whole
+    // task list together.
+    readonly property int taskFontPixelSize: Math.round(14 * hostSettings.zoomLevel)
 
     readonly property var palettes: ({
         "none": {

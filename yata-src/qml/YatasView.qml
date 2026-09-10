@@ -141,8 +141,11 @@ Item {
                         themeMode: appSettings.themeMode,
                         themeTint: appSettings.themeTint,
                         opacityPercent: appSettings.opacityPercent,
-                        fontScale: appSettings.fontScale,
-                        wheelZoomInverted: appSettings.wheelZoomInverted,
+                        // Zoom is host-owned now (yata-src/settings.py) —
+                        // cloned from hostSettings, not the plugin's own
+                        // appSettings, same as borderColor already is.
+                        zoomLevel: hostSettings.zoomLevel,
+                        wheelZoomInverted: hostSettings.wheelZoomInverted,
                         x: root.Window.window.x,
                         y: root.Window.window.y,
                         width: root.Window.window.width,

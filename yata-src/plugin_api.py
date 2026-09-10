@@ -3,6 +3,19 @@
 Plugins are statically registered, not dynamically loaded — see
 plugins_registry.py. This module only defines the shape both sides agree
 on; nothing here talks to Qt/QML directly.
+
+Not every part of the contract is a field on the dataclasses below — some
+of it is a QML-level context property every window already shares between
+host and plugin. The generic zoom API is one of these: the host owns
+Ctrl+scroll/Ctrl+=/Ctrl+-/Ctrl+0 input handling and a per-window
+`hostSettings.zoomLevel` float (see yata-src/settings.py's own docstring),
+reachable from any plugin's own QML the same way `hostSettings.borderColor`
+already is. A plugin decides entirely on its own whether and how to apply
+it — simple_task_list multiplies its own base font size by it
+(ThemeImpl.qml); a future plugin could ignore it, or use it for something
+else entirely. This is deliberately generic rather than task-list-specific,
+since more host-level, cross-plugin controls (zoom included) are expected
+to keep landing here as this plugin architecture grows.
 """
 from __future__ import annotations
 

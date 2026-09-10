@@ -39,7 +39,7 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.44.3"
+APP_VERSION = "0.45.0"
 
 # Nuitka injects a module-level "__compiled__" global into every compiled
 # module -- this is the standard way to tell a packaged build.sh binary
@@ -497,26 +497,29 @@ def main() -> int:
         # Used for windows created via the YATAS view's ADD button — clones
         # the creating window's theme (explicit requirement: "new window has
         # same theme as the actual window") and a non-overlapping position
-        # WindowManager already computed into caller_state's x/y. Theme/zoom
+        # WindowManager already computed into caller_state's x/y. Theme
         # cloning lands on the new plugin content's own "appSettings" (not
         # this function's own host app_settings — those keys are plugin-
         # owned, see settings.py's module docstring), read back generically
         # by name since main.py stays plugin-agnostic about what object
-        # that actually is.
+        # that actually is. zoomLevel/wheelZoomInverted clone onto the
+        # HOST app_settings instead — zoom is generic host-owned window
+        # state now, not plugin-owned (see yata-src/settings.py's own
+        # docstring).
         legacy_qsettings = _open_settings(window_id)
         app_settings = AppSettings(legacy_qsettings)
         app_settings.width = int(caller_state["width"])
         app_settings.height = int(caller_state["height"])
         app_settings.x = int(caller_state["x"])
         app_settings.y = int(caller_state["y"])
+        app_settings.zoomLevel = float(caller_state["zoomLevel"])
+        app_settings.wheelZoomInverted = bool(caller_state["wheelZoomInverted"])
         plugin_content = _plugin_content_for(window_id, legacy_qsettings)
         plugin_settings = plugin_content.context_properties.get("appSettings")
         if plugin_settings is not None:
             plugin_settings.themeMode = caller_state["themeMode"]
             plugin_settings.themeTint = caller_state["themeTint"]
             plugin_settings.opacityPercent = int(caller_state["opacityPercent"])
-            plugin_settings.fontScale = float(caller_state["fontScale"])
-            plugin_settings.wheelZoomInverted = bool(caller_state["wheelZoomInverted"])
         return _make_window(
             engine, icon_provider, window_manager, app_icon,
             window_id, plugin_content, app_settings,

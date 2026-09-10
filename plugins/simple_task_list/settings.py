@@ -1,11 +1,20 @@
-"""Plugin-owned theme/zoom settings (r-9.md step 4).
+"""Plugin-owned theme/opacity settings (r-9.md step 4).
 
 Split out of the host's AppSettings (yata-src/settings.py), which now only
-keeps host-owned keys (window geometry, borderColor, lockState). These five
-properties were always content-facing (the task list's own look and zoom),
-so they move here — backed by plugin_data.py's versioned envelope in their
+keeps host-owned keys (window geometry, borderColor, lockState, zoomLevel,
+wheelZoomInverted). These three properties are genuinely content-facing
+(a different plugin could have no concept of "theme"/"tint" at all), so
+they stay here — backed by plugin_data.py's versioned envelope in their
 own file rather than the shared per-window QSettings .conf, with a
 one-time migration off the legacy QSettings keys for existing installs.
+
+zoom (fontScale/wheelZoomInverted) moved to yata-src/settings.py's
+AppSettings in a later follow-up: zoom is generic per-window host state,
+not plugin-owned — see that module's own docstring. This class no longer
+reads or writes those two keys at all; an existing plugin-state.json with
+old fontScale/wheelZoomInverted entries simply leaves them as harmless,
+unread orphaned data (same "skip, don't delete" philosophy plugin_data.py
+already applies to incompatible blocks).
 """
 from __future__ import annotations
 
@@ -28,27 +37,6 @@ DEFAULT_OPACITY_PERCENT = 65
 MIN_OPACITY_PERCENT = 5
 MAX_OPACITY_PERCENT = 100
 
-DEFAULT_FONT_SCALE = 1.0
-MIN_FONT_SCALE = 0.5
-# Not literally unbounded — Qt's font.pixelSize is still a real int under
-# the hood, and an astronomically large value risks overflow/undefined
-# behavior there. 200x (2800px base task text at the default 14px) is
-# effectively "as far as you'd ever actually zoom" while staying nowhere
-# near that ceiling.
-MAX_FONT_SCALE = 200.0
-
-
-def _read_bool(s: QSettings, key: str, default: bool) -> bool:
-    """Read a boolean from QSettings, correctly handling stored 'false'
-    strings. Only used for the legacy-QSettings migration below — see
-    yata-src/settings.py's own copy of this same helper."""
-    v = s.value(key, default)
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, str):
-        return v.lower() not in ("false", "0", "no")
-    return bool(v)
-
 
 class TaskListSettings(QObject):
     """Backed by plugin_data.py's versioned envelope; QML binds to these
@@ -58,8 +46,6 @@ class TaskListSettings(QObject):
     themeModeChanged = Signal()
     themeTintChanged = Signal()
     opacityPercentChanged = Signal()
-    fontScaleChanged = Signal()
-    wheelZoomInvertedChanged = Signal()
 
     def __init__(self, path: str, legacy_settings: QSettings | None = None, parent=None):
         super().__init__(parent)
@@ -74,8 +60,6 @@ class TaskListSettings(QObject):
         tint = data.get("themeTint", "none")
         self._theme_tint = tint if tint in THEME_TINTS else "none"
         self._opacity_percent = self._clamp_opacity(data.get("opacityPercent", DEFAULT_OPACITY_PERCENT))
-        self._font_scale = self._clamp_font_scale(data.get("fontScale", DEFAULT_FONT_SCALE))
-        self._wheel_zoom_inverted = bool(data.get("wheelZoomInverted", False))
 
         if not already_on_disk:
             # Either truly first-run, or just migrated above — either way,
@@ -96,25 +80,17 @@ class TaskListSettings(QObject):
             "themeMode": legacy_settings.value("theme/mode", "dark"),
             "themeTint": legacy_settings.value("theme/tint", "none"),
             "opacityPercent": legacy_settings.value("theme/opacityPercent", DEFAULT_OPACITY_PERCENT),
-            "fontScale": legacy_settings.value("theme/fontScale", DEFAULT_FONT_SCALE),
-            "wheelZoomInverted": _read_bool(legacy_settings, "theme/wheelZoomInverted", False),
         }
 
     @staticmethod
     def _clamp_opacity(value) -> int:
         return max(MIN_OPACITY_PERCENT, min(MAX_OPACITY_PERCENT, int(round(float(value)))))
 
-    @staticmethod
-    def _clamp_font_scale(value) -> float:
-        return max(MIN_FONT_SCALE, min(MAX_FONT_SCALE, float(value)))
-
     def _save(self) -> None:
         plugin_data.write_block(self._path, PLUGIN_ID, MODEL_VERSION, API_VERSION, {
             "themeMode": self._theme_mode,
             "themeTint": self._theme_tint,
             "opacityPercent": self._opacity_percent,
-            "fontScale": self._font_scale,
-            "wheelZoomInverted": self._wheel_zoom_inverted,
         })
 
     def _get_theme_mode(self) -> str:
@@ -156,38 +132,6 @@ class TaskListSettings(QObject):
         int, _get_opacity_percent, _set_opacity_percent, notify=opacityPercentChanged
     )
 
-    def _get_font_scale(self) -> float:
-        return self._font_scale
-
-    def _set_font_scale(self, value: float):
-        value = self._clamp_font_scale(value)
-        if value == self._font_scale:
-            return
-        self._font_scale = value
-        self._save()
-        self.fontScaleChanged.emit()
-
-    fontScale = Property(float, _get_font_scale, _set_font_scale, notify=fontScaleChanged)
-
-    def _get_wheel_zoom_inverted(self) -> bool:
-        return self._wheel_zoom_inverted
-
-    def _set_wheel_zoom_inverted(self, value: bool):
-        value = bool(value)
-        if value == self._wheel_zoom_inverted:
-            return
-        self._wheel_zoom_inverted = value
-        self._save()
-        self.wheelZoomInvertedChanged.emit()
-
-    wheelZoomInverted = Property(
-        bool, _get_wheel_zoom_inverted, _set_wheel_zoom_inverted, notify=wheelZoomInvertedChanged
-    )
-
-    # Read-only so QML can reset to these without hardcoding the values
-    # itself in more than one place (the RESET button and the Ctrl+0
-    # shortcut both need them).
+    # Read-only so QML can reset to this without hardcoding the value
+    # itself in more than one place (ThemeMenu's own Reset item).
     defaultOpacityPercent = Property(int, lambda self: DEFAULT_OPACITY_PERCENT, constant=True)
-    defaultFontScale = Property(float, lambda self: DEFAULT_FONT_SCALE, constant=True)
-    minFontScale = Property(float, lambda self: MIN_FONT_SCALE, constant=True)
-    maxFontScale = Property(float, lambda self: MAX_FONT_SCALE, constant=True)

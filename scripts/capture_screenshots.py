@@ -292,11 +292,15 @@ def _build_window(engine, registry, manager, icon_provider, app_icon, *, tag, th
     uses, so it always has a correctly-populated windowManager/windowId/
     Theme context. Returns (window_id, QQuickWindow, TaskListModel).
 
-    r-9.md step 4: theme/opacity/font-scale/wheel-zoom are plugin-owned
-    settings now (plugins/simple_task_list/settings.py's TaskListSettings,
-    reached via the plugin's own "appSettings" content property), not the
-    host's settings.AppSettings — same split main.py's own window_factory/
-    restore_factory apply. Window geometry/borderColor stay host-owned.
+    r-9.md step 4: theme/opacity are plugin-owned settings
+    (plugins/simple_task_list/settings.py's TaskListSettings, reached via
+    the plugin's own "appSettings" content property), not the host's
+    settings.AppSettings — same split main.py's own window_factory/
+    restore_factory apply. Window geometry/borderColor stay host-owned, as
+    does zoom (font_scale/wheel_zoom_inverted params, kept under their
+    original names here for callers/MULTIWINDOW_BACK/FRONT — zoom moved
+    from plugin-owned to host-owned in a later follow-up, see
+    yata-src/settings.py's own docstring).
     """
     import plugins_registry
     from main import _make_window, _open_settings
@@ -314,14 +318,14 @@ def _build_window(engine, registry, manager, icon_provider, app_icon, *, tag, th
     plugin_content.context_properties["appSettings"].themeMode = theme_mode
     plugin_content.context_properties["appSettings"].themeTint = theme_tint
     plugin_content.context_properties["appSettings"].opacityPercent = opacity
-    plugin_content.context_properties["appSettings"].fontScale = font_scale
-    plugin_content.context_properties["appSettings"].wheelZoomInverted = wheel_zoom_inverted
 
     settings = AppSettings(legacy_qsettings)
     settings.width = width
     settings.height = height
     settings.x = x
     settings.y = y
+    settings.zoomLevel = font_scale
+    settings.wheelZoomInverted = wheel_zoom_inverted
     settings.borderColor = border_color
 
     win = _make_window(engine, icon_provider, manager, app_icon, window_id, plugin_content, settings)
