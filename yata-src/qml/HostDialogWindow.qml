@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Window
 
@@ -113,14 +114,68 @@ Window {
                 Layout.topMargin: 4
                 spacing: 8
 
+                // Custom background/contentItem, not the plain QtQuick.
+                // Controls default look (which is styled for a light
+                // "Basic" theme, not this dark chrome panel) — same
+                // Rectangle+Text+hover-glow idiom the plugin's own toolbar
+                // buttons and Main.qml's own icon boxes already use.
                 Button {
+                    id: cancelBtn
                     text: root.cancelText
                     visible: root.showCancel
                     onClicked: root.reject()
+                    background: Rectangle {
+                        radius: 4
+                        color: root.chromeBoxColor(cancelBtn.hovered)
+                        layer.enabled: cancelBtn.hovered
+                        layer.effect: MultiEffect {
+                            shadowEnabled: true
+                            shadowColor: root.chromeAccentColor
+                            shadowBlur: 1.0
+                            shadowHorizontalOffset: 0
+                            shadowVerticalOffset: 0
+                            shadowOpacity: 1.0
+                            shadowScale: 1.05
+                        }
+                    }
+                    contentItem: Text {
+                        text: cancelBtn.text
+                        color: root.chromeTextColor
+                        font.family: root.chromeFontFamily
+                        font.pixelSize: root.chromeFontPixelSize
+                        font.capitalization: Font.AllUppercase
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
                 Button {
+                    id: okBtn
                     text: root.okText
                     onClicked: root.accept()
+                    background: Rectangle {
+                        radius: 4
+                        color: root.chromeBoxColor(okBtn.hovered)
+                        layer.enabled: okBtn.hovered
+                        layer.effect: MultiEffect {
+                            shadowEnabled: true
+                            shadowColor: root.chromeAccentColor
+                            shadowBlur: 1.0
+                            shadowHorizontalOffset: 0
+                            shadowVerticalOffset: 0
+                            shadowOpacity: 1.0
+                            shadowScale: 1.05
+                        }
+                    }
+                    contentItem: Text {
+                        text: okBtn.text
+                        font.bold: true
+                        color: root.chromeTextColor
+                        font.family: root.chromeFontFamily
+                        font.pixelSize: root.chromeFontPixelSize
+                        font.capitalization: Font.AllUppercase
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
         }

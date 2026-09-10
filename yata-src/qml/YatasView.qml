@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 import QtQuick.Window
 
 // The window-management view (r-3.md's original "YATAS" feature, r-9.md's
@@ -34,9 +35,6 @@ Item {
     readonly property bool contentHovered: hoverHandler.hovered
     HoverHandler { id: hoverHandler }
 
-    property bool showActive: true
-    property bool showDeleted: false
-    property string sortMode: ""
     readonly property string searchText: searchField.text
 
     property var allWindows: []
@@ -53,52 +51,19 @@ Item {
     // screen and no YatasView left to reopen anything from.
     readonly property int openWindowCount: root.allWindows.filter(function(w) { return w.open }).length
 
+    // Just the list of windows, search-filtered — no separate visibility/
+    // sort controls (explicit request: "no reason for ACTIVE/DELETE/SORT
+    // actions, only list of windows"). Both active and deleted windows
+    // always show together, in registry order; each row's own button set
+    // (delete vs. recreate/purge, see YatasRow.qml) already makes clear
+    // which category a row is in.
     readonly property var filteredWindows: {
         var needle = root.searchText.trim().toLowerCase()
-        var items = root.allWindows.filter(function(w) {
-            if (w.deleted ? !root.showDeleted : !root.showActive)
-                return false
-            if (needle.length > 0 && String(w.tag).toLowerCase().indexOf(needle) === -1)
-                return false
-            return true
+        if (needle.length === 0)
+            return root.allWindows
+        return root.allWindows.filter(function(w) {
+            return String(w.tag).toLowerCase().indexOf(needle) !== -1
         })
-        // Stable sort — brings the selected category to the top while
-        // leaving each category's own relative order (registry order)
-        // unchanged otherwise.
-        if (root.sortMode === "active" || root.sortMode === "deleted") {
-            var wantDeleted = root.sortMode === "deleted"
-            items = items.slice().sort(function(a, b) {
-                return (a.deleted === wantDeleted ? 0 : 1) - (b.deleted === wantDeleted ? 0 : 1)
-            })
-        }
-        return items
-    }
-
-    // Small reusable toggle pill for the Active/Deleted visibility+sort
-    // rows below — same look as the plugin's own FilterButton.qml (glow on
-    // hover/active) but chrome-styled, not Theme-styled.
-    component ChromeToggle: Item {
-        id: toggle
-        property string label: ""
-        property bool active: false
-        signal toggled(bool newChecked)
-
-        implicitWidth: toggleText.implicitWidth + 8
-        implicitHeight: toggleText.implicitHeight + 2
-
-        HoverHandler { id: toggleHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: toggle.toggled(!toggle.active) }
-
-        Text {
-            id: toggleText
-            anchors.centerIn: parent
-            text: toggle.label
-            font.family: root.chromeFontFamily
-            font.pixelSize: Math.round(root.chromeFontPixelSize * 0.75)
-            font.capitalization: Font.AllUppercase
-            color: toggleHover.hovered ? root.chromeAccentColor
-                   : (toggle.active ? root.chromeAccentColor : root.chromeMutedTextColor)
-        }
     }
 
     ColumnLayout {
@@ -117,6 +82,8 @@ Item {
             // window's own plugin content settings; reachable from any
             // depth in this window's tree since it's a plain context
             // property, not something only the plugin's own QML can see.
+            // Same "Add"/bold/all-caps look as the plugin's own toolbar
+            // ADD button, for visual consistency across the boundary.
             Rectangle {
                 id: addBtn
                 radius: 4
@@ -124,13 +91,26 @@ Item {
                 implicitWidth: addText.implicitWidth + 16
                 implicitHeight: addText.implicitHeight + 8
 
+                layer.enabled: addHover.hovered
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: root.chromeAccentColor
+                    shadowBlur: 1.0
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 0
+                    shadowOpacity: 1.0
+                    shadowScale: 1.05
+                }
+
                 Text {
                     id: addText
                     anchors.centerIn: parent
-                    text: qsTr("+ New Window")
-                    color: root.chromeTextColor
+                    text: qsTr("Add")
+                    font.bold: true
                     font.family: root.chromeFontFamily
                     font.pixelSize: root.chromeFontPixelSize
+                    font.capitalization: Font.AllUppercase
+                    color: root.chromeTextColor
                 }
 
                 HoverHandler { id: addHover; cursorShape: Qt.PointingHandCursor }
@@ -153,6 +133,8 @@ Item {
                 id: searchField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Search windows")
+                placeholderTextColor: root.chromeMutedTextColor
+                leftPadding: searchIcon.width + 12
                 color: root.chromeTextColor
                 font.family: root.chromeFontFamily
                 font.pixelSize: root.chromeFontPixelSize
@@ -160,38 +142,23 @@ Item {
                     radius: 4
                     color: root.chromeBoxColor(false)
                 }
-            }
-        }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 18
-
-            RowLayout {
-                spacing: 8
-                ChromeToggle {
-                    label: qsTr("Active")
-                    active: root.showActive
-                    onToggled: (checked) => root.showActive = checked
-                }
-                ChromeToggle {
-                    label: qsTr("Deleted")
-                    active: root.showDeleted
-                    onToggled: (checked) => root.showDeleted = checked
-                }
-            }
-
-            RowLayout {
-                spacing: 8
-                ChromeToggle {
-                    label: qsTr("Sort active first")
-                    active: root.sortMode === "active"
-                    onToggled: (checked) => root.sortMode = checked ? "active" : ""
-                }
-                ChromeToggle {
-                    label: qsTr("Sort deleted first")
-                    active: root.sortMode === "deleted"
-                    onToggled: (checked) => root.sortMode = checked ? "deleted" : ""
+                // Same static "lupe" convention the plugin's own Toolbar
+                // search field uses, just chrome-styled/iconProvider-
+                // sourced directly rather than via the plugin's
+                // IconIndicator.qml (which sizes itself off the plugin's
+                // own, zoomable Theme.taskFontPixelSize — not appropriate
+                // for host chrome).
+                Image {
+                    id: searchIcon
+                    source: iconProvider.coloredSvgUri("search", root.chromeMutedTextColor.toString())
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    height: Math.round(root.chromeFontPixelSize * 1.15)
+                    width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
+                    anchors.left: parent.left
+                    anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
                 }
             }
         }
@@ -232,7 +199,7 @@ Item {
         Text {
             Layout.alignment: Qt.AlignHCenter
             visible: root.filteredWindows.length === 0
-            text: root.allWindows.length === 0 ? qsTr("No windows") : qsTr("No windows match your search or filters")
+            text: root.allWindows.length === 0 ? qsTr("No windows") : qsTr("No windows match your search")
             color: root.chromeMutedTextColor
             font.family: root.chromeFontFamily
             font.pixelSize: root.chromeFontPixelSize

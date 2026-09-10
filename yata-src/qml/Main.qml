@@ -222,14 +222,19 @@ Window {
             // The window itself stays fully transparent (per spec); this
             // wash is what actually paints the content panel's background,
             // translucent so the window still reads as "transparent"
-            // rather than opaque. Still reads the plugin's own
-            // Theme.contentBackground — this is the content panel's own
-            // themed background, not one of the four host-chrome elements
-            // this file otherwise keeps independent of the plugin's theme.
+            // rather than opaque. Reads the plugin's own Theme.
+            // contentBackground while the plugin's content is showing —
+            // this is the content panel's own themed background, not one
+            // of the host-chrome elements this file otherwise keeps
+            // independent of the plugin's theme — but falls back to
+            // "transparent" (exactly the "none" tint's own dark-mode
+            // value) while yatasView is showing instead: window
+            // management must look the same regardless of the plugin's
+            // theme/tint, same as every other host-chrome element.
             Rectangle {
                 anchors.fill: parent
                 radius: 6
-                color: Theme.contentBackground
+                color: root.yatasActive ? "transparent" : Theme.contentBackground
             }
 
             // Same anchors/margins the old inline "contentColumn" ColumnLayout
@@ -619,7 +624,11 @@ Window {
                 font.bold: true
                 font.family: root.chromeFontFamily
                 font.pixelSize: Math.round(yatasIconBg.height * 0.6)
-                color: root.chromeTextColor
+                // Border color when off (matches the tag label/lock/close
+                // icons' own accent), transparent once active — the lit
+                // accent-colored box (above) is the "on" indicator, the
+                // glyph doesn't need to fight it for attention too.
+                color: root.yatasActive ? "transparent" : root.chromeAccentColor
             }
 
             MouseArea {

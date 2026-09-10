@@ -190,9 +190,13 @@ def test_add_window_button_in_yatas_view_clones_theme(yata_window):
     window.setProperty("yatasActive", True)
     app.processEvents()
 
+    # Scoped to the YatasView subtree specifically -- the plugin's own
+    # (now hidden, not destroyed) ADD button also has a Text reading
+    # "Add", so searching the whole window would be ambiguous.
+    yatas_view = _find_by_class_prefix(window.contentItem(), "YatasView")[0]
     add_text = next(
-        t for t in _find_by_class_prefix(window.contentItem(), "QQuickText")
-        if t.property("text") == "+ New Window"
+        t for t in _find_by_class_prefix(yatas_view, "QQuickText")
+        if t.property("text") == "Add"
     )
     before_count = window_manager.openWindowCount
 
@@ -261,9 +265,8 @@ def test_delete_recreate_purge_round_trip(yata_window):
 
     assert next(e for e in registry.list() if e["id"] == second_id)["deleted"] is True
 
-    # The deleted row is filtered out of view by default (showDeleted
-    # starts False) -- switch it on to see/interact with it.
-    yatas_view.setProperty("showDeleted", True)
+    # Deleted windows show right alongside active ones now (no separate
+    # visibility toggle) -- just needs a refresh to pick up the new state.
     yatas_view.refresh()
     app.processEvents()
     app.processEvents()

@@ -7,6 +7,42 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.44.1] - 2026-09-10
+
+### Changed
+- **Follow-up polish on the new host-owned window-management view (0.44.0),
+  from live feedback after actually seeing it on screen:**
+  - The "Y" chrome icon's glyph was a distracting near-white — now the
+    icon uses the window's own border color (falling back to the same
+    default `#64748b` every other chrome accent uses) when off, and goes
+    fully transparent when the view is active (the lit accent-colored box
+    itself is the "on" indicator, so the glyph doesn't need to compete
+    with it).
+  - Removed the Active/Deleted visibility and sort-order controls
+    entirely — just the plain list of windows now, search included. Every
+    window (open, closed, or soft-deleted) shows together; each row's own
+    button set already makes clear which category it's in.
+  - "+ New Window" is now "Add" (bold, all-caps) — matching the plugin's
+    own toolbar ADD button's look, for consistency across the host/plugin
+    boundary.
+  - The search field gained the same static "lupe" (magnifying glass)
+    icon the plugin's own search field has, and the delete/purge
+    confirmation dialogs' OK/Cancel buttons — previously plain, unstyled
+    `QtQuick.Controls` buttons that stood out against the dark chrome
+    panel — now use the same Rectangle+Text+hover-glow styling as every
+    other chrome button. The content wash background behind the view no
+    longer follows whatever tint the plugin's own content happens to be
+    set to (a real, previously-unnoticed inconsistency: opening the
+    window list while a non-default plugin tint was active showed it
+    against that tint's own background) — it's fixed/transparent, the
+    same "none" tint default every other chrome element already commits
+    to regardless of plugin.
+  - Verified the "Y" icon's color-switch logic directly (live property
+    inspection, not just a screenshot) — confirmed correct even where an
+    offscreen screenshot couldn't reliably show the glow effect actually
+    rendering (a known, already-documented limitation of this project's
+    offscreen test rendering, not a functional issue).
+
 ## [0.44.0] - 2026-09-10
 
 ### Changed
