@@ -389,11 +389,19 @@ Window {
 
             // Also doubles as the window's drag-to-move handle, now that
             // the plugin's own Toolbar no longer spans host-owned space —
-            // its empty background used to serve that role.
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
-                onPressed: Window.window.startSystemMove()
+            // its empty background used to serve that role. A DragHandler
+            // (not a plain MouseArea.onPressed) deliberately: startSystemMove()
+            // hands the pointer grab to the window manager the instant it's
+            // called, so calling it unconditionally on every press (as a
+            // MouseArea would) ate the second click of the double-click
+            // above before Qt's own TapHandler ever saw it — confirmed live,
+            // double-click-to-rename silently stopped working the moment this
+            // drag handle was added. DragHandler only goes active once the
+            // press has actually moved past Qt's drag threshold, so a plain
+            // double-click (no movement in between) never triggers it at all.
+            DragHandler {
+                target: null
+                onActiveChanged: if (active) root.startSystemMove()
             }
         }
 

@@ -7,6 +7,26 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.42.1] - 2026-09-10
+
+### Fixed
+- **Double-click-to-rename on the window's tag label silently stopped
+  working**, a regression from 0.42.0's step 4 change that gave the tag
+  label a second job (drag-to-move handle, since the plugin's own Toolbar
+  no longer spans host-owned space). The new `MouseArea.onPressed:
+  Window.startSystemMove()` handed the pointer grab to the window manager
+  the instant the first click of a double-click landed, eating the second
+  click before the sibling `TapHandler.onDoubleTapped` ever saw it.
+  Confirmed live: the identical gesture renamed the tag correctly on the
+  pre-step-4 code, and failed the moment the drag handle was added.
+  Replaced the `MouseArea` with a `DragHandler` (`target: null`,
+  `onActiveChanged: if (active) root.startSystemMove()`) — Qt's own
+  recommended pattern for this exact coexistence, since a `DragHandler`
+  only goes active once the press has moved past Qt's drag threshold, so a
+  plain double-click (no movement in between) never triggers it. Added
+  `tests/test_tag_rename.py` (verified it fails against the pre-fix code
+  and passes after).
+
 ## [0.42.0] - 2026-09-10
 
 ### Changed
