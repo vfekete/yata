@@ -66,6 +66,34 @@ uv run --group build pyside6-deploy --init -f --name "$NAME" yata-src/main.py
 LOADER_ABS="$(pwd)/x-loader/x-loader"
 sed -i -E "s|^extra_args = (.*)|extra_args = \1 --include-data-files=${LOADER_ABS}=x-loader-loader|" yata-src/pysidedeploy.spec
 
+# pyside6-deploy's QML auto-detection (the spec's own "qml_files" line)
+# only finds files reachable via yata-src/qml/Main.qml's own static QML
+# imports -- a plugin's content, loaded at runtime through a Loader whose
+# source is a plain Python-computed QUrl string (see plugin_api.py's
+# PluginContent.qml_source), is invisible to that scan. Without this, the
+# packaged binary launches, then immediately fails with "No such file or
+# directory" the moment it tries to load the plugin's own QML (confirmed
+# live against an actual built binary before this was added) -- the .py
+# files DO get bundled correctly (Nuitka follows the static import graph
+# for those), only the .qml data files were missing. Bundled the same way
+# x-loader is above (--include-data-dir, Nuitka's recursive directory
+# equivalent of --include-data-files), one per registered plugin (not
+# hardcoded to simple_task_list) so a future plugin needs no build.sh
+# change here -- just qml_import_dir set on its own Plugin entry.
+PLUGIN_QML_ARGS="$(uv run python -c "
+import os, sys
+sys.path.insert(0, 'yata-src')
+import plugins_registry
+repo_root = os.getcwd()
+for p in plugins_registry.AVAILABLE_PLUGINS.values():
+    if p.qml_import_dir:
+        rel = os.path.relpath(p.qml_import_dir, repo_root)
+        print(f' --include-data-dir={p.qml_import_dir}={rel}', end='')
+")"
+if [ -n "$PLUGIN_QML_ARGS" ]; then
+    sed -i -E "s|^extra_args = (.*)|extra_args = \1${PLUGIN_QML_ARGS}|" yata-src/pysidedeploy.spec
+fi
+
 uv run --group build pyside6-deploy -c yata-src/pysidedeploy.spec -f --name "$NAME" yata-src/main.py
 
 mkdir -p dist

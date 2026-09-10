@@ -7,6 +7,31 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.43.2] - 2026-09-10
+
+### Fixed
+- **r-9.md step 6: the packaged standalone binary (`build.sh`) couldn't
+  actually launch** — `pyside6-deploy`'s QML auto-detection only finds
+  files reachable via `yata-src/qml/Main.qml`'s own *static* QML imports;
+  a plugin's content, loaded at runtime through a `Loader` whose `source`
+  is a plain Python-computed `QUrl` string, is invisible to that scan. The
+  plugin's `.py` files were correctly bundled (Nuitka follows the static
+  import graph for those), but its `.qml` files were silently left out —
+  confirmed live: the built binary launched, then immediately failed with
+  `QQmlComponent: Component is not ready` / `ThemeImpl.qml ... No such
+  file or directory` the moment it tried to load the plugin's own content.
+  `build.sh` now also bundles each registered plugin's `qml_import_dir` as
+  a Nuitka onefile data directory (`--include-data-dir`, the recursive
+  equivalent of the `--include-data-files` already used for `x-loader`),
+  generated from `plugins_registry.AVAILABLE_PLUGINS` rather than
+  hardcoded to `simple_task_list` — a future plugin needs no `build.sh`
+  change, just `qml_import_dir` set on its own `Plugin` entry. Verified by
+  actually running the packaged binary (isolated `XDG_DATA_HOME`/
+  `XDG_CONFIG_HOME`, no real data touched): failed with the error above
+  before this fix, launched and ran cleanly with zero errors after.
+  Documented in `BUILD.md` ("Build a standalone binary", "Project
+  layout").
+
 ## [0.43.1] - 2026-09-10
 
 ### Fixed
