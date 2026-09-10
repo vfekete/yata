@@ -214,6 +214,29 @@ def test_purge_window_removes_registry_entry_and_deletes_files(tmp_path):
     assert not os.path.exists(tasks_path)
 
 
+def test_purge_window_removes_every_file_in_the_instance_directory(tmp_path):
+    """Regression test: purgeWindow() used to remove only tasks.json (and
+    the settings .conf), silently leaving every OTHER plugin-owned file in
+    the instance directory behind forever -- e.g. simple_task_list's own
+    plugin-state.json, or (r-10.md) a second plugin's own data/cache
+    files. The whole per-instance directory is now discarded (shutil.
+    rmtree), not just one hardcoded filename inside it."""
+    manager = make_manager(tmp_path)
+    new_id = manager.createWindow({"x": 0, "y": 0, "width": 400, "height": 600})
+
+    from window_registry import instance_dir_for
+    instance_dir = instance_dir_for(new_id)
+    with open(os.path.join(instance_dir, "tasks.json"), "w") as f:
+        f.write("[]")
+    with open(os.path.join(instance_dir, "plugin-state.json"), "w") as f:
+        f.write("{}")
+
+    manager.deleteWindow(new_id)
+    manager.purgeWindow(new_id)
+
+    assert not os.path.exists(instance_dir)
+
+
 def test_purge_window_closes_it_first_if_still_open(tmp_path):
     """Defensive: purging should never normally see an open window (delete
     always closes first), but must not leave a live one dangling if it does."""

@@ -302,19 +302,21 @@ def _build_window(engine, registry, manager, icon_provider, app_icon, *, tag, th
     from plugin-owned to host-owned in a later follow-up, see
     yata-src/settings.py's own docstring).
     """
+    import os
+
     import plugins_registry
     from main import _make_window, _open_settings
     from settings import AppSettings
-    from window_registry import tasks_path_for
+    from window_registry import instance_dir_for
 
     window_id = registry.add(tag)
-    tasks_path = tasks_path_for(window_id)
+    instance_dir = instance_dir_for(window_id)
     if seed_tasks:
-        shutil.copy(FIXTURE, tasks_path)
+        shutil.copy(FIXTURE, os.path.join(instance_dir, "tasks.json"))
 
     legacy_qsettings = _open_settings(window_id)
     plugin = plugins_registry.get(registry.get_plugin(window_id))
-    plugin_content = plugin.create_content(window_id, tasks_path, legacy_qsettings)
+    plugin_content = plugin.create_content(window_id, instance_dir, legacy_qsettings)
     plugin_content.context_properties["appSettings"].themeMode = theme_mode
     plugin_content.context_properties["appSettings"].themeTint = theme_tint
     plugin_content.context_properties["appSettings"].opacityPercent = opacity

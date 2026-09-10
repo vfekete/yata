@@ -33,13 +33,13 @@ from window_registry import (
     WindowRegistry,
     config_dir,
     data_dir,
+    instance_dir_for,
     settings_path_for,
-    tasks_path_for,
 )
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.46.1"
+APP_VERSION = "0.47.0"
 
 # Nuitka injects a module-level "__compiled__" global into every compiled
 # module -- this is the standard way to tell a packaged build.sh binary
@@ -491,7 +491,7 @@ def main() -> int:
         # created (see TaskListSettings). Not otherwise touched here; the
         # plugin owns whatever it does with it.
         plugin = plugins_registry.get(registry.get_plugin(window_id))
-        return plugin.create_content(window_id, tasks_path_for(window_id), legacy_qsettings)
+        return plugin.create_content(window_id, instance_dir_for(window_id), legacy_qsettings)
 
     def window_factory(window_id, caller_state):
         # Used for windows created via the YATAS view's ADD button — clones

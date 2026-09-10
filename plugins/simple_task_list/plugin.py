@@ -17,26 +17,31 @@ CONTENT_QML_SOURCE = os.path.join(_QML_DIR, "TaskListContent.qml")
 THEME_QML_SOURCE = os.path.join(_QML_DIR, "ThemeImpl.qml")
 
 
-def _plugin_state_path(tasks_path: str | None) -> str:
+def _plugin_state_path(instance_dir: str | None) -> str:
     """Sits next to tasks.json (same per-window instance directory), or in
     this plugin's own default data_dir() for the legacy default window
-    (tasks_path is None) — same "None means legacy default location"
+    (instance_dir is None) — same "None means legacy default location"
     convention TaskStore's own `path` parameter already uses."""
-    directory = os.path.dirname(tasks_path) if tasks_path else data_dir()
+    directory = instance_dir if instance_dir else data_dir()
     return os.path.join(directory, "plugin-state.json")
 
 
-def create_content(window_id: str, tasks_path: str | None, settings) -> PluginContent:
-    """tasks_path: today, exactly TaskStore's own `path` parameter (a
-    tasks.json path, or None for the legacy default window) — see
-    window_registry.tasks_path_for() and main.py's call site. Will
-    generalize to a true per-window directory if this plugin ever needs a
-    third file. `settings`: the window's legacy per-window QSettings
-    (main.py's `_open_settings`) — used only for TaskListSettings' one-time
-    migration off its old theme/* keys.
+def create_content(window_id: str, instance_dir: str | None, settings) -> PluginContent:
+    """instance_dir: a directory this window's plugin instance owns
+    entirely (r-9.md's original tasks_path parameter, generalized once a
+    second plugin needed more than one file of its own — see plugin_api.
+    py's own PluginContent docstring and window_registry.instance_dir_for()),
+    or None for the legacy default window (falls back to this plugin's own
+    hardcoded default locations, exactly as tasks_path=None always has).
+    `settings`: the window's legacy per-window QSettings (main.py's
+    `_open_settings`) — used only for TaskListSettings' one-time migration
+    off its old theme/* keys.
     """
+    tasks_path = os.path.join(instance_dir, "tasks.json") if instance_dir else None
+    if instance_dir:
+        os.makedirs(instance_dir, exist_ok=True)
     task_model = TaskListModel(TaskStore(tasks_path))
-    task_list_settings = TaskListSettings(_plugin_state_path(tasks_path), settings)
+    task_list_settings = TaskListSettings(_plugin_state_path(instance_dir), settings)
     return PluginContent(
         context_properties={"taskModel": task_model, "appSettings": task_list_settings},
         qml_source=CONTENT_QML_SOURCE,

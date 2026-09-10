@@ -45,13 +45,26 @@ def config_dir() -> str:
     return path
 
 
-def tasks_path_for(window_id: str) -> str | None:
-    """None means "use TaskStore's own default path" (the legacy location)."""
+def instance_dir_for(window_id: str) -> str | None:
+    """None means "use this plugin's own hardcoded legacy default
+    location" (the pre-r-9.md default window's storage, untouched so
+    upgrading users lose nothing) — every other window gets a real,
+    per-instance directory a plugin can put as many of its own files in as
+    it needs (r-9.md's plugin_api.py originally only had to hand back one
+    tasks.json path; generalized to a directory the moment a second
+    plugin, timesheet's r-10.md, needed a file of its own alongside it).
+    """
     if window_id == DEFAULT_WINDOW_ID:
         return None
     d = os.path.join(data_dir(), "instances", window_id)
     os.makedirs(d, exist_ok=True)
-    return os.path.join(d, "tasks.json")
+    return d
+
+
+def tasks_path_for(window_id: str) -> str | None:
+    """None means "use TaskStore's own default path" (the legacy location)."""
+    d = instance_dir_for(window_id)
+    return None if d is None else os.path.join(d, "tasks.json")
 
 
 def settings_path_for(window_id: str) -> str | None:

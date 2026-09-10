@@ -13,6 +13,7 @@ QQmlEngine.
 """
 from __future__ import annotations
 
+import shutil
 from typing import Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -22,8 +23,8 @@ from PySide6.QtQml import QJSValue
 from window_registry import (
     DEFAULT_TAG,
     WindowRegistry,
+    instance_dir_for,
     settings_path_for,
-    tasks_path_for,
 )
 
 
@@ -281,9 +282,19 @@ class WindowManager(QObject):
         if entry is not None:
             entry["window"].close()
         self._registry.remove(window_id)
-        for path in (tasks_path_for(window_id), settings_path_for(window_id)):
-            if path:
-                _remove_file(path)
+        # instance_dir_for() is this window's WHOLE data directory now (not
+        # just tasks.json) — a plugin can own more than one file in it (see
+        # window_registry.instance_dir_for()'s own docstring, r-10.md).
+        # Discarding the entire directory is what "permanently discards...
+        # data" has always promised; removing only tasks.json (the original
+        # behavior here) silently left every other plugin-owned file behind
+        # forever, e.g. simple_task_list's own plugin-state.json.
+        instance_dir = instance_dir_for(window_id)
+        if instance_dir:
+            shutil.rmtree(instance_dir, ignore_errors=True)
+        settings_path = settings_path_for(window_id)
+        if settings_path:
+            _remove_file(settings_path)
         self.windowsChanged.emit()
 
     def _find_free_position(self, width: int, height: int, start_x: int, start_y: int):
@@ -426,15 +437,16 @@ class WindowManager(QObject):
 
 
 def _remove_file(path: str) -> None:
+    """Used for settings_path_for()'s own file only now — the per-instance
+    data directory (instance_dir_for()) is discarded wholesale via
+    shutil.rmtree in purgeWindow() above instead. settings_path_for()'s
+    directory (instances/, config-side) is shared across every window's
+    own .conf file, so the empty-dir cleanup below is a harmless no-op in
+    the common case rather than something that actually fires."""
     import os
 
     if os.path.isfile(path):
         os.remove(path)
-    # tasks_path_for() gives each instance its own directory
-    # (instances/<id>/tasks.json) — remove it if now empty, so deleted
-    # instances don't leave litter behind. settings_path_for()'s directory
-    # (instances/) is shared across instances and won't be empty in the
-    # common case; harmless to also try here (no-op if not empty).
     parent = os.path.dirname(path)
     try:
         if os.path.isdir(parent) and not os.listdir(parent):

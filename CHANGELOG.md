@@ -7,6 +7,31 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.47.0] - 2026-09-10
+
+### Changed
+- **`Plugin.create_content`'s second argument generalized from a
+  `tasks.json` path to a whole per-window instance directory** —
+  `plugin_api.py`'s own docstring already anticipated this ("will
+  generalize to a true per-window directory if this plugin ever needs a
+  third file"). First step of r-10.md's new timesheet plugin, which needs
+  a file of its own alongside `simple_task_list`'s `tasks.json`. New
+  `window_registry.instance_dir_for()` replaces the directory-computing
+  part of `tasks_path_for()` (still present, now a thin wrapper).
+  `simple_task_list`'s own `create_content` builds its `tasks.json` path
+  from the given directory itself. No behavior change for existing
+  installs — the legacy default window still falls back to its original
+  location exactly as before.
+
+### Fixed
+- **Purging a window used to leave every plugin-owned file behind except
+  `tasks.json`** — e.g. `simple_task_list`'s own `plugin-state.json`
+  silently survived a purge forever, contrary to its own "permanently
+  discards... data" promise. `WindowManager.purgeWindow()` now discards
+  the whole per-window instance directory (`shutil.rmtree`), not one
+  hardcoded filename inside it — a latent bug made more visible now that
+  a plugin can own more than one file there.
+
 ## [0.46.1] - 2026-09-10
 
 ### Fixed

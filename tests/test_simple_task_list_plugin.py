@@ -13,7 +13,7 @@ def test_plugin_is_registered_with_expected_identity():
 
 def test_create_content_returns_a_working_task_model(tmp_path):
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat)
-    content = create_content("window-1", str(tmp_path / "tasks.json"), settings)
+    content = create_content("window-1", str(tmp_path / "window-1"), settings)
 
     assert isinstance(content, PluginContent)
     task_model = content.context_properties["taskModel"]
@@ -26,8 +26,8 @@ def test_create_content_returns_a_working_task_model(tmp_path):
 
 def test_create_content_take_item_and_insert_item_move_a_task_between_models(tmp_path):
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat)
-    source = create_content("source", str(tmp_path / "source.json"), settings)
-    target = create_content("target", str(tmp_path / "target.json"), settings)
+    source = create_content("source", str(tmp_path / "source"), settings)
+    target = create_content("target", str(tmp_path / "target"), settings)
 
     source_model = source.context_properties["taskModel"]
     task_id = source_model.addTask()

@@ -37,6 +37,18 @@ class PluginContent:
 
     qml_source: absolute path to the plugin's root content QML file, loaded
     into Main.qml's content Loader.
+
+    (Not a dataclass field, but part of the same contract: Plugin.
+    create_content's second parameter is `instance_dir: str | None` — a
+    directory this window's plugin instance owns entirely, to put as many
+    of its own files in as it needs. None means "use your own hardcoded
+    legacy default location" — only ever true for the pre-r-9.md default
+    window (window_registry.DEFAULT_WINDOW_ID), which every plugin's own
+    create_content must keep falling back to its original single-window
+    default path/location for, so upgrading users lose nothing. Generalized
+    from an original single tasks_path parameter — see window_registry.
+    instance_dir_for()'s own docstring — the moment a second plugin needed
+    more than one file of its own.)
     theme_qml_source: absolute path to the plugin's Theme QML file (a
     QtObject exposing whatever color/font properties the plugin's own
     content QML wants under the bare "Theme" identifier). Constructed by
