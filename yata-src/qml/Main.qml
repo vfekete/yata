@@ -148,14 +148,15 @@ Window {
     // the Loader shows — see yatasView's own YatasView.qml header for why.
     property bool yatasActive: false
 
+    // yatasView is exempt from this entirely (see its own declaration
+    // below, outside frostedContent/contentOverlay) — window management
+    // must stay visible and usable no matter the lock state, so this only
+    // ever needs to reason about the plugin's own content.
     readonly property bool contentLocked: {
         if (hostSettings.lockState === "unlocked") return false
         if (hostSettings.lockState === "locked") return true
         if (root.editingTaskDescription) return false
-        // Whichever of the two is actually showing right now — auto-locked
-        // must unlock on hover regardless of which one that is.
-        var hovered = root.yatasActive ? yatasView.contentHovered
-            : (contentLoader.item ? contentLoader.item.contentHovered : false)
+        var hovered = contentLoader.item ? contentLoader.item.contentHovered : false
         return !hovered && !root.dragHoverActive
     }
 
@@ -222,19 +223,14 @@ Window {
             // The window itself stays fully transparent (per spec); this
             // wash is what actually paints the content panel's background,
             // translucent so the window still reads as "transparent"
-            // rather than opaque. Reads the plugin's own Theme.
-            // contentBackground while the plugin's content is showing —
-            // this is the content panel's own themed background, not one
-            // of the host-chrome elements this file otherwise keeps
-            // independent of the plugin's theme — but falls back to
-            // "transparent" (exactly the "none" tint's own dark-mode
-            // value) while yatasView is showing instead: window
-            // management must look the same regardless of the plugin's
-            // theme/tint, same as every other host-chrome element.
+            // rather than opaque. Still reads the plugin's own Theme.
+            // contentBackground — this is the content panel's own themed
+            // background, not one of the host-chrome elements this file
+            // otherwise keeps independent of the plugin's theme.
             Rectangle {
                 anchors.fill: parent
                 radius: 6
-                color: root.yatasActive ? "transparent" : Theme.contentBackground
+                color: Theme.contentBackground
             }
 
             // Same anchors/margins the old inline "contentColumn" ColumnLayout
@@ -245,7 +241,11 @@ Window {
             // Stays loaded (never re-sourced) while yatasView is showing
             // instead — just hidden, so switching back to it is instant and
             // doesn't lose any in-progress plugin state (e.g. a half-typed
-            // task, a scroll position).
+            // task, a scroll position). yatasView itself is NOT declared
+            // here (see below, outside frostedContent entirely) — window
+            // management must stay visible and usable regardless of lock
+            // state, so it can't live inside the thing that gets blurred
+            // and input-blocked while locked.
             Loader {
                 id: contentLoader
                 anchors.fill: parent
@@ -253,23 +253,6 @@ Window {
                 anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
                 source: pluginContentUrl
                 visible: !root.yatasActive
-            }
-
-            // Window management (r-3.md's original "YATAS" feature) — host
-            // chrome, not plugin content, see YatasView.qml's own header.
-            // Same geometry as contentLoader so contentOverlay's lock-time
-            // input blocker (below, anchored off contentLoader's own x/y/
-            // width/height) already covers this too with no extra wiring.
-            YatasView {
-                id: yatasView
-                anchors.fill: contentLoader
-                visible: root.yatasActive
-                chromeTextColor: root.chromeTextColor
-                chromeMutedTextColor: root.chromeMutedTextColor
-                chromeAccentColor: root.chromeAccentColor
-                chromeFontFamily: root.chromeFontFamily
-                chromeFontPixelSize: root.chromeFontPixelSize
-                chromeBoxColor: root.chromeBoxColor
             }
         }
 
@@ -341,6 +324,38 @@ Window {
                 acceptedButtons: Qt.AllButtons
                 onWheel: (event) => { event.accepted = true }
             }
+        }
+
+        // Window management (r-3.md's original "YATAS" feature) — host
+        // chrome, not plugin content, see YatasView.qml's own header.
+        // Deliberately declared here, AFTER frostedContent/the tint scrim/
+        // contentOverlay (contentBlocker) rather than inside frostedContent
+        // alongside contentLoader: explicit request — the window list must
+        // show and stay fully usable regardless of lock state, not sit
+        // behind the same blur/tint/input-block the plugin's own content
+        // does. Being a later sibling means it paints on top of all three
+        // AND wins input delivery over contentBlocker underneath (Qt Quick
+        // hands events to the topmost item first) — no change needed to
+        // contentBlocker itself for this to work.
+        //
+        // x/y/width/height read directly from contentLoader, not
+        // anchors.fill: contentLoader — same reasoning as contentOverlay
+        // above: QML anchoring only works between a parent/child or direct
+        // siblings, and contentLoader is nested one level deeper inside
+        // frostedContent.
+        YatasView {
+            id: yatasView
+            x: contentLoader.x
+            y: contentLoader.y
+            width: contentLoader.width
+            height: contentLoader.height
+            visible: root.yatasActive
+            chromeTextColor: root.chromeTextColor
+            chromeMutedTextColor: root.chromeMutedTextColor
+            chromeAccentColor: root.chromeAccentColor
+            chromeFontFamily: root.chromeFontFamily
+            chromeFontPixelSize: root.chromeFontPixelSize
+            chromeBoxColor: root.chromeBoxColor
         }
 
         Rectangle {

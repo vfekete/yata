@@ -7,6 +7,28 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.44.2] - 2026-09-10
+
+### Fixed
+- **The window-management view ("Y" icon) was still subject to the glass
+  lock** — while the window was locked or auto-locked (and not hovered),
+  opening the window list showed it blurred and its buttons/rows didn't
+  react to clicks, since `YatasView` lived inside `frostedContent`
+  alongside the plugin's own content, sharing the same blur layer and
+  input-blocking overlay. Window management is host-owned admin
+  functionality, not something the lock is meant to protect — explicit
+  request: it must show and stay fully usable no matter the lock state.
+  `YatasView` now lives as a later sibling of `contentOverlay`
+  (`contentBlocker`) instead of nested inside `frostedContent`, so it
+  paints on top of the blur/tint/blocker and wins input delivery over
+  `contentBlocker` (Qt Quick hands pointer events to the topmost item
+  first) — no change needed to `contentBlocker` itself. Verified live
+  (both plain "locked" and "auto-locked" while not hovered): double-
+  click-to-rename works correctly with the window fully locked. New
+  `tests/test_yatas_host.py::
+  test_yatas_view_stays_visible_and_usable_while_locked` (confirmed it
+  fails against the pre-fix code, passes after).
+
 ## [0.44.1] - 2026-09-10
 
 ### Changed

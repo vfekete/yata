@@ -147,6 +147,43 @@ def test_yatas_icon_toggles_window_list_in_place_of_plugin_content(yata_window):
     assert plugin_loader.property("visible") is True
 
 
+def test_yatas_view_stays_visible_and_usable_while_locked(yata_window):
+    """Explicit request: window management must show and stay fully
+    usable regardless of lock state -- it must NOT sit behind the same
+    blur/tint/input-block the plugin's own content does. yatasView is
+    declared as a later sibling of contentOverlay (contentBlocker), not
+    nested inside frostedContent alongside contentLoader, specifically so
+    it wins both rendering (paints on top) and input delivery (Qt Quick
+    hands events to the topmost item first) regardless of contentLocked."""
+    app, window, window_manager, registry, window_id, task_model, engine = yata_window
+
+    host_settings = window_manager._windows[window_id]["app_settings"]
+    host_settings.lockState = "locked"
+    app.processEvents()
+    assert window.property("contentLocked") is True
+
+    window.setProperty("yatasActive", True)
+    app.processEvents()
+
+    yatas_view = _find_by_class_prefix(window.contentItem(), "YatasView")[0]
+    assert yatas_view.property("visible") is True
+
+    row = _find_by_class_prefix(yatas_view, "YatasRow")[0]
+    tag_text = next(
+        t for t in _find_by_class_prefix(row, "QQuickText")
+        if t.property("text") == window_manager.tagFor(window_id)
+    )
+
+    from PySide6.QtTest import QTest
+    QTest.mouseDClick(window, Qt.LeftButton, Qt.NoModifier, _center_point(window, tag_text))
+    app.processEvents()
+
+    assert row.property("editing") is True, (
+        "double-click-to-rename must work even while the window is "
+        "hard-locked -- window management is exempt from the glass lock"
+    )
+
+
 def test_add_window_button_in_yatas_view_clones_theme(yata_window):
     """The shared yata_window fixture's window_factory is a no-op (other
     tests in this file never need createWindow() to actually build
