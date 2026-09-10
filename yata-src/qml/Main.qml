@@ -51,6 +51,15 @@ Window {
     readonly property color chromeDragHoverColor: "#00FFFF"
     readonly property string chromeFontFamily: "Noto Sans"
     readonly property int chromeFontPixelSize: 14
+    // For controls that sit INSIDE a content panel (yatasView's ADD
+    // button/search field, its rows) rather than floating directly on the
+    // bare window frame (lock/close/tag, which use chromeBoxColor above) —
+    // the plugin's own Toolbar/FilterBar buttons and fields use exactly
+    // these same translucent-white-overlay values (see ThemeImpl.qml's
+    // "none" dark palette: field/hover), and yatasView content needs to
+    // keep matching that look now that it's host-owned.
+    readonly property color chromeFieldColor: Qt.rgba(1, 1, 1, 0.10)
+    readonly property color chromeHoverColor: Qt.rgba(1, 1, 1, 0.08)
 
     x: hostSettings.x
     y: hostSettings.y
@@ -343,6 +352,16 @@ Window {
         // above: QML anchoring only works between a parent/child or direct
         // siblings, and contentLoader is nested one level deeper inside
         // frostedContent.
+        //
+        // yatasView.qml paints its own solid background (not "transparent"
+        // like the plugin content panel's own wash) — deliberately, so it
+        // fully occludes frostedContent's blur/tint scrim behind it
+        // regardless of lock state. Confirmed live: without an opaque
+        // background here, locking the window WHILE this view was showing
+        // still visibly bled the glass-lock tint through around/behind its
+        // content, even though input/blur were already correctly bypassed —
+        // window management must be unaffected by the lock in every
+        // respect, visual included.
         YatasView {
             id: yatasView
             x: contentLoader.x
@@ -356,6 +375,8 @@ Window {
             chromeFontFamily: root.chromeFontFamily
             chromeFontPixelSize: root.chromeFontPixelSize
             chromeBoxColor: root.chromeBoxColor
+            chromeFieldColor: root.chromeFieldColor
+            chromeHoverColor: root.chromeHoverColor
         }
 
         Rectangle {
@@ -612,12 +633,12 @@ Window {
             y: 0
             height: tagLabelBg.height
             radius: 3
-            // Active state lights the BOX, not the glyph — same convention
-            // lock/close already use (their own glyph color never changes;
-            // only the box reacts, to hover there). Matches the old
-            // plugin-owned Yatas toolbar button's own look before this
-            // moved to host chrome.
-            color: root.yatasActive ? root.chromeAccentColor : root.chromeBoxColor(yatasMouseArea.containsMouse)
+            // Same background/opacity as every other icon box (lock/close)
+            // regardless of active state — explicit follow-up request,
+            // an accent-colored fill when active looked visibly different/
+            // lighter than the other boxes. "Active" is communicated by
+            // the persistent glow below instead (see layer.enabled).
+            color: root.chromeBoxColor(yatasMouseArea.containsMouse)
             width: yatasGlyph.implicitWidth + 16
             x: lockIconBg.x - root.lockCloseIconGap - width
 
@@ -639,11 +660,10 @@ Window {
                 font.bold: true
                 font.family: root.chromeFontFamily
                 font.pixelSize: Math.round(yatasIconBg.height * 0.6)
-                // Border color when off (matches the tag label/lock/close
-                // icons' own accent), transparent once active — the lit
-                // accent-colored box (above) is the "on" indicator, the
-                // glyph doesn't need to fight it for attention too.
-                color: root.yatasActive ? "transparent" : root.chromeAccentColor
+                // Always visible now (the box itself no longer changes
+                // fill when active — see its own comment above), same
+                // accent color the tag label/lock/close icons already use.
+                color: root.chromeAccentColor
             }
 
             MouseArea {

@@ -183,6 +183,21 @@ def test_yatas_view_stays_visible_and_usable_while_locked(yata_window):
         "hard-locked -- window management is exempt from the glass lock"
     )
 
+    # yatasView's own background must be fully opaque, not just correctly
+    # positioned/interactive -- a transparent background here would still
+    # let frostedContent's blur/tint scrim bleed through visually
+    # underneath/around this content even though input/rendering order
+    # were already fixed (confirmed live, this was a real follow-up bug).
+    background_rects = [
+        r for r in _find_by_class_prefix(yatas_view, "QQuickRectangle")
+        if round(r.width()) == round(yatas_view.width()) and round(r.height()) == round(yatas_view.height())
+    ]
+    assert background_rects, "yatasView's own full-size background Rectangle not found"
+    assert background_rects[0].property("color").alpha() == 255, (
+        "yatasView's background must be fully opaque so the glass-lock "
+        "tint/blur behind it can never show through"
+    )
+
 
 def test_add_window_button_in_yatas_view_clones_theme(yata_window):
     """The shared yata_window fixture's window_factory is a no-op (other

@@ -27,6 +27,8 @@ Item {
     required property string chromeFontFamily
     required property int chromeFontPixelSize
     required property var chromeBoxColor
+    required property color chromeFieldColor
+    required property color chromeHoverColor
 
     // Read back by Main.qml the same way it reads contentLoader.item's
     // contentHovered — auto-locked's hover-to-unlock check needs to know
@@ -34,6 +36,20 @@ Item {
     // view included.
     readonly property bool contentHovered: hoverHandler.hovered
     HoverHandler { id: hoverHandler }
+
+    // Solid background, deliberately NOT "transparent" like the plugin
+    // content panel's own wash — this view sits on top of frostedContent's
+    // blur/tint layer (see Main.qml's own comment at this component's
+    // instantiation) precisely so window management stays visually
+    // unaffected by the lock, and a transparent background here would let
+    // that same blur/tint bleed through underneath/around this content —
+    // confirmed live. Same color lock/close/the tag-rename field already
+    // use for their own solid boxes.
+    Rectangle {
+        anchors.fill: parent
+        radius: 6
+        color: root.chromeBoxColor(false)
+    }
 
     readonly property string searchText: searchField.text
 
@@ -83,11 +99,17 @@ Item {
             // depth in this window's tree since it's a plain context
             // property, not something only the plugin's own QML can see.
             // Same "Add"/bold/all-caps look as the plugin's own toolbar
-            // ADD button, for visual consistency across the boundary.
+            // ADD button, for visual consistency across the boundary —
+            // including its background: transparent at rest, a subtle
+            // translucent overlay on hover (chromeHoverColor, not the
+            // solid chromeBoxColor lock/close/tag-rename use) — that's
+            // the plugin toolbar's own convention for buttons sitting
+            // inside a content panel, and the "before" look this needs to
+            // match now that it's host-owned.
             Rectangle {
                 id: addBtn
                 radius: 4
-                color: root.chromeBoxColor(addHover.hovered)
+                color: addHover.hovered ? root.chromeHoverColor : "transparent"
                 implicitWidth: addText.implicitWidth + 16
                 implicitHeight: addText.implicitHeight + 8
 
@@ -140,7 +162,7 @@ Item {
                 font.pixelSize: root.chromeFontPixelSize
                 background: Rectangle {
                     radius: 4
-                    color: root.chromeBoxColor(false)
+                    color: root.chromeFieldColor
                 }
 
                 // Same static "lupe" convention the plugin's own Toolbar
@@ -187,6 +209,8 @@ Item {
                 chromeFontFamily: root.chromeFontFamily
                 chromeFontPixelSize: root.chromeFontPixelSize
                 chromeBoxColor: root.chromeBoxColor
+                chromeFieldColor: root.chromeFieldColor
+                chromeHoverColor: root.chromeHoverColor
                 onRenamed: (id, newTag) => windowManager.renameWindow(id, newTag)
                 onDeleteRequested: (id, tag) => deleteDialog.openFor(id, tag)
                 onShowToggled: (id, show) => show ? windowManager.openWindow(id) : windowManager.closeWindow(id)

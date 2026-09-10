@@ -42,6 +42,8 @@ Item {
     required property string chromeFontFamily
     required property int chromeFontPixelSize
     required property var chromeBoxColor
+    required property color chromeFieldColor
+    required property color chromeHoverColor
 
     property bool editing: false
     readonly property bool hovered: hoverHandler.hovered
@@ -60,7 +62,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 4
-        color: root.hovered ? root.chromeBoxColor(true) : "transparent"
+        color: root.hovered ? root.chromeHoverColor : "transparent"
     }
 
     RowLayout {
@@ -100,7 +102,7 @@ Item {
             font.pixelSize: root.chromeFontPixelSize
             background: Rectangle {
                 radius: 4
-                color: root.chromeBoxColor(false)
+                color: root.chromeFieldColor
             }
 
             onVisibleChanged: if (visible) { selectAll(); forceActiveFocus() }

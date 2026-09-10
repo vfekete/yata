@@ -7,6 +7,41 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.44.3] - 2026-09-10
+
+### Fixed
+- **More live-feedback polish on the window-management view**, following
+  up on 0.44.1/0.44.2:
+  - The "Y" chrome icon's pushed/active look used a solid accent-colored
+    fill that read visibly lighter than the lock/close icon boxes — now
+    its background always matches theirs exactly (`chromeBoxColor`, hover-
+    reactive only); "active" is communicated purely by the persistent
+    glow, and the glyph itself stays visible at all times.
+  - **Fixed a real visual bug**: locking the window (plain or auto-lock)
+    while the window list was showing still visibly bled the glass-lock's
+    frosted tint through underneath/around its content, even though
+    blur/input-blocking were already correctly bypassed in 0.44.2 —
+    `YatasView` had no opaque background of its own, so the (still-
+    rendering, just now-hidden-behind-it) tint scrim showed through. Gave
+    it its own solid background, same color the lock/close icons and the
+    tag-rename field already use. New regression test asserts this
+    background is genuinely fully opaque, not just present.
+  - The ADD button and search field had solid near-black backgrounds
+    that didn't match how these looked before the move — that opaque
+    `chromeBoxColor` convention is right for icon buttons floating
+    directly on the bare window frame (lock/close/tag), but the plugin's
+    own toolbar buttons/fields (the actual "before" look) use translucent
+    white overlays instead. Added `chromeFieldColor`/`chromeHoverColor`
+    chrome constants matching `ThemeImpl.qml`'s own "none"-tint dark
+    values exactly (`Qt.rgba(1,1,1,0.10)`/`Qt.rgba(1,1,1,0.08)`) and
+    switched the ADD button (transparent at rest, translucent overlay on
+    hover — matching the plugin toolbar buttons' own convention exactly),
+    the search field, and the row hover/rename-field backgrounds to use
+    them instead.
+  - Verified every color value directly via live property inspection
+    (not just screenshots, which can't reliably show glow effects
+    offscreen).
+
 ## [0.44.2] - 2026-09-10
 
 ### Fixed
