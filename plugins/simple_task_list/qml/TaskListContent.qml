@@ -119,7 +119,21 @@ Item {
             // (scene) coordinates and some other coordinate system, here
             // going from "this window's local point" to "listView's own
             // local point".
-            var win = Window.window
+            //
+            // contentRoot.Window.window, NOT the bare "Window.window" this
+            // line originally had (before r-9.md step 4, this file's whole
+            // content lived directly inside Main.qml, i.e. the Window's own
+            // QML document, where the bare form happened to resolve) — from
+            // inside a Connections function body in a separately-loaded
+            // file, the bare attached-property lookup silently resolves to
+            // null instead of walking up to the enclosing Window, throwing
+            // here and aborting the handler before dragHoverActive/
+            // dragHoverIndex ever got set. Confirmed live: cross-window drag
+            // stopped updating the target window's own list placeholder the
+            // moment this file stopped being inlined in Main.qml. Same
+            // qualified-id pattern TaskDelegate.qml's own onCentroidChanged
+            // already uses for exactly this reason (root.Window.window).
+            var win = contentRoot.Window.window
             var posInWindow = Qt.point(globalX - win.x, globalY - win.y)
             var posInListView = listView.mapFromItem(null, posInWindow.x, posInWindow.y)
             listView.dragHoverActive = true

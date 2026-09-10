@@ -7,6 +7,28 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.42.2] - 2026-09-10
+
+### Fixed
+- **Dragging a task onto another window stopped showing that window's own
+  drop placeholder/list reflow**, another regression from 0.42.0's step 4
+  QML move. `TaskListContent.qml`'s `Connections{target: windowManager}`
+  handler for `taskDragHoverChanged` read the bare `Window.window` attached
+  property to convert the broadcast global drag position into local list
+  coordinates — before step 4 this code lived directly inside `Main.qml`
+  (the `Window`'s own QML document), where the bare form happened to
+  resolve; once it moved into a separately `Loader`-loaded file, it
+  silently resolved to `null` from inside that `Connections` function body,
+  throwing and aborting the handler before `dragHoverActive`/
+  `dragHoverIndex` were ever set. Main.qml's own independent host-side
+  border highlight (a separate listener on the same signal) kept working
+  fine throughout, which is what let this slip past the initial
+  live-testing pass. Fixed by qualifying it as `contentRoot.Window.window`
+  — the same pattern `TaskDelegate.qml`'s own `onCentroidChanged` already
+  used for exactly this reason. Added `tests/test_cross_window_drag.py`
+  (verified it fails against the pre-fix code with the exact same error,
+  and passes after).
+
 ## [0.42.1] - 2026-09-10
 
 ### Fixed
