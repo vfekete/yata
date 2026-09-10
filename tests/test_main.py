@@ -1,12 +1,31 @@
 """Regression tests for main.py's startup logic (not the full app entry
 point, which needs a real QGuiApplication/QML engine — just the pure
 window-selection logic factored out into _windows_to_restore())."""
+import re
 import zipfile
+from pathlib import Path
 
 import pytest
 
-from main import _create_backup, _unique_backup_path, _windows_to_restore
+from main import APP_VERSION, _create_backup, _unique_backup_path, _windows_to_restore
 from window_registry import DEFAULT_TAG, DEFAULT_WINDOW_ID, WindowRegistry
+
+
+def test_app_version_matches_pyproject_version():
+    """Regression test: main.py's APP_VERSION (gates desktop-entry/icon-
+    cache resync on upgrade, see _ensure_desktop_entry) has drifted from
+    pyproject.toml's own version before (fixed once already, in 0.38.4) —
+    build.sh's own version-match check only catches this at build time,
+    not at every commit. This is the same field build.sh itself reads via
+    `grep -m1 '^version = '`."""
+    pyproject = Path(__file__).parent.parent / "pyproject.toml"
+    match = re.search(r'^version = "(.*)"$', pyproject.read_text(), re.MULTILINE)
+    assert match, "could not find version = \"...\" in pyproject.toml"
+    assert APP_VERSION == match.group(1), (
+        f"main.py's APP_VERSION ({APP_VERSION!r}) doesn't match "
+        f"pyproject.toml's version ({match.group(1)!r}) -- bump APP_VERSION "
+        "to match (see build.sh's own version-match check)."
+    )
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,20 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.43.1] - 2026-09-10
+
+### Fixed
+- **`main.py`'s `APP_VERSION` had drifted from `pyproject.toml`'s version**
+  (stuck at `0.41.0` across the 0.42.0-0.43.0 steps 4/5 work) — the same
+  class of drift already fixed once before, in 0.38.4.
+  `_ensure_desktop_entry` uses `APP_VERSION` to decide whether an
+  already-installed desktop entry needs a resync on upgrade, so a stale
+  value could make a newer build look "already current" to that check.
+  `build.sh` has its own version-match gate that would have caught this at
+  build time, but that's the last possible moment — added
+  `tests/test_main.py::test_app_version_matches_pyproject_version` so a
+  future drift fails `pytest` immediately instead.
+
 ## [0.43.0] - 2026-09-10
 
 ### Changed
