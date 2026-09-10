@@ -85,14 +85,14 @@ Item {
                 font.pixelSize: Theme.taskFontPixelSize
             }
             Text {
-                visible: root.summaryData.overtimeLabel !== "0h 00m"
+                visible: root.summaryData.overtimeLabel !== "0:00:00"
                 text: qsTr("Overtime: %1").arg(root.summaryData.overtimeLabel)
                 color: Theme.onSiteColor
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.taskFontPixelSize
             }
             Text {
-                visible: root.summaryData.overtimeLabel === "0h 00m"
+                visible: root.summaryData.overtimeLabel === "0:00:00"
                 text: qsTr("Remaining: %1").arg(root.summaryData.remainingLabel)
                 color: Theme.remoteColor
                 font.family: Theme.fontFamily

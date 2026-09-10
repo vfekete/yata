@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Effects
 import QtQuick.Window
@@ -94,6 +95,21 @@ Item {
 
             Item { Layout.preferredWidth: 12 }
 
+            // Temporary placeholder, not a real icon (explicit follow-up
+            // request — will be replaced by a proper icon from the nuon
+            // project later): a static, non-interactive marker before the
+            // DAY/WEEK/MONTH/YEAR group, same role IconIndicator.qml
+            // plays before simple_task_list's own FilterBar button groups
+            // (e.g. a calendar icon before its own Day/Month/Year set) —
+            // just a plain glyph here rather than a themed SVG.
+            Text {
+                text: "Σ"
+                color: Theme.mutedTextColor
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
+                Layout.alignment: Qt.AlignVCenter
+            }
+
             PeriodToggle {
                 label: qsTr("Day")
                 active: contentRoot.activePeriod === "day"
@@ -184,7 +200,14 @@ Item {
 
             Text {
                 anchors.centerIn: parent
-                visible: timesheetModel.rowCount() === 0
+                // itemsList.count, NOT timesheetModel.rowCount() -- the
+                // latter is a plain method call, invisible to QML's
+                // binding dependency tracker (same class of bug as the
+                // ComboBox.currentIndex one fixed in YatasView.qml this
+                // session), so this stayed permanently "true" the moment
+                // it was first evaluated regardless of later additions.
+                // ListView.count is a real, change-notifying property.
+                visible: itemsList.count === 0
                 text: qsTr("No work items yet -- click ADD to create one")
                 color: Theme.mutedTextColor
                 font.family: Theme.fontFamily
@@ -219,8 +242,51 @@ Item {
 
     ExportPdfDialog {
         id: exportDialog
-        onExportFailed: exportFailedNotice.visible = true
-        onExportSucceeded: exportFailedNotice.visible = false
+        onPeriodChosen: (period, referenceDate, holidayDates, dailyHours) => {
+            pdfFileDialog._period = period
+            pdfFileDialog._referenceDate = referenceDate
+            pdfFileDialog._holidayDates = holidayDates
+            pdfFileDialog._dailyHours = dailyHours
+            pdfFileDialog.open()
+        }
+    }
+
+    // Declared here (a plain Item's own child), NOT nested inside
+    // ExportPdfDialog (a separate top-level Window in its own right, see
+    // DialogWindow.qml) — confirmed as the actual cause of "timesheet is
+    // not exported": nesting a FileDialog inside another custom Window-
+    // based dialog is a Window-within-a-Window arrangement nothing else
+    // in this codebase uses, unlike the one proven-working precedent
+    // (YatasRow.qml's own ColorDialog, declared directly inside its
+    // window's own content, not inside another dialog window). Moved
+    // here to match that pattern instead of guessing further at the
+    // native/portal-dialog specifics.
+    FileDialog {
+        id: pdfFileDialog
+        property string _period: "month"
+        property date _referenceDate: new Date()
+        property var _holidayDates: ({})
+        property real _dailyHours: 8.0
+
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("PDF files (*.pdf)")]
+        defaultSuffix: "pdf"
+        onAccepted: {
+            var path = String(selectedFile).replace(/^file:\/\//, "")
+            var ok = timesheetModel.exportPdf(
+                path, pdfFileDialog._period, Qt.formatDate(pdfFileDialog._referenceDate, "yyyy-MM-dd"),
+                pdfFileDialog._holidayDates, pdfFileDialog._dailyHours,
+                {
+                    customerName: appSettings.customerName,
+                    customerAddress: appSettings.customerAddress,
+                    contractorName: appSettings.contractorName,
+                    includeCustomer: appSettings.pdfIncludeCustomer,
+                    includeContractor: appSettings.pdfIncludeContractor,
+                    includeSignatures: appSettings.pdfIncludeSignatures,
+                }
+            )
+            exportFailedNotice.visible = !ok
+        }
     }
 
     Text {

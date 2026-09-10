@@ -7,6 +7,52 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.48.1] - 2026-09-10
+
+### Fixed
+- **Timesheet's "No work items yet" message stayed visible forever, even
+  after adding items** — its `visible` binding called
+  `timesheetModel.rowCount()` directly, a plain method call QML's binding
+  dependency tracker can't see through, so it never re-evaluated after
+  the first time (same bug class as a `ComboBox.currentIndex` binding
+  fixed earlier this session). Now bound to `ListView.count`, a real
+  change-notifying property.
+- **A started work item's row never visually updated** — `startItem()`
+  emitted `layoutChanged` (signals a row-*order* change) instead of
+  `dataChanged` (signals a row-*value* change), so the `running`/
+  `durationLabel` role bindings QML delegates read never actually
+  refreshed.
+- **Work-item row icons (non-working toggle, sessions, start/stop,
+  delete) were always visible** instead of only on hover, and weren't
+  reliably right-aligned/vertically centered — now hover-gated and
+  pushed to the row's trailing edge, matching `TaskDelegate.qml`'s own
+  action-row convention (its persistent abandoned-session warning stays
+  always visible, same "status stays, actions hide behind hover" split
+  that file already uses).
+- **Durations now show `H:MM:SS`** (unbounded hours, full second
+  precision) instead of a rounded-to-the-minute `Xh MMm` — and the
+  currently-running item's row now ticks live once a second instead of
+  only updating on start/stop.
+- **The item actually being tracked is now highlighted** (a tinted
+  background + border in the window's own accent color), and its stop
+  button is a filled square (⏹) instead of the pause glyph (⏸) — pausing
+  implied a resumable mid-session state this plugin doesn't have.
+- Added a temporary placeholder marker before the DAY/WEEK/MONTH/YEAR
+  summary selector, indicating it's a group (to be replaced by a proper
+  icon later) — same role `IconIndicator.qml` plays before
+  `simple_task_list`'s own filter button groups.
+- **PDF export silently did nothing.** Two separate bugs: `FileDialog`
+  was nested inside `ExportPdfDialog`, itself a separate top-level
+  `Window` (`DialogWindow.qml`) — a Window-within-a-Window arrangement
+  nothing else in the codebase uses, unlike the one proven-working
+  precedent (`ColorDialog`, declared directly in its own window's
+  content in `YatasRow.qml`); moved `FileDialog` to that same level.
+  Separately, `QPdfWriter`/`QTextDocument.print_()` fail *silently* at
+  the C++ level for an unwritable destination (no Python exception at
+  all, confirmed live) — `pdf_export.export_pdf()` now explicitly checks
+  the file actually got written and raises if not, so a real failure is
+  finally detectable instead of being reported as success.
+
 ## [0.48.0] - 2026-09-10
 
 ### Added

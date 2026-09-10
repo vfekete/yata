@@ -1,12 +1,19 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Dialogs
 import QtQuick.Layouts
 
-// Period + destination picker for "Export to PDF" (spec: "per-day,
-// per-week and per-month summary to PDF"). Uses whatever the summary
-// view's own reference date/period currently is as the default, but the
-// user can change either before exporting.
+// Period picker for "Export to PDF" (spec: "per-day, per-week and
+// per-month summary to PDF"). Uses whatever the summary view's own
+// reference date/period currently is as the default, but the user can
+// change either before exporting. The actual file destination picker
+// (FileDialog) lives one level up, in TimesheetContent.qml — NOT nested
+// in here (tried first): a FileDialog nested inside this dialog's own
+// Window (DialogWindow.qml is a real top-level Window, see its own
+// header) is a Window-within-a-Window arrangement nothing else in this
+// codebase uses, and was the actual cause of exports silently never
+// happening. periodChosen fires once the user confirms the period here;
+// TimesheetContent.qml is what actually opens the file picker and calls
+// timesheetModel.exportPdf.
 DialogWindow {
     id: root
     title: qsTr("Export to PDF")
@@ -17,8 +24,7 @@ DialogWindow {
     property var holidayDates: ({})
     property real dailyHours: 8.0
 
-    signal exportFailed()
-    signal exportSucceeded(string path)
+    signal periodChosen(string period, date referenceDate, var holidayDates, real dailyHours)
 
     function openFor(period, referenceDate, holidayDates, dailyHours) {
         root.period = period
@@ -28,31 +34,7 @@ DialogWindow {
         root.open()
     }
 
-    onAccepted: fileDialog.open()
-
-    FileDialog {
-        id: fileDialog
-        fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("PDF files (*.pdf)")]
-        defaultSuffix: "pdf"
-        onAccepted: {
-            var path = String(selectedFile).replace(/^file:\/\//, "")
-            var ok = timesheetModel.exportPdf(
-                path, root.period, Qt.formatDate(root.referenceDate, "yyyy-MM-dd"),
-                root.holidayDates, root.dailyHours,
-                {
-                    customerName: appSettings.customerName,
-                    customerAddress: appSettings.customerAddress,
-                    contractorName: appSettings.contractorName,
-                    includeCustomer: appSettings.pdfIncludeCustomer,
-                    includeContractor: appSettings.pdfIncludeContractor,
-                    includeSignatures: appSettings.pdfIncludeSignatures,
-                }
-            )
-            if (ok) root.exportSucceeded(path)
-            else root.exportFailed()
-        }
-    }
+    onAccepted: root.periodChosen(root.period, root.referenceDate, root.holidayDates, root.dailyHours)
 
     RowLayout {
         Layout.fillWidth: true

@@ -52,9 +52,15 @@ def session_duration_by_day(session: WorkSession) -> dict:
 
 
 def format_duration(total: timedelta) -> str:
-    total_minutes = int(total.total_seconds() // 60)
-    hours, minutes = divmod(max(total_minutes, 0), 60)
-    return f"{hours}h {minutes:02d}m"
+    """H:MM:SS, hours unbounded (a multi-day session is entirely plausible
+    for a "worked N days straight" total, explicit spec/follow-up
+    request) and never rounded to the nearest minute — seconds are kept
+    at full precision throughout, not just cosmetically in the format
+    string."""
+    total_seconds = int(max(total.total_seconds(), 0))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}:{minutes:02d}:{seconds:02d}"
 
 
 def _period_bounds(period: str, reference: date) -> tuple[date, date]:
@@ -278,7 +284,17 @@ class TimesheetModel(QAbstractListModel):
                 self._stop_now(other)
         target.sessions.append(WorkSession())
         self._save()
-        self.layoutChanged.emit()  # any OTHER item's running/duration may have changed too
+        # dataChanged over the WHOLE visible range, not layoutChanged
+        # (tried first) — layoutChanged signals a row-ORDER change, not a
+        # role-VALUE change, so QML's required-property role bindings
+        # (running/durationLabel) never actually refreshed from it,
+        # confirmed live (a started item's row silently kept showing its
+        # old state). Any OTHER row may also have just been auto-stopped
+        # above, so the whole range is covered rather than tracking
+        # exactly which single row that was.
+        items = self._visible()
+        if items:
+            self.dataChanged.emit(self.index(0), self.index(len(items) - 1))
 
     @Slot(str)
     def stopItem(self, item_id: str) -> None:
@@ -317,6 +333,22 @@ class TimesheetModel(QAbstractListModel):
         target.non_working = non_working
         self._save()
         self._refresh_row(target)
+
+    @Slot(str, result=str)
+    def liveDurationLabel(self, item_id: str) -> str:
+        """Same total _total_duration() computes, PLUS the elapsed time of
+        the currently-running session (if any) as of right now —
+        WorkItemRow.qml polls this once a second while running, since the
+        durationLabel role itself only updates on start/stop, not
+        continuously."""
+        target = self._find(item_id)
+        if target is None:
+            return format_duration(timedelta())
+        total = self._total_duration(target)
+        running = self._running_session(target)
+        if running is not None:
+            total += datetime.now() - _parse(running.start)
+        return format_duration(total)
 
     @Slot(str, result="QVariant")
     def sessionsFor(self, item_id: str):
@@ -373,24 +405,30 @@ class TimesheetModel(QAbstractListModel):
         object literal, unwrapped the same "may arrive as a dict already,
         or need dict(...)" way every other QVariant-typed slot in this
         codebase already handles. Returns False (instead of raising) on
-        any failure (e.g. an unwritable path) so PdfExportDialog.qml can
-        show an error instead of crashing the window."""
-        reference = date.fromisoformat(reference_iso_date)
-        summary = compute_summary(
-            self._items, period, reference, dict(_unwrap(holiday_dates)), daily_hours, self._day_locations,
-        )
-        options = dict(_unwrap(options))
-        html = pdf_export.build_html(
-            summary,
-            customer_name=options.get("customerName", ""),
-            customer_address=options.get("customerAddress", ""),
-            contractor_name=options.get("contractorName", ""),
-            include_customer=bool(options.get("includeCustomer", True)),
-            include_contractor=bool(options.get("includeContractor", True)),
-            include_signatures=bool(options.get("includeSignatures", True)),
-        )
+        any failure so ExportPdfDialog.qml can show an error instead of
+        crashing the window — the whole body is guarded, not just the
+        final write, since a PySide slot that raises otherwise fails
+        silently from QML's perspective (no exception surfaces there;
+        the call just returns undefined) while still printing a
+        traceback here, which is what to check if this starts happening."""
         try:
+            reference = date.fromisoformat(reference_iso_date)
+            summary = compute_summary(
+                self._items, period, reference, dict(_unwrap(holiday_dates)), daily_hours, self._day_locations,
+            )
+            options = dict(_unwrap(options))
+            html = pdf_export.build_html(
+                summary,
+                customer_name=options.get("customerName", ""),
+                customer_address=options.get("customerAddress", ""),
+                contractor_name=options.get("contractorName", ""),
+                include_customer=bool(options.get("includeCustomer", True)),
+                include_contractor=bool(options.get("includeContractor", True)),
+                include_signatures=bool(options.get("includeSignatures", True)),
+            )
             pdf_export.export_pdf(path, html)
-        except OSError:
+        except Exception:
+            import traceback  # noqa: PLC0415
+            traceback.print_exc()
             return False
         return True

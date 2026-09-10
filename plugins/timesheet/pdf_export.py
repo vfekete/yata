@@ -3,6 +3,7 @@ confirmed to ship with PySide6's QtGui already (no new dependency, same
 bar already applied to every other library choice in this codebase)."""
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 from PySide6.QtGui import QPageSize, QPdfWriter, QTextDocument
@@ -81,8 +82,17 @@ def build_html(
 
 
 def export_pdf(path: str, html: str) -> None:
+    """Raises OSError if the PDF wasn't actually written — QPdfWriter/
+    QTextDocument.print_() fail SILENTLY at the C++ level for an
+    unwritable path (a QPainter::begin() warning printed to stderr, no
+    Python exception at all) rather than raising, confirmed live: calling
+    this against a nonexistent directory returned normally with no file
+    ever created. model.py's exportPdf() only catches Python exceptions,
+    so this has to turn that silent failure into one."""
     document = QTextDocument()
     document.setHtml(html)
     writer = QPdfWriter(path)
     writer.setPageSize(QPageSize(QPageSize.A4))
     document.print_(writer)
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        raise OSError(f"failed to write PDF to {path!r}")
