@@ -395,22 +395,33 @@ class WindowManager(QObject):
 
     @Slot(str, str, str, result=bool)
     def moveTaskToWindow(self, source_window_id: str, task_id: str, target_window_id: str) -> bool:
-        """Moves one task from one open window's model/store to another's —
-        TaskDelegate.qml's drag handle, dropped on a different window
+        """Moves one item from one open window's plugin content to another's
+        — TaskDelegate.qml's drag handle, dropped on a different window
         (detected via windowAt()) instead of a row in the same list. Lands
         it at self._drag_hover_index (see setDragHoverIndex), i.e. wherever
         the target window's own placeholder was last shown, not always at
-        the top."""
+        the top.
+
+        Routed through each window's own plugin_content.take_item/insert_item
+        (r-9.md step 5) rather than reaching into a hardcoded "task_model"
+        entry — a cross-window move is only possible between two windows
+        whose plugin both support it; either one leaving a hook None (e.g.
+        a future plugin with no concept of movable items) makes this a
+        no-op, same as a missing window entry."""
         if source_window_id == target_window_id:
             return False
         source_entry = self._windows.get(source_window_id)
         target_entry = self._windows.get(target_window_id)
         if source_entry is None or target_entry is None:
             return False
-        task = source_entry["task_model"].take_task(task_id)
-        if task is None:
+        take_item = source_entry["plugin_content"].take_item
+        insert_item = target_entry["plugin_content"].insert_item
+        if take_item is None or insert_item is None:
             return False
-        target_entry["task_model"].insert_task(task, self._drag_hover_index)
+        item = take_item(task_id)
+        if item is None:
+            return False
+        insert_item(item, self._drag_hover_index)
         return True
 
 

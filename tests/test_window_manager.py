@@ -365,6 +365,19 @@ def _make_task_model(tmp_path, name):
     return TaskListModel(TaskStore(path=str(tmp_path / f"{name}.json")), settings=settings)
 
 
+def _plugin_content_for(model):
+    """moveTaskToWindow (r-9.md step 5) reads take_item/insert_item off
+    each window's own plugin_content, not a hardcoded "task_model" entry —
+    same minimal PluginContent shape plugins/simple_task_list/plugin.py's
+    real create_content() builds, just without the QML/context-property
+    parts these WindowManager-only tests don't need."""
+    from plugin_api import PluginContent
+
+    return PluginContent(
+        context_properties={}, take_item=model.take_task, insert_item=model.insert_task,
+    )
+
+
 def test_window_at_finds_the_open_window_containing_the_point(tmp_path):
     manager = make_manager(tmp_path)
     manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600))
@@ -404,9 +417,15 @@ def test_move_task_to_window_transfers_task_between_open_windows(tmp_path):
     manager = make_manager(tmp_path)
     source_model = _make_task_model(tmp_path, "source")
     dest_model = _make_task_model(tmp_path, "dest")
-    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), task_model=source_model)
+    manager.register_window(
+        DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600),
+        task_model=source_model, plugin_content=_plugin_content_for(source_model),
+    )
     second_id = manager._registry.add("Second")
-    manager.register_window(second_id, FakeWindow(1000, 0, 400, 600), task_model=dest_model)
+    manager.register_window(
+        second_id, FakeWindow(1000, 0, 400, 600),
+        task_model=dest_model, plugin_content=_plugin_content_for(dest_model),
+    )
     task_id = source_model.addTask()
     source_model.setText(task_id, "Move me")
 
@@ -420,7 +439,10 @@ def test_move_task_to_window_transfers_task_between_open_windows(tmp_path):
 def test_move_task_to_window_fails_gracefully_for_unknown_task_or_window(tmp_path):
     manager = make_manager(tmp_path)
     source_model = _make_task_model(tmp_path, "source")
-    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), task_model=source_model)
+    manager.register_window(
+        DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600),
+        task_model=source_model, plugin_content=_plugin_content_for(source_model),
+    )
 
     assert manager.moveTaskToWindow(DEFAULT_WINDOW_ID, "no-such-task", "no-such-window") is False
     assert manager.moveTaskToWindow(DEFAULT_WINDOW_ID, "no-such-task", DEFAULT_WINDOW_ID) is False
@@ -429,7 +451,10 @@ def test_move_task_to_window_fails_gracefully_for_unknown_task_or_window(tmp_pat
 def test_move_task_to_window_is_a_no_op_for_the_same_window(tmp_path):
     manager = make_manager(tmp_path)
     source_model = _make_task_model(tmp_path, "source")
-    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), task_model=source_model)
+    manager.register_window(
+        DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600),
+        task_model=source_model, plugin_content=_plugin_content_for(source_model),
+    )
     task_id = source_model.addTask()
 
     assert manager.moveTaskToWindow(DEFAULT_WINDOW_ID, task_id, DEFAULT_WINDOW_ID) is False
@@ -443,9 +468,15 @@ def test_move_task_to_window_lands_at_the_reported_hover_index(tmp_path):
     manager = make_manager(tmp_path)
     source_model = _make_task_model(tmp_path, "source")
     dest_model = _make_task_model(tmp_path, "dest")
-    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), task_model=source_model)
+    manager.register_window(
+        DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600),
+        task_model=source_model, plugin_content=_plugin_content_for(source_model),
+    )
     second_id = manager._registry.add("Second")
-    manager.register_window(second_id, FakeWindow(1000, 0, 400, 600), task_model=dest_model)
+    manager.register_window(
+        second_id, FakeWindow(1000, 0, 400, 600),
+        task_model=dest_model, plugin_content=_plugin_content_for(dest_model),
+    )
     task_id = source_model.addTask()
     source_model.setText(task_id, "Move me")
     dest_b = dest_model.addTask()
@@ -465,9 +496,15 @@ def test_move_task_to_window_falls_back_to_top_with_no_reported_hover_index(tmp_
     manager = make_manager(tmp_path)
     source_model = _make_task_model(tmp_path, "source")
     dest_model = _make_task_model(tmp_path, "dest")
-    manager.register_window(DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600), task_model=source_model)
+    manager.register_window(
+        DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600),
+        task_model=source_model, plugin_content=_plugin_content_for(source_model),
+    )
     second_id = manager._registry.add("Second")
-    manager.register_window(second_id, FakeWindow(1000, 0, 400, 600), task_model=dest_model)
+    manager.register_window(
+        second_id, FakeWindow(1000, 0, 400, 600),
+        task_model=dest_model, plugin_content=_plugin_content_for(dest_model),
+    )
     task_id = source_model.addTask()
     dest_existing = dest_model.addTask()
 
@@ -475,6 +512,36 @@ def test_move_task_to_window_falls_back_to_top_with_no_reported_hover_index(tmp_
 
     assert moved is True
     assert [t.id for t in dest_model._tasks] == [task_id, dest_existing]
+
+
+def test_move_task_to_window_is_a_no_op_when_either_plugin_lacks_the_hooks(tmp_path):
+    """r-9.md step 5: a plugin that doesn't support moving its items between
+    windows leaves take_item/insert_item None (plugin_api.PluginContent's
+    own documented default) — moveTaskToWindow must degrade gracefully
+    rather than crash on a None call."""
+    from plugin_api import PluginContent
+
+    manager = make_manager(tmp_path)
+    source_model = _make_task_model(tmp_path, "source")
+    dest_model = _make_task_model(tmp_path, "dest")
+    no_hooks_content = PluginContent(context_properties={})
+
+    manager.register_window(
+        DEFAULT_WINDOW_ID, FakeWindow(0, 0, 400, 600),
+        task_model=source_model, plugin_content=no_hooks_content,
+    )
+    second_id = manager._registry.add("Second")
+    manager.register_window(
+        second_id, FakeWindow(1000, 0, 400, 600),
+        task_model=dest_model, plugin_content=_plugin_content_for(dest_model),
+    )
+    task_id = source_model.addTask()
+
+    moved = manager.moveTaskToWindow(DEFAULT_WINDOW_ID, task_id, second_id)
+
+    assert moved is False
+    assert source_model.rowCount() == 1
+    assert dest_model.rowCount() == 0
 
 
 def _make_app_settings(tmp_path, name):

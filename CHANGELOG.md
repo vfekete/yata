@@ -7,6 +7,36 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.43.0] - 2026-09-10
+
+### Changed
+- **r-9.md step 5: cross-window task drag&drop now routes through the
+  plugin's own hooks.** `WindowManager.moveTaskToWindow()` previously
+  reached into each window's registry entry by the hardcoded key
+  `"task_model"` and called `TaskListModel.take_task`/`insert_task`
+  directly — the last place `WindowManager` still assumed every plugin is
+  `simple_task_list`. It now calls `plugin_content.take_item(task_id)` /
+  `plugin_content.insert_item(item, target_index)` instead (the
+  `plugin_api.PluginContent` hooks introduced in step 1 and already wired
+  by `plugins/simple_task_list/plugin.py` to those same two model methods
+  — unused by `WindowManager` until now). A window whose plugin leaves
+  either hook `None` (a plugin with no concept of movable items) makes the
+  move a no-op, same as a missing window entry — no crash.
+- The `"task_model"` registry entry itself is unchanged and still set
+  (`main.py`'s `register_window(..., task_model=...)`) — it's genuinely
+  useful `simple_task_list`-specific convenience access for tests/tooling
+  (`scripts/capture_screenshots.py`, several test fixtures), just no
+  longer something `WindowManager`'s own logic depends on.
+- Verified live (offscreen, real windows built through the real
+  `plugin.py create_content()` path, not just the unit-level `FakeWindow`
+  tests): confirmed each window's registered `plugin_content.take_item`/
+  `insert_item` really are the same bound methods as its `task_model`'s
+  own `take_task`/`insert_task`, and that a task dragged from one real
+  window to another still moves correctly (data intact) through the new
+  routing. Added `tests/test_window_manager.py::
+  test_move_task_to_window_is_a_no_op_when_either_plugin_lacks_the_hooks`
+  for the new graceful-degradation path.
+
 ## [0.42.2] - 2026-09-10
 
 ### Fixed

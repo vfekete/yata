@@ -291,10 +291,14 @@ def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plu
     # when it's the window that requested its own deletion.
     window_manager.register_window(
         window_id, window,
-        # "task_model" here is transitional: WindowManager.moveTaskToWindow
-        # still reaches into this entry by that exact name (unchanged since
-        # before r-9.md) — generalizing it to plugin_content's own
-        # take_item/insert_item hooks is r-9.md's plan's step 5, not this one.
+        # "task_model" is simple_task_list-specific convenience access for
+        # tests/tooling (e.g. scripts/capture_screenshots.py, and several
+        # test fixtures reach in for direct model assertions) — as of
+        # r-9.md step 5, WindowManager itself no longer depends on this
+        # entry existing; moveTaskToWindow goes through plugin_content's
+        # own take_item/insert_item hooks instead, which stay correct for
+        # any future plugin regardless of whether it happens to expose a
+        # "taskModel" context property at all.
         task_model=plugin_content.context_properties.get("taskModel"),
         app_settings=host_settings, context=context, theme=theme,
         theme_component=theme_component, main_component=main_component,
