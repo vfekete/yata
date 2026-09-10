@@ -60,6 +60,10 @@ Window {
     // keep matching that look now that it's host-owned.
     readonly property color chromeFieldColor: Qt.rgba(1, 1, 1, 0.10)
     readonly property color chromeHoverColor: Qt.rgba(1, 1, 1, 0.08)
+    // yatasView's DELETED row label — same red TaskDelegate.qml's own
+    // CANCELED label uses under the "none" theme, frozen as a fixed chrome
+    // constant for the same reason every other chrome* color is.
+    readonly property color chromeDangerColor: "#ef4444"
 
     x: hostSettings.x
     y: hostSettings.y
@@ -173,7 +177,18 @@ Window {
     // below) rather than snapping instantly — 0 (fully clear) to 1 (fully
     // blurred, i.e. MultiEffect's blurMax radius). 150ms per explicit
     // request (shortened from the original 1-second spec in r-8.md).
-    property real blurAmount: root.contentLocked ? 1.0 : 0.0
+    //
+    // Forced to 0 while yatasView is showing (&& !root.yatasActive below) —
+    // explicit request: window management must be visually unaffected by
+    // the lock in every respect, not just input. contentLocked itself keeps
+    // tracking the real lock state underneath exactly as before (nothing
+    // here stops hostSettings.lockState from changing, or contentBlocker
+    // from being enabled) — only the glass EFFECT is suppressed while this
+    // view is up; the moment yatasActive goes false again this snaps back
+    // to whatever contentLocked already is (still animated by the Behavior
+    // below), i.e. "the lock state is preserved and applied once the
+    // window list is closed".
+    property real blurAmount: (root.contentLocked && !root.yatasActive) ? 1.0 : 0.0
     Behavior on blurAmount {
         NumberAnimation { duration: 150 }
     }
@@ -399,6 +414,7 @@ Window {
             chromeBoxColor: root.chromeBoxColor
             chromeFieldColor: root.chromeFieldColor
             chromeHoverColor: root.chromeHoverColor
+            chromeDangerColor: root.chromeDangerColor
         }
 
         Rectangle {
@@ -655,12 +671,11 @@ Window {
             y: 0
             height: tagLabelBg.height
             radius: 3
-            // Same background/opacity as every other icon box (lock/close)
-            // regardless of active state — explicit follow-up request,
-            // an accent-colored fill when active looked visibly different/
-            // lighter than the other boxes. "Active" is communicated by
-            // the persistent glow below instead (see layer.enabled).
-            color: root.chromeBoxColor(yatasMouseArea.containsMouse)
+            // Pushed/active state fills with the accent (highlight) color
+            // itself, glyph flipped to the dark box color for contrast —
+            // explicit follow-up request ("plain Y might not be visible"
+            // against a background matching the other, unpushed icons).
+            color: root.yatasActive ? root.chromeAccentColor : root.chromeBoxColor(yatasMouseArea.containsMouse)
             width: yatasGlyph.implicitWidth + 16
             x: lockIconBg.x - root.lockCloseIconGap - width
 
@@ -682,10 +697,9 @@ Window {
                 font.bold: true
                 font.family: root.chromeFontFamily
                 font.pixelSize: Math.round(yatasIconBg.height * 0.6)
-                // Always visible now (the box itself no longer changes
-                // fill when active — see its own comment above), same
-                // accent color the tag label/lock/close icons already use.
-                color: root.chromeAccentColor
+                // Dark against the now accent-colored pushed background;
+                // the usual accent color against the dark box otherwise.
+                color: root.yatasActive ? root.chromeBoxColor(false) : root.chromeAccentColor
             }
 
             MouseArea {
@@ -701,29 +715,36 @@ Window {
         }
 
         // Ctrl+Wheel zoom interceptor — host-owned and generic (see the
-        // Shortcut items above for why). Item wrapper (not anchors
-        // directly on WheelHandler, which isn't a visual Item and has no
-        // such property) covering the whole window, declared last
-        // (topmost) so it sees Ctrl+Wheel before either the plugin's own
-        // ListView/Flickable or yatasView's own ListView could consume it
-        // for scrolling. Normal (no-modifier) wheel events aren't matched
-        // by acceptedModifiers and propagate through to whichever of
-        // those is actually showing, untouched.
-        Item {
+        // Shortcut items above for why). A MouseArea, not a WheelHandler:
+        // mirrors contentBlocker's own already-proven wheel-interception
+        // pattern above rather than the newer Pointer Handler API — a
+        // WheelHandler here lost priority to a nested ListView/Flickable's
+        // own built-in wheel scrolling in practice (Flickable's wheel
+        // handling predates Pointer Handlers and doesn't consistently
+        // respect their declarative z-order priority), so Ctrl+Wheel
+        // silently did nothing whenever the point happened to be over a
+        // live list. acceptedButtons: Qt.NoButton means it never
+        // intercepts clicks/drags — only onWheel is used. Declared last
+        // (topmost) so it's offered every wheel event before either the
+        // plugin's own content or yatasView's own ListView gets a turn;
+        // anything without Ctrl held is explicitly un-accepted so it falls
+        // through to whichever of those is actually showing, untouched.
+        MouseArea {
             anchors.fill: parent
-
-            WheelHandler {
-                acceptedModifiers: Qt.ControlModifier
-                onWheel: (event) => {
-                    event.accepted = true
-                    var scrollingUp = event.angleDelta.y > 0
-                    // Default (not inverted): scroll up → zoom in, scroll down → zoom out.
-                    var zoomIn = hostSettings.wheelZoomInverted ? !scrollingUp : scrollingUp
-                    if (zoomIn)
-                        hostSettings.zoomLevel = Math.min(hostSettings.zoomLevel + 0.1, hostSettings.maxZoomLevel)
-                    else
-                        hostSettings.zoomLevel = Math.max(hostSettings.zoomLevel - 0.1, hostSettings.minZoomLevel)
+            acceptedButtons: Qt.NoButton
+            onWheel: (wheel) => {
+                if (!(wheel.modifiers & Qt.ControlModifier)) {
+                    wheel.accepted = false
+                    return
                 }
+                wheel.accepted = true
+                var scrollingUp = wheel.angleDelta.y > 0
+                // Default (not inverted): scroll up → zoom in, scroll down → zoom out.
+                var zoomIn = hostSettings.wheelZoomInverted ? !scrollingUp : scrollingUp
+                if (zoomIn)
+                    hostSettings.zoomLevel = Math.min(hostSettings.zoomLevel + 0.1, hostSettings.maxZoomLevel)
+                else
+                    hostSettings.zoomLevel = Math.max(hostSettings.zoomLevel - 0.1, hostSettings.minZoomLevel)
             }
         }
     }

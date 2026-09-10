@@ -183,19 +183,29 @@ def test_yatas_view_stays_visible_and_usable_while_locked(yata_window):
         "hard-locked -- window management is exempt from the glass lock"
     )
 
-    # yatasView's own background must be fully opaque, not just correctly
-    # positioned/interactive -- a transparent background here would still
-    # let frostedContent's blur/tint scrim bleed through visually
-    # underneath/around this content even though input/rendering order
-    # were already fixed (confirmed live, this was a real follow-up bug).
-    background_rects = [
-        r for r in _find_by_class_prefix(yatas_view, "QQuickRectangle")
-        if round(r.width()) == round(yatas_view.width()) and round(r.height()) == round(yatas_view.height())
-    ]
-    assert background_rects, "yatasView's own full-size background Rectangle not found"
-    assert background_rects[0].property("color").alpha() == 255, (
-        "yatasView's background must be fully opaque so the glass-lock "
-        "tint/blur behind it can never show through"
+    # yatasView itself has no background of its own (see its own header
+    # comment) -- what keeps the glass-lock tint/blur from bleeding through
+    # while it's showing is Main.qml's blurAmount being forced to 0
+    # whenever yatasActive is true, not an opaque panel. Confirm that: the
+    # tint scrim's opacity (driven by blurAmount) must read as fully
+    # cleared even though the real lock state is still "locked" underneath.
+    assert window.property("blurAmount") == 0.0, (
+        "the glass-lock blur/tint must be suppressed while yatasView is "
+        "showing, even though the real lock state stays \"locked\" "
+        "underneath and reapplies the moment yatasActive goes false again"
+    )
+
+    # Closing the window list (Y off) re-applies whatever the lock state
+    # already was the whole time -- "the state of lock is preserved and it
+    # is applied once the window list is closed". blurAmount animates over
+    # 150ms (see Main.qml's own Behavior) -- processEvents() alone doesn't
+    # advance real time, so qWait is needed for it to actually finish.
+    from PySide6.QtTest import QTest as _QTest  # noqa: PLC0415
+    window.setProperty("yatasActive", False)
+    _QTest.qWait(250)
+    assert window.property("blurAmount") == 1.0, (
+        "the glass lock must re-apply immediately once yatasView closes, "
+        "since hostSettings.lockState was \"locked\" the entire time"
     )
 
 

@@ -29,6 +29,7 @@ Item {
     required property var chromeBoxColor
     required property color chromeFieldColor
     required property color chromeHoverColor
+    required property color chromeDangerColor
 
     // Read back by Main.qml the same way it reads contentLoader.item's
     // contentHovered — auto-locked's hover-to-unlock check needs to know
@@ -37,20 +38,15 @@ Item {
     readonly property bool contentHovered: hoverHandler.hovered
     HoverHandler { id: hoverHandler }
 
-    // Solid background, deliberately NOT "transparent" like the plugin
-    // content panel's own wash — this view sits on top of frostedContent's
-    // blur/tint layer (see Main.qml's own comment at this component's
-    // instantiation) precisely so window management stays visually
-    // unaffected by the lock, and a transparent background here would let
-    // that same blur/tint bleed through underneath/around this content —
-    // confirmed live. Same color lock/close/the tag-rename field already
-    // use for their own solid boxes.
-    Rectangle {
-        anchors.fill: parent
-        radius: 6
-        color: root.chromeBoxColor(false)
-    }
-
+    // Deliberately no background Rectangle of its own here (there used to
+    // be one, solid near-black) — this view sits directly on top of
+    // frostedContent's own themed wash (Theme.contentBackground), the same
+    // panel the plugin's own content normally shows through, so leaving
+    // this transparent makes it look exactly like that panel: explicit
+    // "total resemblance" request. Safe to do now that Main.qml freezes
+    // blurAmount at 0 whenever this view is showing (see its own comment
+    // there) — there is no blur/tint left to bleed through anymore, which
+    // is what the old solid background used to guard against.
     readonly property string searchText: searchField.text
 
     property var allWindows: []
@@ -157,6 +153,10 @@ Item {
             TextField {
                 id: searchField
                 Layout.fillWidth: true
+                // Shifted right by half the ADD button's own width —
+                // explicit follow-up request — rather than sitting flush
+                // against it.
+                Layout.leftMargin: addBtn.width / 2
                 placeholderText: qsTr("Search windows")
                 placeholderTextColor: root.chromeMutedTextColor
                 leftPadding: searchIcon.width + 12
@@ -214,6 +214,7 @@ Item {
                 chromeBoxColor: root.chromeBoxColor
                 chromeFieldColor: root.chromeFieldColor
                 chromeHoverColor: root.chromeHoverColor
+                chromeDangerColor: root.chromeDangerColor
                 onRenamed: (id, newTag) => windowManager.renameWindow(id, newTag)
                 onDeleteRequested: (id, tag) => deleteDialog.openFor(id, tag)
                 onShowToggled: (id, show) => show ? windowManager.openWindow(id) : windowManager.closeWindow(id)

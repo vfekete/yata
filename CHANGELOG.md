@@ -7,6 +7,43 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.46.0] - 2026-09-10
+
+### Fixed
+- **Ctrl+Wheel zoom actually works now.** The `WheelHandler` added in
+  0.45.0 lost priority to a nested `ListView`/`Flickable`'s own built-in
+  wheel scrolling in real use, even though it worked in offscreen tests —
+  `Flickable`'s wheel handling predates Qt's Pointer Handler API and
+  doesn't consistently respect its declarative z-order priority, so
+  Ctrl+Wheel silently did nothing whenever the pointer happened to be over
+  a live list. Replaced with a plain `MouseArea` (mirroring the
+  already-proven `contentBlocker` wheel-interception idiom elsewhere in
+  `Main.qml`) that explicitly declines any non-Ctrl wheel event so normal
+  scrolling still falls through untouched. Ctrl+=/Ctrl+-/Ctrl+0 keyboard
+  shortcuts were unaffected by this bug.
+- **The window-management view ("Y") no longer looks like a flat black
+  box, and the glass-lock effect no longer bleeds through it at all.**
+  Both traced to the same design mistake: `YatasView` painted its own
+  solid near-black background specifically to block the lock's blur/tint
+  scrim from showing through around its edges. Instead, `Main.qml` now
+  forces `blurAmount` to 0 whenever the window list is showing (the real
+  lock state keeps tracking underneath — `hostSettings.lockState` is
+  untouched — it just visually reapplies the instant the window list
+  closes), so there's nothing left to block and `YatasView` can stay
+  transparent like the plugin's own content panel always has. This is
+  also what "total resemblance" to the normal task list means now: same
+  underlying themed background showing through, not a separately-styled
+  panel.
+- **The "Y" toggle's pushed state was nearly invisible** (dark box,
+  same as unpushed, with only a faint glow) — its background now fills
+  with the accent/highlight color when active, with the glyph flipped to
+  a dark color for contrast.
+- Moved the "Search windows" field right by half the "Add" button's own
+  width, so it no longer sits flush against it.
+- Deleted windows now show a small red "DELETED" label beneath their tag
+  name in the window list, the same way a task's own DONE/CANCELED status
+  shows beneath its text.
+
 ## [0.45.0] - 2026-09-10
 
 ### Changed

@@ -44,6 +44,7 @@ Item {
     required property var chromeBoxColor
     required property color chromeFieldColor
     required property color chromeHoverColor
+    required property color chromeDangerColor
 
     property bool editing: false
     readonly property bool hovered: hoverHandler.hovered
@@ -55,7 +56,9 @@ Item {
     readonly property int iconBoxHeight: Math.round(root.chromeFontPixelSize * 0.86)
 
     width: ListView.view.width
-    height: Math.max(30, mainRow.implicitHeight + 12)
+    // A touch taller for a DELETED row, to make room for deletedLabel
+    // underneath mainRow (see its own comment below).
+    height: Math.max(30, mainRow.implicitHeight + 12 + (root.deleted ? deletedLabel.implicitHeight + 2 : 0))
 
     HoverHandler { id: hoverHandler }
 
@@ -69,7 +72,8 @@ Item {
         id: mainRow
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.top: parent.top
+        anchors.topMargin: 6
         anchors.leftMargin: 4
         anchors.rightMargin: 4
         spacing: 10
@@ -268,6 +272,37 @@ Item {
             }
             HoverHandler { id: purgeHover; cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: root.purgeRequested(root.windowId, root.tag) }
+        }
+    }
+
+    // Same idiom TaskDelegate.qml's own DONE/CANCELED label uses — a
+    // small, colored word beneath the name — explicit follow-up request,
+    // "similarly to DONE or CANCELLED". A sibling anchored below mainRow
+    // rather than nested inside it (tried first: wrapping tagText in a
+    // Column broke TapHandler's double-tap detection the moment more than
+    // one window had existed earlier in the same process — confirmed via a
+    // from-scratch reproduction with/without the wrapper; root cause not
+    // fully understood, but reparenting tagText out of the RowLayout at
+    // all clearly isn't worth it for one label).
+    Text {
+        id: deletedLabel
+        visible: root.deleted
+        anchors.left: mainRow.left
+        anchors.top: mainRow.bottom
+        anchors.topMargin: 2
+        text: qsTr("DELETED")
+        color: root.chromeDangerColor
+        font.family: root.chromeFontFamily
+        font.pixelSize: Math.round(root.chromeFontPixelSize * 0.75)
+        font.bold: true
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: deletedLabel.color
+            shadowBlur: 1.0
+            shadowHorizontalOffset: 0
+            shadowVerticalOffset: 0
+            shadowOpacity: 1.0
         }
     }
 }
