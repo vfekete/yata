@@ -73,18 +73,15 @@ Item {
 
     HoverHandler { id: hoverHandler }
 
-    // Highlighted (not just hovered) while this item is the one actually
-    // being tracked — explicit follow-up request ("make it highlighted").
-    // hoverColor still layers on top while both are true (hovering the
-    // running row), same as a plain overlay addition would.
+    // Plain hover-only background, matching TaskDelegate.qml's own row —
+    // the running-row highlight tried earlier (a tinted background +
+    // colored border box) was explicit follow-up feedback to remove:
+    // the state-indicator circle below is the ONLY "this one is running"
+    // signal now, not a whole-row box around it.
     Rectangle {
         anchors.fill: parent
         radius: 4
-        color: root.running
-            ? Qt.rgba(Theme.ongoingColor.r, Theme.ongoingColor.g, Theme.ongoingColor.b, root.hovered ? 0.22 : 0.14)
-            : (root.hovered ? Theme.hoverColor : "transparent")
-        border.color: root.running ? Theme.ongoingColor : "transparent"
-        border.width: root.running ? 1 : 0
+        color: root.hovered ? Theme.hoverColor : "transparent"
     }
 
     // Measures a representative "worst case" duration string, so every
@@ -112,7 +109,11 @@ Item {
         anchors.topMargin: 6
         anchors.leftMargin: 6
         anchors.rightMargin: 6
-        spacing: 10
+        // Wider than a typical RowLayout gap — explicit follow-up
+        // request ("wider gaps between circle, timestamp and task
+        // name"), so the state indicator/duration/name read as three
+        // distinct parts rather than a cramped run-on line.
+        spacing: Math.round(Theme.taskFontPixelSize * 1.2)
 
         // State indicator: a filled circle, "big as 1/2 size of the
         // font" (explicit spec) — a real Rectangle rather than a text

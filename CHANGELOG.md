@@ -7,6 +7,27 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.49.1] - 2026-09-11
+
+### Fixed
+- **Removed the running-item's row highlight (tinted background +
+  colored border box)** — explicit follow-up feedback (with a
+  screenshot): the state-indicator circle is the only "this one is
+  running" signal now, not a box around the whole row.
+- **Widened the gaps between the state circle, duration, and item name**
+  — they read as one cramped run-on line before.
+- **The window's minimum width was needlessly large** — `Main.qml` sizes
+  it off `contentLoader.item.actionButtonsWidth * 2`, but Timesheet's own
+  version read the WHOLE upper-menu row's `implicitWidth`, which folds in
+  the search field's own preferred width too (a `RowLayout`'s
+  `implicitWidth` includes its `Layout.fillWidth` child's size, not just
+  the fixed buttons). Now sums only the fixed ADD/EXPORT/SETTINGS
+  buttons' own widths, the same technique `Toolbar.qml`'s own
+  `actionButtonsWidth` already uses — confirmed the window now shrinks
+  smaller than Simple Task List's own (346px vs. 476px), matching the
+  screenshot comparison showing Timesheet should be at least as
+  compact, if not more (fewer buttons).
+
 ## [0.49.0] - 2026-09-11
 
 ### Changed

@@ -25,7 +25,16 @@ Item {
     id: contentRoot
     anchors.fill: parent
 
-    readonly property alias actionButtonsWidth: upperMenu.implicitWidth
+    // Sum of ONLY the fixed-width buttons plus the spacing between them —
+    // same technique Toolbar.qml's own actionButtonsWidth uses — NOT
+    // upperMenu.implicitWidth (tried first): a RowLayout's own
+    // implicitWidth folds in its fillWidth child's own preferred size
+    // too, so it included the search field's own natural width and
+    // inflated Main.qml's minimumWidth (2x this) far past what the fixed
+    // buttons alone actually need — confirmed live: the window couldn't
+    // shrink nearly as small as Simple Task List's own, despite having
+    // fewer buttons.
+    readonly property real actionButtonsWidth: addButton.width + exportButton.width + settingsButton.width + upperMenu.spacing * 2
     readonly property alias contentHovered: contentHoverHandler.hovered
     readonly property real windowOpacity: Theme.windowOpacity
 
@@ -92,6 +101,7 @@ Item {
             spacing: 10
 
             Text {
+                id: addButton
                 text: qsTr("ADD")
                 font.bold: true
                 font.family: Theme.fontFamily
@@ -114,6 +124,7 @@ Item {
             }
 
             Text {
+                id: exportButton
                 text: qsTr("EXPORT")
                 font.bold: true
                 font.family: Theme.fontFamily
