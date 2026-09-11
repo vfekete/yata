@@ -2,12 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Confirmation dialog for soft-deleting a YATA window from YatasView's
-// ACTIVE row (WindowManager.deleteWindow) — moves it to the DELETED
-// category without touching its data, recoverable later via Re-create, or
-// permanently discarded via PurgeWindowDialog. Host-owned (see this
-// directory's HostDialogWindow.qml) — window management is master-
-// application chrome, not plugin content.
 HostDialogWindow {
     id: root
     title: qsTr("Delete window?")

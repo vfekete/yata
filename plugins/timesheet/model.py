@@ -1,5 +1,3 @@
-"""Qt list model exposing work items to QML, plus summary computation
-(r-10.md)."""
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
@@ -19,14 +17,6 @@ def _parse(iso: str) -> datetime:
 
 
 def session_duration_by_day(session: WorkSession) -> dict:
-    """Splits a session's duration across the calendar day(s) it actually
-    spans — a session that ran past midnight contributes to each day it
-    touches, not just the day it started on (explicit spec requirement).
-    A still-running session (stop == "") contributes nothing yet — callers
-    needing a live "so far today" total should stop-as-of-now themselves
-    before calling this, same as the QML side already reads `running` to
-    decide whether to keep ticking a live display.
-    """
     if session.stop == "":
         return {}
     start = _parse(session.start)
@@ -42,11 +32,6 @@ def session_duration_by_day(session: WorkSession) -> dict:
 
 
 def format_duration(total: timedelta) -> str:
-    """H:MM:SS, hours unbounded (a multi-day session is entirely plausible
-    for a "worked N days straight" total, explicit spec/follow-up
-    request) and never rounded to the nearest minute — seconds are kept
-    at full precision throughout, not just cosmetically in the format
-    string."""
     total_seconds = int(max(total.total_seconds(), 0))
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -54,9 +39,6 @@ def format_duration(total: timedelta) -> str:
 
 
 def _period_bounds(period: str, reference: date) -> tuple[date, date]:
-    """Inclusive [start, end] calendar-day range for `period` ("day",
-    "week", "month", "year"), containing `reference`. Week starts Monday
-    (ISO)."""
     if period == "day":
         return reference, reference
     if period == "week":
@@ -85,12 +67,6 @@ def compute_summary(
     items: list[WorkItem], period: str, reference: date,
     holiday_dates: dict, daily_hours: float, day_locations: dict,
 ) -> dict:
-    """One row per calendar day in the period, plus period totals.
-    holiday_dates: {"YYYY-MM-DD": name}. A day is a "working day" (counts
-    toward the target) unless it's a holiday or a weekend (Sat/Sun) — the
-    spec's "8 hours per working day * number of working days" default
-    target is computed the same way.
-    """
     start, end = _period_bounds(period, reference)
     day_rows = []
     worked_total = timedelta()
@@ -142,16 +118,8 @@ class TimesheetModel(QAbstractListModel):
         self._store = store
         self._items, self._day_locations = store.load()
         self._search = ""
-        # Cached, not recomputed on every rowCount()/data() call — same
-        # pattern TaskListModel's own self._visible already establishes,
-        # needed now that visibility depends on search text too (a plain
-        # per-call filter, tried first for the not-deleted-only case,
-        # can't properly signal a search-driven visibility change to
-        # QML — see _recompute() below for why that matters).
         self._visible: list[WorkItem] = []
         self._recompute()
-
-    # ── QAbstractListModel plumbing ──────────────────────────────────────
 
     def _matches_search(self, item: WorkItem) -> bool:
         if not self._search:
@@ -159,18 +127,6 @@ class TimesheetModel(QAbstractListModel):
         return self._search.lower() in item.name.lower()
 
     def _recompute(self) -> None:
-        """Rebuilds self._visible (not-deleted, search-matching) and
-        signals QML appropriately — a dataChanged over the unchanged range
-        when the same set/order of items is still visible (e.g. renaming
-        one while no search narrows the list), a full reset when the
-        visible set itself changed (search text edited, item added/
-        deleted). Same "reset only when the row SET changes, dataChanged
-        otherwise" split TaskListModel's own _recompute() already
-        establishes, for the same reason: a search keystroke removing a
-        row needs proper structural signaling, but every other mutation
-        (rename, start/stop, non-working toggle) shouldn't force-destroy
-        every delegate just to update one.
-        """
         old_ids = [i.id for i in self._visible]
         new_visible = [i for i in self._items if not i.deleted and self._matches_search(i)]
         new_ids = [i.id for i in new_visible]
@@ -190,10 +146,6 @@ class TimesheetModel(QAbstractListModel):
 
     def roleNames(self):
         return {
-            # "itemId", not "id" — "id" is QML's own reserved per-object
-            # attribute, so a role literally named "id" can't be declared
-            # as a `required property` on a delegate (same reasoning
-            # TaskListModel's own "taskId" role name already documents).
             _ID: b"itemId",
             _NAME: b"name",
             _NON_WORKING: b"nonWorking",
@@ -227,8 +179,6 @@ class TimesheetModel(QAbstractListModel):
             return any(s.abandoned for s in item.sessions)
         return None
 
-    # ── internal helpers ──────────────────────────────────────────────
-
     def _find(self, item_id: str) -> WorkItem | None:
         for item in self._items:
             if item.id == item_id:
@@ -256,8 +206,6 @@ class TimesheetModel(QAbstractListModel):
             idx = self.index(row)
             self.dataChanged.emit(idx, idx)
 
-    # ── QML-facing API ──────────────────────────────────────────────────
-
     @Slot(result=str)
     def getSearchText(self) -> str:
         return self._search
@@ -272,13 +220,6 @@ class TimesheetModel(QAbstractListModel):
 
     @Slot(result=str)
     def addItem(self) -> str:
-        """No-argument, empty-name creation — same convention
-        TaskListModel.addTask() already established: the row starts
-        in-place-editable (WorkItemRow.qml focuses its name field the
-        moment itemAdded fires, mirroring TaskDelegate's own onTaskAdded
-        handling), and any previous ADD abandoned without typing anything
-        (click-away, no text ever entered) is dropped first rather than
-        accumulating empty rows."""
         self._items = [i for i in self._items if i.name or i.deleted or i.sessions]
         item = WorkItem(name="")
         self._items.append(item)
@@ -301,9 +242,6 @@ class TimesheetModel(QAbstractListModel):
 
     @Slot(str)
     def startItem(self, item_id: str) -> None:
-        """Starting an item auto-stops any OTHER currently-running
-        session first — "up most one work entry traced at any time for
-        given YATA window" (spec)."""
         target = self._find(item_id)
         if target is None or self._running_session(target) is not None:
             return
@@ -312,8 +250,6 @@ class TimesheetModel(QAbstractListModel):
                 self._stop_now(other)
         target.sessions.append(WorkSession())
         self._save()
-        # Whole visible range, not just target's own row -- any OTHER
-        # item may have just been auto-stopped above too.
         if self._visible:
             self.dataChanged.emit(self.index(0), self.index(len(self._visible) - 1))
 
@@ -328,10 +264,6 @@ class TimesheetModel(QAbstractListModel):
 
     @Slot(str)
     def deleteItem(self, item_id: str) -> None:
-        """Soft-delete — see WorkItem.deleted's own docstring for why
-        there's no restore/purge UI for this. Stops it first if it
-        happens to be running, so a deleted item can never be left
-        "tracking forever" in the background."""
         target = self._find(item_id)
         if target is None:
             return
@@ -351,11 +283,6 @@ class TimesheetModel(QAbstractListModel):
 
     @Slot(str, result=str)
     def liveDurationLabel(self, item_id: str) -> str:
-        """Same total _total_duration() computes, PLUS the elapsed time of
-        the currently-running session (if any) as of right now —
-        WorkItemRow.qml polls this once a second while running, since the
-        durationLabel role itself only updates on start/stop, not
-        continuously."""
         target = self._find(item_id)
         if target is None:
             return format_duration(timedelta())
@@ -367,8 +294,6 @@ class TimesheetModel(QAbstractListModel):
 
     @Slot(str, result="QVariant")
     def sessionsFor(self, item_id: str):
-        """Every start/stop pair for one item, oldest first — backs
-        SessionsDialog.qml's manual-edit list."""
         target = self._find(item_id)
         if target is None:
             return []
@@ -379,9 +304,6 @@ class TimesheetModel(QAbstractListModel):
 
     @Slot(str, str, str, str, result=bool)
     def updateSession(self, item_id: str, session_id: str, start_iso: str, stop_iso: str) -> bool:
-        """Manual start/stop adjustment (spec: "Start / stop timestamps
-        can be adjusted manually") — clears `abandoned` the moment a user
-        touches it, per spec."""
         target = self._find(item_id)
         if target is None:
             return False
@@ -415,17 +337,6 @@ class TimesheetModel(QAbstractListModel):
 
     @Slot(str, str, str, "QVariant", float, "QVariant", result=bool)
     def exportPdf(self, path: str, period: str, reference_iso_date: str, holiday_dates, daily_hours: float, options):
-        """options: {customerName, customerAddress, contractorName,
-        includeCustomer, includeContractor, includeSignatures} — a QML
-        object literal, unwrapped the same "may arrive as a dict already,
-        or need dict(...)" way every other QVariant-typed slot in this
-        codebase already handles. Returns False (instead of raising) on
-        any failure so ExportPdfDialog.qml can show an error instead of
-        crashing the window — the whole body is guarded, not just the
-        final write, since a PySide slot that raises otherwise fails
-        silently from QML's perspective (no exception surfaces there;
-        the call just returns undefined) while still printing a
-        traceback here, which is what to check if this starts happening."""
         try:
             reference = date.fromisoformat(reference_iso_date)
             summary = compute_summary(

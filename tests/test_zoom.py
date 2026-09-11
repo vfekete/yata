@@ -1,13 +1,3 @@
-"""Tests for zoom (Ctrl+scroll/Ctrl+=/Ctrl+-/Ctrl+0) as generic host-owned
-window state, not plugin-specific — a follow-up to the r-9.md host/plugin
-split. hostSettings.zoomLevel (yata-src/settings.py) is the host↔plugin
-zoom API: Main.qml owns the input handling and works no matter what's
-currently showing (a plugin's own content or the host's own YatasView), a
-plugin decides entirely on its own what to do with the value.
-
-Runs against a real QML engine (offscreen) using QTest, same construction
-pattern as the other QML integration test files.
-"""
 import os
 import sys
 
@@ -37,9 +27,6 @@ def _get_app():
 
 
 def _send_ctrl_wheel(window, pos, angle_delta_y):
-    """QTest has no mouseWheel() helper in this PySide6 version -- build
-    and dispatch a real QWheelEvent directly, same technique used to
-    verify this live during development."""
     event = QWheelEvent(
         QPointF(pos), window.mapToGlobal(pos),
         QPoint(0, 0), QPoint(0, angle_delta_y),
@@ -50,8 +37,6 @@ def _send_ctrl_wheel(window, pos, angle_delta_y):
 
 @pytest.fixture()
 def yata_window(tmp_path, monkeypatch):
-    """Yields (app, window, host_settings) — a single real window, same
-    construction path as main.py."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -123,8 +108,6 @@ def test_ctrl_wheel_zooms_while_plugin_content_showing(yata_window):
 
 
 def test_ctrl_wheel_zooms_while_yatas_view_showing(yata_window):
-    """The actual point of moving zoom to the host: it must work no
-    matter what's currently on screen, not just the plugin's own content."""
     app, window, host_settings = yata_window
     window.setProperty("yatasActive", True)
     app.processEvents()
@@ -153,8 +136,6 @@ def test_wheel_zoom_inverted_flips_scroll_direction(yata_window):
     host_settings.wheelZoomInverted = True
     before = host_settings.zoomLevel
 
-    # angle_delta_y > 0 is a scroll "up" -- normally zoom in, inverted
-    # should zoom OUT instead.
     _send_ctrl_wheel(window, QPoint(350, 250), 120)
     app.processEvents()
 
@@ -162,10 +143,6 @@ def test_wheel_zoom_inverted_flips_scroll_direction(yata_window):
 
 
 def test_plugin_font_size_reflects_host_zoom_level(yata_window):
-    """Confirms the host↔plugin zoom API actually works end to end, not
-    just that the host-side value changes -- the plugin decides on its
-    own to read hostSettings.zoomLevel and apply it to its own font size
-    (ThemeImpl.qml's taskFontPixelSize)."""
     app, window, host_settings = yata_window
 
     def find_by_class(item, prefix, results=None):
@@ -186,12 +163,6 @@ def test_plugin_font_size_reflects_host_zoom_level(yata_window):
 
 
 def test_yatas_view_font_size_reflects_host_zoom_level(yata_window):
-    """The window list ("YATAS") is host content too, not frame chrome --
-    it must scale with zoom the same way the plugin's own content does.
-    Follow-up bug: it was left bound to the fixed, unscaled
-    chromeFontPixelSize Main.qml's own outer frame (tag/lock/close/Y icon)
-    uses, so zoom visibly worked for the plugin's content but silently did
-    nothing for this view."""
     app, window, host_settings = yata_window
 
     def find_by_class(item, prefix, results=None):
@@ -210,11 +181,6 @@ def test_yatas_view_font_size_reflects_host_zoom_level(yata_window):
         w for w in find_by_class(window.contentItem(), "YatasView")
     )
 
-    # Explicit, not relative to whatever zoomLevel happened to already be
-    # (QSettings can carry a value over between tests sharing one process
-    # even with a fresh XDG_*_HOME per test -- Qt caches the resolved ini
-    # path the first time it's asked, before a later test's monkeypatch
-    # takes effect) -- pin both ends instead of comparing before/after.
     host_settings.zoomLevel = 1.0
     app.processEvents()
     default_sizes = {t.property("font").pixelSize() for t in find_by_class(yatas_view, "QQuickText") if t.property("font")}

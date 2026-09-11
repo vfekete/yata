@@ -1,25 +1,12 @@
 import QtQuick
 import QtQuick.Controls
 
-// Shown instead of the task ListView when Toolbar's "Links" button is
-// active: every task that mentions at least one Markdown [label](url) link,
-// regardless of status or the current visibility/search filters (a lookup
-// across ALL tasks, matching taskModel.linkedTasks()'s own semantics).
 Item {
     id: root
     signal toTaskClicked(string taskId)
 
-    // Set from Main.qml, mirroring the toolbar search field while Links is
-    // active. Filtering happens client-side against the already-fetched
-    // linkedTasks below, not via taskModel — this is a separate search
-    // context from the main list's, matching a link's label/url, not the
-    // task's raw text.
     property string searchText: ""
 
-    // Plain property, not reactively bound to task mutations — same known
-    // limitation as MonthView/YearView's countsByDay/countsByMonth (no
-    // "any task changed" signal to bind to); re-evaluated each time this
-    // view becomes visible via the visible-changed handler below.
     property var linkedTasks: []
 
     onVisibleChanged: if (visible) linkedTasks = taskModel.linkedTasks()

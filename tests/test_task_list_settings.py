@@ -69,12 +69,6 @@ def test_opacity_percent_clamps_to_5_100_and_is_integer(tmp_path):
 
 
 def test_migrates_from_legacy_qsettings_on_first_load(tmp_path):
-    """r-9.md step 4: existing installs had these keys in the per-window
-    QSettings .conf (settings.py's AppSettings, before this class existed)
-    — must be picked up once, not reset to defaults. fontScale/
-    wheelZoomInverted are no longer part of this migration (zoom moved to
-    the host's own AppSettings in a later follow-up) — this class simply
-    never reads those two legacy keys at all now."""
     legacy = ini_settings(tmp_path)
     legacy.setValue("theme/mode", "light")
     legacy.setValue("theme/tint", "green")
@@ -96,8 +90,6 @@ def test_migration_writes_the_new_file_so_legacy_is_not_reread(tmp_path):
 
     TaskListSettings(path, legacy)
 
-    # Change the legacy file after migration -- a second instance must NOT
-    # pick it up again, since the new file already exists.
     legacy.setValue("theme/mode", "dark")
     legacy.sync()
 

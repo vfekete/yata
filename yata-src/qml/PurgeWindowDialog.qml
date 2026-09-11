@@ -2,12 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Confirmation dialog for permanently purging a YATA window from YatasView's
-// DELETED row (WindowManager.purgeWindow) — removes its registry entry and
-// deletes its on-disk tasks/settings for good. Unlike DeleteWindowDialog
-// (soft-delete, fully recoverable) this one is genuinely irreversible, so
-// the wording says so plainly and there's no "keep the data" choice to
-// offer — purge always removes it. Host-owned, see HostDialogWindow.qml.
 HostDialogWindow {
     id: root
     title: qsTr("Purge window?")

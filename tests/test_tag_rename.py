@@ -1,23 +1,3 @@
-"""Regression test for the tag label's double-click-to-rename gesture
-(r-3.md), specifically the interaction with r-9.md step 4's new
-drag-to-move handle on that same area.
-
-Bug: Main.qml's tagLabelBg gained a MouseArea calling
-Window.startSystemMove() unconditionally onPressed (needed once the
-plugin's own Toolbar no longer spans host-owned space and so no longer
-doubles as the drag handle). startSystemMove() hands the pointer grab to
-the window manager the instant it's called, which silently ate the second
-click of a double-click before the sibling TapHandler's onDoubleTapped
-ever saw it -- confirmed live (double-click-to-rename simply stopped
-working the moment the drag handle was added, in a real X11 session, while
-working fine against the same gesture on the pre-step-4 code). Fixed by
-using a DragHandler (only goes active once the press has moved past Qt's
-drag threshold) instead of a MouseArea.onPressed (fires immediately, before
-any movement).
-
-Runs against a real QML engine (offscreen) using QTest.mouseDClick, same
-construction pattern as test_lock_feature.py/test_focus_behavior.py.
-"""
 import os
 import sys
 
@@ -48,8 +28,6 @@ def _get_app():
 
 @pytest.fixture()
 def qml_window(tmp_path, monkeypatch):
-    """Yields (app, window, window_manager, window_id) — same real
-    construction path as test_lock_feature.py's own fixture."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -128,8 +106,6 @@ def test_double_click_tag_label_enters_rename_mode(qml_window):
 
 
 def test_single_click_tag_label_does_not_enter_rename_mode(qml_window):
-    """A plain single click (e.g. the start of a real drag) must not be
-    mistaken for a rename request."""
     app, window, window_manager, window_id = qml_window
     point = _center_point(window, _find_tag_label(window))
 

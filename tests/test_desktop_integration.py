@@ -96,7 +96,6 @@ def test_updates_when_older_version_installed(home):
 
 
 def test_updates_when_exec_changed(home):
-    """Switching from run.sh to compiled binary (or vice versa) triggers reinstall."""
     desktop = home / ".local/share/applications/yata.desktop"
     desktop.parent.mkdir(parents=True)
     desktop.write_text(f"[Desktop Entry]\nExec={ALT_EXEC}\nX-AppVersion=1.0.0\n")
@@ -127,11 +126,6 @@ def _make_executable(path):
 
 
 def test_compute_exec_cmd_packaged_binary_points_at_itself(tmp_path, monkeypatch):
-    """build.sh's packaged binary launches its own splash sibling
-    internally (_maybe_launch_bundled_loader) rather than needing a
-    separate Exec= target for it, so a desktop entry generated from a
-    compiled binary's own perspective (source_dir has no run.sh -- i.e.
-    not a source checkout) should just point at the binary itself."""
     source_dir = tmp_path / "fake-src"
     source_dir.mkdir()
     binary = tmp_path / "yata-1.2.3"
@@ -154,9 +148,6 @@ def test_maybe_launch_bundled_loader_noop_when_not_compiled(tmp_path, monkeypatc
 
 
 def test_maybe_launch_bundled_loader_noop_when_socket_already_set(tmp_path, monkeypatch):
-    """run.sh's own dev-mode orchestration already set the env var --
-    launching a second loader on top of it would just orphan an extra
-    splash window."""
     monkeypatch.setattr("main._IS_COMPILED", True)
     monkeypatch.setenv("YATA_LOADER_SOCKET", "/tmp/already-set.sock")
     monkeypatch.setattr("main.builtins.__nuitka_binary_dir", str(tmp_path), raising=False)
@@ -168,9 +159,6 @@ def test_maybe_launch_bundled_loader_noop_when_socket_already_set(tmp_path, monk
 
 
 def test_maybe_launch_bundled_loader_noop_when_binary_dir_missing(monkeypatch):
-    """A dev-mode `uv run` process never gets the "__nuitka_binary_dir"
-    builtin Nuitka injects at all -- _IS_COMPILED already guards that case,
-    but this pins the (belt-and-suspenders) getattr default too."""
     monkeypatch.setattr("main._IS_COMPILED", True)
     monkeypatch.delenv("YATA_LOADER_SOCKET", raising=False)
     monkeypatch.delattr("main.builtins.__nuitka_binary_dir", raising=False)
@@ -184,7 +172,6 @@ def test_maybe_launch_bundled_loader_noop_when_bundled_file_missing(tmp_path, mo
     monkeypatch.setattr("main._IS_COMPILED", True)
     monkeypatch.delenv("YATA_LOADER_SOCKET", raising=False)
     monkeypatch.setattr("main.builtins.__nuitka_binary_dir", str(tmp_path), raising=False)
-    # Deliberately no "x-loader-loader" file extracted into binary_dir.
 
     with patch("main.subprocess.Popen") as popen:
         _maybe_launch_bundled_loader()
@@ -196,9 +183,7 @@ def test_maybe_launch_bundled_loader_launches_extracted_file_and_sets_env(tmp_pa
     monkeypatch.delenv("YATA_LOADER_SOCKET", raising=False)
     monkeypatch.setattr("main.builtins.__nuitka_binary_dir", str(tmp_path), raising=False)
     loader = tmp_path / "x-loader-loader"
-    loader.write_text("#!/bin/sh\n")  # deliberately NOT chmod +x -- the
-    # function must fix that itself (Nuitka's onefile extraction doesn't
-    # promise the source file's own exec bit survived).
+    loader.write_text("#!/bin/sh\n")
 
     with patch("main.subprocess.Popen") as popen:
         _maybe_launch_bundled_loader()

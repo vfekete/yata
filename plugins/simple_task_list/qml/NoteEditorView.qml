@@ -2,22 +2,11 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Shown instead of the task ListView (r-6.md) while a task's note is being
-// viewed/edited — reached by clicking a completed task's note icon
-// (TaskDelegate.qml). Single always-editable textbox pre-filled with the
-// task's current raw markdown note; OK saves, CANCEL discards, both
-// return to the task list (see Main.qml's noteEditorVisible/
-// listView.noteEditorTaskId wiring).
 Item {
     id: root
     property string taskId: ""
     signal closed()
 
-    // Only reloads from the model when the TARGET task actually changes —
-    // not on every Links/Yatas cover/uncover (this view stays mounted with
-    // visible:false while either of those is shown on top, per Main.qml's
-    // own comment), which would otherwise wipe in-progress edits on every
-    // round trip through them.
     onTaskIdChanged: noteField.text = root.taskId !== "" ? taskModel.noteFor(root.taskId) : ""
 
     ColumnLayout {

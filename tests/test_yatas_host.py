@@ -1,14 +1,3 @@
-"""Tests for window management ("YATAS") as host chrome, not plugin
-content — moved out of plugins/simple_task_list/ after r-9.md's step 4
-initially carried it there along with everything else. Window management
-is the master application's own job (r-9.md's original framing) and must
-stay available regardless of which plugin a window is running, so it now
-lives in yata-src/qml/YatasView.qml, toggled by Main.qml's own "Y" chrome
-icon rather than a plugin toolbar button.
-
-Runs against a real QML engine (offscreen) using QTest, same construction
-pattern as the other QML integration test files.
-"""
 import os
 import sys
 
@@ -53,8 +42,6 @@ def _center_point(window, item):
 
 @pytest.fixture()
 def yata_window(tmp_path, monkeypatch):
-    """Yields (app, window, window_manager, registry, window_id, task_model,
-    engine) — a single real window, same construction path as main.py."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -109,8 +96,6 @@ def test_plugin_toolbar_has_no_yatas_button(yata_window):
 
 
 def test_plugin_add_button_always_adds_a_task(yata_window):
-    """No more yatasActive-dependent dual purpose -- ADD is always "add
-    task" now that window creation lives in the host's own YatasView."""
     app, window, window_manager, registry, window_id, task_model, engine = yata_window
     add_button = next(
         b for b in _find_by_class_prefix(window.contentItem(), "ToolButton")
@@ -148,13 +133,6 @@ def test_yatas_icon_toggles_window_list_in_place_of_plugin_content(yata_window):
 
 
 def test_yatas_view_stays_visible_and_usable_while_locked(yata_window):
-    """Explicit request: window management must show and stay fully
-    usable regardless of lock state -- it must NOT sit behind the same
-    blur/tint/input-block the plugin's own content does. yatasView is
-    declared as a later sibling of contentOverlay (contentBlocker), not
-    nested inside frostedContent alongside contentLoader, specifically so
-    it wins both rendering (paints on top) and input delivery (Qt Quick
-    hands events to the topmost item first) regardless of contentLocked."""
     app, window, window_manager, registry, window_id, task_model, engine = yata_window
 
     host_settings = window_manager._windows[window_id]["app_settings"]
@@ -183,23 +161,12 @@ def test_yatas_view_stays_visible_and_usable_while_locked(yata_window):
         "hard-locked -- window management is exempt from the glass lock"
     )
 
-    # yatasView itself has no background of its own (see its own header
-    # comment) -- what keeps the glass-lock tint/blur from bleeding through
-    # while it's showing is Main.qml's blurAmount being forced to 0
-    # whenever yatasActive is true, not an opaque panel. Confirm that: the
-    # tint scrim's opacity (driven by blurAmount) must read as fully
-    # cleared even though the real lock state is still "locked" underneath.
     assert window.property("blurAmount") == 0.0, (
         "the glass-lock blur/tint must be suppressed while yatasView is "
         "showing, even though the real lock state stays \"locked\" "
         "underneath and reapplies the moment yatasActive goes false again"
     )
 
-    # Closing the window list (Y off) re-applies whatever the lock state
-    # already was the whole time -- "the state of lock is preserved and it
-    # is applied once the window list is closed". blurAmount animates over
-    # 150ms (see Main.qml's own Behavior) -- processEvents() alone doesn't
-    # advance real time, so qWait is needed for it to actually finish.
     from PySide6.QtTest import QTest as _QTest  # noqa: PLC0415
     window.setProperty("yatasActive", False)
     _QTest.qWait(250)
@@ -210,10 +177,6 @@ def test_yatas_view_stays_visible_and_usable_while_locked(yata_window):
 
 
 def test_add_window_button_in_yatas_view_clones_theme(yata_window):
-    """The shared yata_window fixture's window_factory is a no-op (other
-    tests in this file never need createWindow() to actually build
-    anything) -- this one does, so it wires a real factory onto the same
-    window_manager first, same as main.py's own window_factory."""
     app, window, window_manager, registry, window_id, task_model, engine = yata_window
 
     from main import _make_window, _open_settings  # noqa: PLC0415
@@ -252,9 +215,6 @@ def test_add_window_button_in_yatas_view_clones_theme(yata_window):
     window.setProperty("yatasActive", True)
     app.processEvents()
 
-    # Scoped to the YatasView subtree specifically -- the plugin's own
-    # (now hidden, not destroyed) ADD button also has a Text reading
-    # "Add", so searching the whole window would be ambiguous.
     yatas_view = _find_by_class_prefix(window.contentItem(), "YatasView")[0]
     add_text = next(
         t for t in _find_by_class_prefix(yatas_view, "QQuickText")
@@ -296,11 +256,6 @@ def test_delete_recreate_purge_round_trip(yata_window):
     app, window, window_manager, registry, window_id, task_model, engine = yata_window
     second_id = registry.add("Second")
 
-    # register_window needs a real plugin_content to be a fully-formed
-    # entry for YatasView's SHOW toggle to make sense, but this test only
-    # exercises the registry-level active/deleted round trip (no second
-    # live window needed) -- WindowManager.deleteWindow/recreateWindow/
-    # purgeWindow only touch the registry either way.
     window.setProperty("yatasActive", True)
     app.processEvents()
     yatas_view = _find_by_class_prefix(window.contentItem(), "YatasView")[0]
@@ -327,8 +282,6 @@ def test_delete_recreate_purge_round_trip(yata_window):
 
     assert next(e for e in registry.list() if e["id"] == second_id)["deleted"] is True
 
-    # Deleted windows show right alongside active ones now (no separate
-    # visibility toggle) -- just needs a refresh to pick up the new state.
     yatas_view.refresh()
     app.processEvents()
     app.processEvents()

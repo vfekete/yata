@@ -7,30 +7,13 @@ Item {
     id: root
     implicitHeight: row.implicitHeight + 8
 
-    // Set externally by Main.qml (from FilterBar.linksActive) — Toolbar
-    // can't see FilterBar directly (separate QML documents, ids don't cross
-    // file boundaries), so Main.qml relays state both ways: this property
-    // drives the button's highlighted look, and linksToggled() below is how
-    // a click gets back out to Main.qml to actually flip it.
     property bool linksActive: false
     signal linksToggled()
 
-    // Relayed to LinksView by Main.qml while it's active — see searchField
-    // below for why the same field drives both contexts. Window management
-    // (formerly YATAS here) moved to host chrome — see yata-src/qml/
-    // YatasView.qml's own header — so ADD is unconditionally "add task"
-    // again and this field no longer needs a window-search mode.
     readonly property string searchText: searchField.text
 
-    // Sum of ADD/RELOAD/THEME/LINKS's own widths plus the spacing between
-    // them — i.e. "the width of the upper toolbar buttons one after
-    // another", scaling with font zoom same as the buttons themselves. Used
-    // by Main.qml to set the window's minimumWidth.
     readonly property real actionButtonsWidth: addButton.width + reloadButton.width + themeButton.width + linksButton.width + row.spacing * 3
 
-    // Empty toolbar background doubles as a window drag handle, since the
-    // window has no title bar. Buttons/fields declared below sit on top and
-    // consume their own clicks first.
     MouseArea {
         anchors.fill: parent
         onPressed: Window.window.startSystemMove()
@@ -138,12 +121,6 @@ Item {
         TextField {
             id: searchField
             Layout.fillWidth: true
-            // One shared field for both contexts — its text always feeds
-            // taskModel's search (harmless while Links is active, since
-            // that view doesn't use taskModel._visible) and is separately
-            // relayed to LinksView for its own filtering there; the
-            // placeholder is what actually tells the user which context
-            // they're currently searching.
             placeholderText: root.linksActive ? qsTr("Search for link") : qsTr("Search for task")
             placeholderTextColor: Theme.mutedTextColor
             leftPadding: searchIcon.width + 12
@@ -157,11 +134,6 @@ Item {
                 color: Theme.fieldColor
             }
 
-            // Static "lupe" (magnifying glass) marking this field as search —
-            // non-interactive, unlike clearIcon on the right. Explicitly
-            // matched to placeholderTextColor above (the visible "Search for
-            // task" text's actual color) rather than Theme.textColor, which
-            // is only what typed-in text uses and rendered visibly brighter.
             IconIndicator {
                 id: searchIcon
                 iconName: "search"

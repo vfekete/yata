@@ -1,11 +1,6 @@
 import QtQuick
 import QtQuick.Effects
 
-// Small toggle-pill for the DAY/WEEK/MONTH/YEAR summary selector — own
-// copy of simple_task_list/qml/FilterButton.qml's glow-on-active look
-// (plugins can't share QML across their own import boundaries), radio-
-// style: TimesheetContent.qml is responsible for only one being active
-// at a time.
 Item {
     id: btn
     property string label: ""

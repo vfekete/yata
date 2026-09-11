@@ -1,20 +1,3 @@
-"""Shared base for plugin-owned, envelope-persisted settings objects
-(plugin_data.py) that expose the "themeMode/themeTint/opacityPercent"
-property trio — main.py's window_factory clones a NEW window's theme
-generically onto whatever "appSettings" object the new window's plugin
-returns (plugin_settings.themeMode = ..., etc.), regardless of which
-plugin that turns out to be, so every plugin needing this look-
-customizable is expected to expose exactly this surface (see
-plugin_api.py's own PluginContent docstring).
-
-Extracted after simple_task_list's TaskListSettings and timesheet's
-TimesheetSettings ended up with ~90 lines of identical Property/Signal
-boilerplate for this trio (r-10.md's "Bug wave 1" follow-up, once a
-second plugin needed the exact same thing) — a plugin's own settings
-class subclasses ThemedSettings, calls _load_themed(data)/_themed_data()
-from its own __init__/_save(), and adds whatever plugin-specific
-properties it needs on top.
-"""
 from __future__ import annotations
 
 from PySide6.QtCore import Property, QObject, Signal
@@ -28,13 +11,6 @@ MAX_OPACITY_PERCENT = 100
 
 
 class ThemedSettings(QObject):
-    """QObject base providing themeMode/themeTint/opacityPercent as Qt
-    Properties. A subclass is responsible for its own persistence: call
-    _load_themed(data) once, early in __init__, to seed these three from
-    whatever dict was just read back from disk (or defaults, on first
-    run), and have its own _save() call _themed_data() to fold these
-    three back into whatever larger dict it writes out.
-    """
     themeModeChanged = Signal()
     themeTintChanged = Signal()
     opacityPercentChanged = Signal()
@@ -60,8 +36,6 @@ class ThemedSettings(QObject):
         }
 
     def _save(self) -> None:
-        """A subclass MUST override this — this base has no file/path of
-        its own to persist to, only the in-memory property trio."""
         raise NotImplementedError
 
     @staticmethod
@@ -107,7 +81,4 @@ class ThemedSettings(QObject):
         int, _get_opacity_percent, _set_opacity_percent, notify=opacityPercentChanged
     )
 
-    # Read-only so QML can reset to this without hardcoding the value
-    # itself in more than one place — same convention every plugin's own
-    # ThemeMenu-equivalent Reset item already relies on.
     defaultOpacityPercent = Property(int, lambda self: DEFAULT_OPACITY_PERCENT, constant=True)

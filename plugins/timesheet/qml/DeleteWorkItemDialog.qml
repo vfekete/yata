@@ -2,10 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Confirmation dialog for deleting a work item — spec: "Work item can be
-// deleted, but confirmation of user is required." Soft-delete (see
-// storage.py's WorkItem.deleted docstring for why): past sessions are
-// kept for summary/PDF accuracy, it just drops out of the active list.
 DialogWindow {
     id: root
     title: qsTr("Delete work item?")

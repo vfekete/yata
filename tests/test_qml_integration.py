@@ -1,9 +1,3 @@
-"""Offscreen QML integration tests for the ADD / edit / delete flow.
-
-Runs against a real QML engine (QT_QPA_PLATFORM=offscreen) to catch bugs
-that only appear when QML delegates are live — e.g. onEditingFinished firing
-during beginResetModel() and overwriting model data.
-"""
 import os
 import sys
 
@@ -38,12 +32,11 @@ def qml_app():
 
 @pytest.fixture()
 def engine_and_model(qml_app, tmp_path, monkeypatch):
-    """Spin up a fresh QML engine + TaskListModel for each test."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "yata-src"))
-    import resources_rc  # noqa: F401,PLC0415 — registers qrc:/icons/*.svg etc.
+    import resources_rc  # noqa: F401,PLC0415
     from icons import IconProvider  # noqa: PLC0415
     from main import _make_window  # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
@@ -55,13 +48,6 @@ def engine_and_model(qml_app, tmp_path, monkeypatch):
     raw_settings = QSettings("yata", "yata")
     app_settings = AppSettings(raw_settings)
     icon_provider = IconProvider()
-    # Reuses main.py's real window-construction path (not a hand-rolled
-    # equivalent) specifically because it's the one already proven to build
-    # Theme/Main.qml correctly for r-3.md's multi-window support — a
-    # near-identical but not-quite-matching setup (e.g. creating Theme
-    # directly against engine.rootContext() instead of a per-window child
-    # QQmlContext, as an earlier version of this fixture did) reproduced
-    # "Unable to assign [undefined] to QColor" for every Theme.* consumer.
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     window_manager = WindowManager(registry, window_factory=lambda *a: None)
 
@@ -80,10 +66,6 @@ def engine_and_model(qml_app, tmp_path, monkeypatch):
 
     yield task_model
 
-    # Destroy engine synchronously before task_model/app_settings are
-    # garbage-collected. deleteLater() is async and the deferred deletion
-    # fires after Python has already nulled the context properties, causing
-    # QML bindings to emit "Cannot read property ... of null" on teardown.
     del engine
     qml_app.processEvents()
     qml_app.processEvents()
@@ -125,10 +107,6 @@ def test_delete_task_removes_it(engine_and_model):
 
 @pytest.fixture()
 def engine_and_window(qml_app, tmp_path, monkeypatch):
-    """Like engine_and_model, but yields (window, app_settings,
-    plugin_settings) instead of just the task model — needed for r-5.md's
-    Theme.effectiveGlowColor/effectiveLinkColor, which live on the
-    per-window Theme context property, not on the task model."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -141,17 +119,6 @@ def engine_and_window(qml_app, tmp_path, monkeypatch):
     from window_manager import WindowManager  # noqa: PLC0415
     from window_registry import DEFAULT_WINDOW_ID, WindowRegistry  # noqa: PLC0415
 
-    # An explicit-path QSettings (IniFormat), not bare AppSettings()'s own
-    # QSettings("yata", "yata") 2-arg fallback — that fallback resolves via
-    # QStandardPaths at construction time, and empirically (confirmed via a
-    # real full-suite run) Qt does NOT reliably re-resolve it per-process
-    # for every later monkeypatched XDG_CONFIG_HOME: this fixture's own
-    # write-then-read tests leaked their borderColor into an unrelated,
-    # later-running test_window_manager.py test in the same pytest process
-    # (that test's own autouse XDG_CONFIG_HOME fixture didn't help — the
-    # path/data was apparently already cached from this fixture's earlier,
-    # first-in-process use). An explicit absolute path sidesteps the whole
-    # env-var-resolution/caching question entirely — see feedback_test_data_safety.
     from PySide6.QtCore import QSettings  # noqa: PLC0415
 
     raw_settings = QSettings(str(tmp_path / "app.ini"), QSettings.IniFormat)
@@ -172,10 +139,6 @@ def engine_and_window(qml_app, tmp_path, monkeypatch):
     qml_app.processEvents()
     qml_app.processEvents()
 
-    # app_settings: host-owned (borderColor/lockState/geometry). The
-    # plugin's own settings (themeMode/themeTint/opacityPercent/fontScale/
-    # wheelZoomInverted) are a separate object — see plugin_content's own
-    # "appSettings" context-properties entry.
     plugin_settings = plugin_content.context_properties["appSettings"]
     yield window, app_settings, plugin_settings
 
@@ -191,9 +154,6 @@ def _theme_for(window):
 
 
 def test_effective_glow_color_follows_custom_border_color(engine_and_window):
-    """r-5.md: FilterButton's pushed-state glow and markdown link color/glow
-    should follow the window's custom border color (r-4.md) once one is
-    set, falling back to each one's own theme default otherwise."""
     window, app_settings, plugin_settings = engine_and_window
     theme = _theme_for(window)
 
@@ -208,9 +168,6 @@ def test_effective_glow_color_follows_custom_border_color(engine_and_window):
 
 
 def test_effective_glow_color_falls_back_after_reset(engine_and_window):
-    """Resetting the custom border color (ThemeMenu's Reset, or clearing it
-    any other way) must bring the button/link colors back to their own
-    theme defaults, not leave them stuck on the last custom color."""
     window, app_settings, plugin_settings = engine_and_window
     theme = _theme_for(window)
 
@@ -223,11 +180,6 @@ def test_effective_glow_color_falls_back_after_reset(engine_and_window):
 
 
 def test_effective_glow_color_ignores_custom_color_under_a_tint(engine_and_window):
-    """Follow-up to r-5.md: under any CRT tint (not "none"), buttons/links
-    keep that tint's own accent-derived color regardless of a custom border
-    color — only the border itself (Main.qml, not Theme) takes the raw
-    custom color under a tint. Only the "none" tint lets buttons/links
-    follow the custom color."""
     window, app_settings, plugin_settings = engine_and_window
     theme = _theme_for(window)
 
@@ -243,12 +195,6 @@ def test_effective_glow_color_ignores_custom_color_under_a_tint(engine_and_windo
 
 
 def test_click_away_on_new_task_saves_task_name(engine_and_model, qml_app):
-    """onEditingFinished with empty text for a new task should save 'Task name'.
-
-    Triggered by a model reset (setSearchText round-trip) while the new
-    task's TextField still has focus — replicating what happens when the
-    user clicks the toolbar or any area outside the list.
-    """
     model = engine_and_model
     t1 = model.addTask()
     qml_app.processEvents()

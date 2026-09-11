@@ -43,8 +43,6 @@ def test_task_ids_are_unique():
 
 
 def test_loads_pre_r9_bare_array_format(tmp_path):
-    """tasks.json written before this file gained a versioned envelope
-    (r-9.md) is a bare JSON array — must still load correctly forever."""
     path = tmp_path / "tasks.json"
     path.write_text(json.dumps([{"text": "Legacy task", "status": "active"}]))
 
@@ -79,9 +77,6 @@ def test_save_after_loading_legacy_format_upgrades_it(tmp_path):
 
 
 def test_load_skips_block_with_incompatible_newer_model_version(tmp_path):
-    """A block written by a newer plugin version, then downgraded, must
-    never be handed back to code that isn't equipped to understand it —
-    it's skipped, not lost (see plugin_data.py)."""
     path = tmp_path / "tasks.json"
     path.write_text(json.dumps({
         "plugin_id": PLUGIN_ID,

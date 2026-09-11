@@ -2,15 +2,10 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Read-only per-day/week/month/year summary (spec: "Summary is read
-// only"), replacing the work-item list when a period is selected
-// (TimesheetContent.qml). Shows every calendar day in the selected
-// period, each day's worked/target duration, weekend/holiday/location
-// markers, and period totals (worked, target, remaining/overtime).
 Item {
     id: root
-    required property string period  // "day" | "week" | "month" | "year"
-    required property var holidayDates  // {"YYYY-MM-DD": name}
+    required property string period
+    required property var holidayDates
     required property real dailyHours
 
     property date referenceDate: new Date()

@@ -1,6 +1,3 @@
-"""Checks on tests/fixtures/mock_tasks.json, the 3-day mock dataset used to
-visually spot-check day-grouping, status-sort and long-text word-wrap (see
-BUILD.md for how to load it into a real run of the app)."""
 import json
 import os
 import shutil
@@ -41,12 +38,11 @@ def test_fixture_day_status_breakdown_matches_spec(loaded_model):
 def test_fixture_includes_a_512_char_markdown_task(loaded_model):
     longest = max(loaded_model._tasks, key=lambda t: len(t.text))
     assert len(longest.text) >= 512
-    # Uses several of the markdown styles Text.MarkdownText renders.
-    assert "**" in longest.text  # bold
-    assert "*" in longest.text.replace("**", "")  # italic
-    assert "`" in longest.text  # inline code
-    assert "~~" in longest.text  # strikethrough
-    assert "[actually done](" in longest.text  # link
+    assert "**" in longest.text
+    assert "*" in longest.text.replace("**", "")
+    assert "`" in longest.text
+    assert "~~" in longest.text
+    assert "[actually done](" in longest.text
 
 
 def test_fixture_is_valid_task_json():

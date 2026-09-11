@@ -148,6 +148,11 @@ required by the Noun Project's license), licensed under
 - "Link" by Design Queen — `resources/assets/noun-link-7985857.svg`
 - "Paint Bucket" by Arthur Shlain — `resources/assets/noun-paint-bucket-104334.svg`
 - "Notes" by Suharsono — `resources/assets/noun-notes-8410855.svg`
+- "Sleep Mode" by IconPai — `resources/assets/noun_SleepMode_7877974.svg`
+- "Start" by Larea — `resources/assets/noun_start_3131880.svg`
+- "Stop" by Wahyu Adam — `resources/assets/noun_Stop_8389958.svg`
+- "Summary" by I Putu Dicky Adi Pranatha — `resources/assets/noun_summary_8078125.svg`
+- "Time List" by Iconiqu — `resources/assets/noun_timelist_4046224.svg`
 
 ## Known limitation
 

@@ -1,8 +1,3 @@
-"""Tests for keyboard-focus behaviour: auto-focus on new task, click-away to commit.
-
-Runs against a real QML engine (offscreen) using QTest.mouseClick so that
-the actual TapHandler / TextField focus machinery is exercised.
-"""
 import os
 import sys
 import pytest
@@ -15,8 +10,6 @@ from PySide6.QtTest import QTest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-
-# ── shared app singleton ─────────────────────────────────────────────────────
 
 _app = None
 
@@ -36,7 +29,6 @@ def _get_app():
 
 @pytest.fixture()
 def qml_window(tmp_path, monkeypatch):
-    """Start a fresh QML engine; yield (app, task_model, window)."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -44,7 +36,7 @@ def qml_window(tmp_path, monkeypatch):
 
     src = os.path.join(os.path.dirname(__file__), "..", "yata-src")
     sys.path.insert(0, src)
-    import resources_rc  # noqa: F401,PLC0415 — registers qrc:/icons/*.svg etc.
+    import resources_rc  # noqa: F401,PLC0415
     from icons import IconProvider    # noqa: PLC0415
     from main import _make_window     # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
@@ -56,10 +48,6 @@ def qml_window(tmp_path, monkeypatch):
     raw_settings = QSettings("yata", "yata")
     app_settings = AppSettings(raw_settings)
     icon_provider = IconProvider()
-    # Reuses main.py's real window-construction path — see
-    # test_qml_integration.py's engine_and_model fixture for why a
-    # hand-rolled equivalent (e.g. creating Theme directly against
-    # engine.rootContext()) isn't safe to substitute here.
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     window_manager = WindowManager(registry, window_factory=lambda *a: None)
 
@@ -84,7 +72,6 @@ def qml_window(tmp_path, monkeypatch):
 
 
 def _focus_class(window):
-    """Return the C++ class name of the currently focused item, or 'None'."""
     item = window.activeFocusItem()
     if item is None:
         return "None"
@@ -92,13 +79,11 @@ def _focus_class(window):
 
 
 def _is_textfield_focused(window):
-    """True when a TextField/TextInput currently holds active focus."""
     cls = _focus_class(window)
     return "TextField" in cls or "TextInput" in cls
 
 
 def _find_by_class_prefix(item, prefix, results=None):
-    """Recursively collect QQuickItems whose C++ class name starts with prefix."""
     if results is None:
         results = []
     if item.metaObject().className().startswith(prefix):
@@ -109,12 +94,6 @@ def _find_by_class_prefix(item, prefix, results=None):
 
 
 def _task_row_center(window, row_index):
-    """Map the row_index-th TaskDelegate's center to window coordinates.
-
-    Reads the live layout instead of a hardcoded pixel offset, since the
-    toolbar/sub-toolbar stack above the list (and thus where the list
-    starts) has changed shape more than once (e.g. the 0.9.35 OrderBar).
-    """
     delegates = _find_by_class_prefix(window.contentItem(), "TaskDelegate")
     delegates.sort(key=lambda item: item.mapToItem(window.contentItem(), 0, 0).y())
     delegate = delegates[row_index]
@@ -122,19 +101,15 @@ def _task_row_center(window, row_index):
     return QPoint(round(center.x()), round(center.y()))
 
 
-# ── tests ────────────────────────────────────────────────────────────────────
-
 def test_autofocus_after_add_task(qml_window):
-    """Clicking Add should give the new task's TextField active focus within ~200 ms."""
     app, model, window = qml_window
 
-    # Sanity: focus should NOT be on a TextField before we do anything
     assert not _is_textfield_focused(window), (
         f"Unexpected initial focus: {_focus_class(window)}"
     )
 
     model.addTask()
-    QTest.qWait(300)  # 100 ms timer + generous buffer
+    QTest.qWait(300)
 
     cls = _focus_class(window)
     print(f"\n[auto-focus] activeFocusItem after addTask+300ms: {cls}")
@@ -144,17 +119,14 @@ def test_autofocus_after_add_task(qml_window):
 
 
 def test_click_other_task_steals_focus(qml_window):
-    """Clicking a non-editing task row should move focus away from the editor."""
     app, model, window = qml_window
 
-    # Seed one existing task so the list has two rows after addTask()
     from plugins.simple_task_list.storage import Task, STATUS_ACTIVE  # noqa: PLC0415
     model._tasks.append(Task(text="Target task", status=STATUS_ACTIVE))
     model._recompute()
     app.processEvents()
     app.processEvents()
 
-    # Add a blank task — it lands at index 0 and auto-focuses
     model.addTask()
     QTest.qWait(300)
 
@@ -162,10 +134,6 @@ def test_click_other_task_steals_focus(qml_window):
     print(f"\n[click-steal] focus before click: {cls_before}")
     print(f"  window size: {window.width()} x {window.height()}")
 
-    # Click the second task row (index 1, "Target task") — its position is
-    # read from the live layout rather than a hardcoded pixel offset, since
-    # what's stacked above the list (toolbar/sub-toolbars) has changed shape
-    # more than once.
     point = _task_row_center(window, 1)
     print(f"  clicking at ({point.x()}, {point.y()})")
     QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, point)

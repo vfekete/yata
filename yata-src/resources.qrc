@@ -19,5 +19,10 @@
     <file alias="lock_unlocked.svg">../resources/assets/lock_unlocked_outline.svg</file>
     <file alias="move_up.svg">../resources/assets/move_up.svg</file>
     <file alias="move_down.svg">../resources/assets/move_down.svg</file>
+    <file alias="sleep_mode.svg">../resources/assets/noun_SleepMode_7877974.svg</file>
+    <file alias="start.svg">../resources/assets/noun_start_3131880.svg</file>
+    <file alias="stop.svg">../resources/assets/noun_Stop_8389958.svg</file>
+    <file alias="summary.svg">../resources/assets/noun_summary_8078125.svg</file>
+    <file alias="timelist.svg">../resources/assets/noun_timelist_4046224.svg</file>
 </qresource>
 </RCC>

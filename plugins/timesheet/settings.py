@@ -1,23 +1,3 @@
-"""Plugin-owned settings for the timesheet plugin (r-10.md).
-
-Same envelope-backed QObject shape TaskListSettings (plugins/
-simple_task_list/settings.py) already established — one JSON file per
-window instance, via plugin_data.py's versioned block envelope. No legacy
-QSettings migration here (this plugin never existed before), unlike
-TaskListSettings' one-time theme/* migration.
-
-themeMode/themeTint/opacityPercent — the shared property trio yata-src/
-plugin_settings.py's ThemedSettings base provides — are deliberately kept
-identical to TaskListSettings' own: main.py's window_factory clones a NEW
-window's theme generically onto whatever "appSettings" object the new
-window's plugin returns (plugin_settings.themeMode = ..., etc.),
-regardless of which plugin that turns out to be. Keeping the exact same
-property surface here is what makes "new window clones the creating
-window's theme" keep working across a plugin boundary, and gives every
-window in the app the same customizable dark/light + CRT-tint look
-(this plugin's own ThemeImpl.qml implements the same palette contract
-TaskListSettings' theme drives).
-"""
 from __future__ import annotations
 
 from PySide6.QtCore import Property, QLocale, Signal
@@ -34,22 +14,12 @@ DEFAULT_DAILY_HOURS = 8.0
 MIN_DAILY_HOURS = 0.5
 MAX_DAILY_HOURS = 24.0
 
-# r-10.md "Bug wave 1": per-window colors for the work-item row's state
-# indicator (a filled circle — see WorkItemRow.qml). "By default it is
-# Lime" is explicit for ongoing; abandoned's default isn't specified
-# there, so it keeps the red ThemeImpl.qml's own abandonedColor constant
-# already used for the (now-removed) standalone warning icon.
 DEFAULT_ONGOING_COLOR = "lime"
 DEFAULT_ABANDONED_COLOR = "#ef4444"
 
 
 def _detect_country_code() -> str:
-    """Best-effort default from the system locale's region — "" if the
-    locale is unset/C/POSIX (QLocale.system().name() comes back as "C" or
-    empty in that case, per Qt's own documented behavior), which the UI
-    treats as "ask the user to pick one on first open" (explicit r-10.md
-    decision)."""
-    name = QLocale.system().name()  # e.g. "sk_SK", "en_US", or "C"
+    name = QLocale.system().name()
     if "_" not in name:
         return ""
     return name.split("_", 1)[1].upper()
@@ -246,9 +216,6 @@ class TimesheetSettings(ThemedSettings):
 
     abandonedColor = Property(str, _get_abandoned_color, _set_abandoned_color, notify=abandonedColorChanged)
 
-    # Read-only so QML can reset to these without hardcoding the values
-    # itself in more than one place — same convention ThemedSettings'
-    # own defaultOpacityPercent already establishes.
     defaultDailyHoursDefault = Property(float, lambda self: DEFAULT_DAILY_HOURS, constant=True)
     defaultOngoingColor = Property(str, lambda self: DEFAULT_ONGOING_COLOR, constant=True)
     defaultAbandonedColor = Property(str, lambda self: DEFAULT_ABANDONED_COLOR, constant=True)

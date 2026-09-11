@@ -1,6 +1,3 @@
-"""PDF timesheet export (r-10.md) — Qt's own QTextDocument -> QPdfWriter,
-confirmed to ship with PySide6's QtGui already (no new dependency, same
-bar already applied to every other library choice in this codebase)."""
 from __future__ import annotations
 
 import os
@@ -21,10 +18,6 @@ def build_html(
     summary: dict, *, customer_name: str, customer_address: str, contractor_name: str,
     include_customer: bool, include_contractor: bool, include_signatures: bool,
 ) -> str:
-    """summary: exactly model.py's compute_summary() return shape. Spec's
-    PDF layout: header (customer/contractor, both optional), a table of
-    work days with duration + ON-SITE/REMOTE, footer (totals + optional
-    signature lines + generation timestamp)."""
     parts = ["<html><body style='font-family: sans-serif;'>"]
 
     if include_customer or include_contractor:
@@ -82,13 +75,6 @@ def build_html(
 
 
 def export_pdf(path: str, html: str) -> None:
-    """Raises OSError if the PDF wasn't actually written — QPdfWriter/
-    QTextDocument.print_() fail SILENTLY at the C++ level for an
-    unwritable path (a QPainter::begin() warning printed to stderr, no
-    Python exception at all) rather than raising, confirmed live: calling
-    this against a nonexistent directory returned normally with no file
-    ever created. model.py's exportPdf() only catches Python exceptions,
-    so this has to turn that silent failure into one."""
     document = QTextDocument()
     document.setHtml(html)
     writer = QPdfWriter(path)

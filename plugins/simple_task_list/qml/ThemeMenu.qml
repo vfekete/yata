@@ -1,25 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 
-// Shared theme popup, used both by Main.qml's background right-click menu
-// and Toolbar.qml's "Theme" button, so the opacity editor's state (view vs.
-// edit mode) only needs to live in one place.
 Menu {
     id: root
     property bool showQuit: false
 
-    // Popups are parented into the window's Overlay layer, not into the
-    // visual item that opened them, so they don't inherit font size from
-    // the toolbar/window's item tree and need it set explicitly.
     font.pixelSize: Theme.taskFontPixelSize
-    // Explicitly scale width with font so the menu stays wide enough for
-    // the longest item ("Switch zoom direction") at every zoom level.
-    // Qt Quick Controls 2 doesn't reactively re-derive contentWidth from
-    // MenuItem implicitWidths when font.pixelSize changes.
     width: Theme.taskFontPixelSize * 16
 
-    // Opacity slider first, per feature request. A plain Item, not a
-    // MenuItem, because Menu accepts arbitrary Items alongside MenuItems.
     Item {
         id: opacityRow
         width: root.width > 0 ? root.width - 20 : 200
@@ -55,12 +43,7 @@ Menu {
         font.capitalization: Font.AllUppercase
         onTriggered: {
             appSettings.opacityPercent = appSettings.defaultOpacityPercent
-            // Zoom is host-owned now (generic, not plugin-specific — see
-            // yata-src/settings.py's own docstring), reached the same way
-            // borderColor already is.
             hostSettings.zoomLevel = hostSettings.defaultZoomLevel
-            // r-4.md: RESET also clears any custom border/tag-name color
-            // back to following the theme.
             hostSettings.borderColor = ""
         }
         padding: 10
@@ -78,9 +61,6 @@ Menu {
     MenuItem {
         text: qsTr("Dark theme")
         checkable: true
-        // "Dark"/"Light" are also the way back to the plain look: picking
-        // either forces the tint to "none" (the Tint submenu no longer has
-        // its own "None" entry).
         checked: appSettings.themeMode === "dark" && appSettings.themeTint === "none"
         onTriggered: {
             appSettings.themeMode = "dark"
@@ -104,8 +84,6 @@ Menu {
     Menu {
         title: qsTr("Tint")
         font.pixelSize: Theme.taskFontPixelSize
-        // CRT tints ignore theme mode entirely; "None" was removed here
-        // since Dark/Light theme above now cover that look directly.
         MenuItem { text: qsTr("Green"); onTriggered: appSettings.themeTint = "green"; padding: 10 }
         MenuItem { text: qsTr("Goldenrod"); onTriggered: appSettings.themeTint = "goldenrod"; padding: 10 }
         MenuItem { text: qsTr("White"); onTriggered: appSettings.themeTint = "white"; padding: 10 }

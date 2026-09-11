@@ -2,12 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Per-item list of start/stop session pairs — spec: "For every work item
-// there is a list of start - stop timestamps... Start / stop timestamps
-// can be adjusted manually." Editing and committing (Enter, or losing
-// focus) a row calls timesheetModel.updateSession immediately (not
-// batched behind this dialog's own OK button) so a mistake in one row
-// can't be lost by cancelling out of the whole dialog.
 DialogWindow {
     id: root
     title: qsTr("Sessions for “%1”").arg(root.itemName)
@@ -17,7 +11,7 @@ DialogWindow {
 
     property string itemId: ""
     property string itemName: ""
-    property var sessions: []  // refreshed on openFor()
+    property var sessions: []
 
     function openFor(id, name) {
         root.itemId = id
@@ -26,10 +20,6 @@ DialogWindow {
         root.open()
     }
 
-    // Expected format: an ISO-ish "yyyy-MM-dd HH:mm" the user can type
-    // directly — parsed via JS Date, same tolerant approach QML's own
-    // Date.fromLocaleString would need a locale for; kept simple and
-    // explicit instead.
     function _toDisplay(iso) {
         if (!iso) return ""
         var d = new Date(iso)
@@ -110,7 +100,7 @@ DialogWindow {
                 var startIso = root._toIso(startField.text)
                 var stopIso = stopField.text.length === 0 ? "" : root._toIso(stopField.text)
                 if (startIso === null || (stopField.text.length > 0 && stopIso === null))
-                    return  // unparseable -- leave the field as typed, don't save garbage
+                    return
                 timesheetModel.updateSession(root.itemId, sessionRow.modelData.id, startIso, stopIso)
                 sessionRow.modelData = Object.assign({}, sessionRow.modelData, {
                     start: startIso, stop: stopIso, abandoned: false

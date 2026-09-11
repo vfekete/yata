@@ -1,18 +1,12 @@
 import QtQuick
 import QtQuick.Layouts
 
-// One row in LinksView: every link the task mentions (shown by label, not
-// raw URL — clickable, opens in the default browser), its status tag
-// beneath (mirrors TaskDelegate.qml's task-name-then-status-label stacking,
-// not side-by-side), and a "to task" button at the end. Mirrors
-// TaskDelegate.qml's row structure otherwise (hover highlight, height
-// tracking content) for visual consistency with the main task list.
 Item {
     id: root
     required property string taskId
     required property string status
     required property string completedAt
-    required property var links  // [{label, url}, ...]
+    required property var links
     signal toTaskClicked(string taskId)
 
     readonly property bool hovered: hoverHandler.hovered
@@ -75,8 +69,6 @@ Item {
         }
 
         LinkToTaskButton {
-            // 8px further from the row's right edge than a plain trailing
-            // item would sit — i.e. moved 8px left, per explicit request.
             Layout.rightMargin: 8
             onClicked: root.toTaskClicked(root.taskId)
         }

@@ -1,6 +1,5 @@
 import QtQuick
 
-// Prev/next arrow used by MonthView/YearView's pagination header.
 Text {
     id: root
     property string symbol: "‹"

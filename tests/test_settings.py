@@ -42,13 +42,6 @@ def test_geometry_persists_across_restart_on_same_monitor_layout(tmp_path):
 
 
 def test_geometry_clamps_into_virtual_desktop_when_monitor_layout_changed(tmp_path):
-    """Regression test: a monitor-signature mismatch used to discard the
-    saved geometry outright for first_run_geometry()'s small centered box —
-    destructive even when the mismatch was a false alarm (see
-    test_monitor_signature_ignores_screen_order below) or when the old
-    geometry would still mostly fit. It's now clamped into whatever screen
-    space is currently available instead, preserving as much of the saved
-    position/size as still fits."""
     backing = ini_settings(tmp_path)
     backing.setValue("window/monitorSignature", "not-the-real-signature")
     backing.setValue("window/x", 999)
@@ -65,14 +58,10 @@ def test_geometry_clamps_into_virtual_desktop_when_monitor_layout_changed(tmp_pa
     assert settings.height == min(999, virtual.height())
     assert virtual.x() <= settings.x <= virtual.x() + virtual.width() - settings.width
     assert virtual.y() <= settings.y <= virtual.y() + virtual.height() - settings.height
-    # Confirmed genuinely different from the old reset-to-default behavior.
     assert (settings.x, settings.y, settings.width, settings.height) != first_run_geometry()
 
 
 def test_geometry_untouched_when_saved_position_still_fits_despite_signature_mismatch(tmp_path):
-    """A monitor-signature mismatch alone shouldn't move/resize a window that
-    already fits fine in the currently available space — only genuinely
-    out-of-bounds geometry should be adjusted."""
     backing = ini_settings(tmp_path)
     backing.setValue("window/monitorSignature", "not-the-real-signature")
     backing.setValue("window/x", 10)
@@ -91,14 +80,6 @@ def test_monitor_signature_is_stable_between_calls():
 
 
 def test_monitor_signature_ignores_screen_order(monkeypatch):
-    """Regression test: QGuiApplication.screens()'s enumeration order isn't
-    guaranteed stable across a full session restart (confirmed: GNOME
-    "Shutdown" then logging back in can report the same physical monitors in
-    a different order depending on output-detection timing), even though the
-    actual layout hasn't changed. monitor_signature() used to join screens in
-    whatever order screens() returned them, so that reordering alone made
-    _load_geometry think the monitor layout had changed and discard the
-    saved window geometry."""
     from PySide6.QtCore import QRect
     from PySide6.QtGui import QGuiApplication
 
@@ -121,7 +102,6 @@ def test_monitor_signature_ignores_screen_order(monkeypatch):
 
 
 def test_border_color_defaults_to_empty(tmp_path):
-    """Empty string means "no custom color, follow the theme" (r-4.md)."""
     settings = AppSettings(settings=ini_settings(tmp_path))
     assert settings.borderColor == ""
 
@@ -148,8 +128,6 @@ def test_border_color_can_be_reset_to_empty(tmp_path):
 
 
 def test_lock_state_defaults_to_unlocked_and_persists(tmp_path):
-    """r-8.md: unlocked is the safe default (a brand new window must never
-    be born blurred/frozen)."""
     backing = ini_settings(tmp_path)
     s = AppSettings(settings=backing)
 
@@ -179,23 +157,6 @@ def test_invalid_lock_state_is_ignored(tmp_path):
 
 
 def test_settings_persist_to_disk_without_explicit_caller_sync(tmp_path):
-    """Regression test: every AppSettings setter used to call setValue()
-    without ever calling sync() itself, relying entirely on QSettings'
-    deferred/implicit flush (periodic auto-sync or sync-on-destruction).
-    That flush depends on teardown ordering that isn't guaranteed —
-    Python's GC order, a killed session, or the process exiting before the
-    delayed write fires can all lose the change.
-
-    Deliberately reads the *raw file bytes* from disk rather than via a
-    second QSettings pointed at the same path: Qt caches an open file's
-    QConfFile process-wide, so a second QSettings instance in the same
-    process sees the unsynced in-memory value regardless of whether it was
-    ever actually flushed to disk — which is exactly why the previous
-    version of this test (constructing a fresh AppSettings against the same
-    path, with an explicit backing.sync() the setter didn't need) passed
-    even against the unfixed code. Confirmed via a stash A/B: this version
-    fails without the .sync() calls in AppSettings' setters and passes with
-    them."""
     ini_path = tmp_path / "settings.ini"
     s = AppSettings(settings=QSettings(str(ini_path), QSettings.IniFormat))
     s.borderColor = "#ff8800"
@@ -205,11 +166,6 @@ def test_settings_persist_to_disk_without_explicit_caller_sync(tmp_path):
 
 
 def test_zoom_level_defaults_to_1_and_persists(tmp_path):
-    """Zoom moved here from the plugin's own settings in a follow-up to
-    r-9.md step 4 — it's generic per-window host state now (Ctrl+scroll/
-    Ctrl+=/Ctrl+-/Ctrl+0, handled once in Main.qml regardless of which
-    plugin is running), not plugin-owned. "Zoom level should be 1 per
-    window" (explicit request)."""
     backing = ini_settings(tmp_path)
     s = AppSettings(settings=backing)
 

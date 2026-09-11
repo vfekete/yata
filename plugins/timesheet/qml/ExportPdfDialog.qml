@@ -2,26 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Everything needed for "Export to PDF" in one place: period, customer/
-// contractor identity, country (drives holiday lookup), default daily
-// target hours, and which optional PDF parts to include — all per-window
-// (r-10.md decision). Reachable three ways, all opening this same dialog:
-// the top-level EXPORT button, SETTINGS menu's "Export..." item, and
-// (as a first-run country prompt) TimesheetContent.qml's own
-// Component.onCompleted the first time a window's countryCode comes back
-// empty. Identity/PDF-part fields save immediately as they're edited
-// (matching their own previous home, PdfSettingsDialog.qml, now merged
-// in here); only "period" is threaded through periodChosen, once Export
-// is actually clicked.
-//
-// The actual file destination picker (FileDialog) lives one level up, in
-// TimesheetContent.qml — NOT nested in here: a FileDialog nested inside
-// this dialog's own Window (DialogWindow.qml is a real top-level Window,
-// see its own header) is a Window-within-a-Window arrangement nothing
-// else in this codebase uses, and was the actual cause of exports
-// silently never happening. periodChosen fires once the user confirms
-// here; TimesheetContent.qml is what actually opens the file picker and
-// calls timesheetModel.exportPdf.
 DialogWindow {
     id: root
     title: qsTr("Export to PDF")
@@ -32,7 +12,7 @@ DialogWindow {
     property date referenceDate: new Date()
     property var holidayDates: ({})
     property real dailyHours: 8.0
-    property var countries: []  // [{code, name}] -- populated on open()
+    property var countries: []
 
     signal periodChosen(string period, date referenceDate, var holidayDates, real dailyHours)
 
@@ -82,13 +62,6 @@ DialogWindow {
             model: root.countries
             textRole: "name"
             valueRole: "code"
-            // A plain search over root.countries/appSettings.countryCode
-            // directly, not indexOfValue(appSettings.countryCode) — the
-            // latter's dependencies (this combo's own model/valueRole)
-            // are invisible to QML's binding tracker, so the binding
-            // would never re-evaluate once they settle into place
-            // (confirmed live elsewhere this session: exactly this
-            // shape left a ComboBox's currentIndex stuck at -1 forever).
             currentIndex: {
                 for (var i = 0; i < root.countries.length; i++)
                     if (root.countries[i].code === appSettings.countryCode) return i

@@ -1,22 +1,9 @@
 import QtQuick
 
-// Same contract/filename convention as plugins/simple_task_list/qml/
-// ThemeImpl.qml (see that file's own header for why this can't be named
-// Theme.qml) — one instance per window, injected as the "Theme" context
-// property by main.py before this plugin's own content QML loads. A
-// smaller palette than the task list's own: no per-task status colors
-// (done/cancelled/link/etc.) since this plugin has no such concept, but
-// the same five named tints (dark mode default "none" plus four CRT
-// looks) so a timesheet window can visually match whatever the rest of
-// the app is using.
 QtObject {
     readonly property bool dark: appSettings.themeMode === "dark"
     readonly property string tintName: appSettings.themeTint
 
-    // Scaled by the host's own generic zoom (hostSettings.zoomLevel) —
-    // same mechanism/reasoning simple_task_list's own taskFontPixelSize
-    // documents; kept under the same property name for consistency across
-    // plugins even though nothing here is strictly a "task".
     readonly property int taskFontPixelSize: Math.round(14 * hostSettings.zoomLevel)
 
     readonly property var palettes: ({
@@ -78,27 +65,14 @@ QtObject {
     readonly property color hoverColor: current.hover
     readonly property string fontFamily: current.fontFamily
 
-    // Same "custom border color overrides the theme's own accent, under
-    // the 'none' tint only" convention simple_task_list's own
-    // effectiveGlowColor established (r-5.md) — this plugin's toggle-pill
-    // period selector and hover glows follow it the same way.
     readonly property color effectiveGlowColor: (tintName === "none" && hostSettings.borderColor !== "") ? hostSettings.borderColor : accentColor
     readonly property color effectiveGlowShadowColor: Qt.lighter(effectiveGlowColor, 1.4)
 
     readonly property real windowOpacity: appSettings.opacityPercent / 100.0
 
-    // Fixed, theme-independent — same reasoning TaskDelegate's own
-    // checkIconColor/crossIconColor use literal green/red under "none":
-    // ON-SITE/REMOTE is a semantic signal, not a decorative accent.
     readonly property color onSiteColor: "#22c55e"
     readonly property color remoteColor: "#0ea5e9"
 
-    // r-10.md "Bug wave 1": user-configurable (SETTINGS menu's "Ongoing
-    // color"/"Abandoned color" pickers), NOT fixed like onSiteColor/
-    // remoteColor above — these coerce appSettings' plain string
-    // properties into real `color` values the same way effectiveGlowColor
-    // above coerces hostSettings.borderColor, so WorkItemRow.qml can read
-    // .r/.g/.b off them directly.
     readonly property color ongoingColor: appSettings.ongoingColor
     readonly property color abandonedColor: appSettings.abandonedColor
 }

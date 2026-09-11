@@ -26,9 +26,6 @@ def test_write_updates_existing_block_with_same_floors(tmp_path):
 
 
 def test_incompatible_block_is_skipped_not_used(tmp_path):
-    """A block whose floors are higher than what's currently running (e.g.
-    written by a newer plugin, then downgraded) must never be handed back —
-    the caller isn't equipped to understand its shape."""
     path = str(tmp_path / "data.json")
     write_block(path, "simple_task_list", "2.0", "1.0", {"new_shape": True})
 
@@ -36,13 +33,10 @@ def test_incompatible_block_is_skipped_not_used(tmp_path):
 
 
 def test_downgrade_still_finds_older_compatible_block(tmp_path):
-    """Writing a newer-floor block must never remove or touch an
-    older-floor block already on disk — a later downgrade needs it."""
     path = str(tmp_path / "data.json")
     write_block(path, "simple_task_list", "1.0", "1.0", {"tasks": ["a"]})
     write_block(path, "simple_task_list", "2.0", "1.0", {"new_shape": True})
 
-    # Still running the old model version: only sees its own old block.
     assert read_compatible(path, model_version="1.0", api_version="1.0") == {"tasks": ["a"]}
     doc = json.loads((tmp_path / "data.json").read_text())
     assert len(doc["blocks"]) == 2
@@ -57,9 +51,6 @@ def test_read_picks_newest_compatible_block_when_several_qualify(tmp_path):
 
 
 def test_write_block_upgrades_a_pre_envelope_bare_list_file(tmp_path):
-    """Regression guard: a file predating this envelope entirely (e.g. a
-    plain JSON array, as tasks.json used to be) must not crash write_block
-    — it should just be replaced by a fresh envelope on the first save."""
     path = tmp_path / "data.json"
     path.write_text(json.dumps([{"legacy": True}]))
 

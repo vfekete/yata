@@ -28,9 +28,6 @@ def test_build_registry_includes_a_plugin_whose_min_api_version_is_satisfied():
 
 
 def test_build_registry_excludes_a_plugin_needing_a_newer_api(tmp_path):
-    """A plugin declaring a min_api_version newer than this host build
-    provides must be silently left out, not crash the registry build —
-    see plugin_api.py's API_VERSION/min_api_version contract."""
     too_new = _fake_plugin("too_new", "999.0")
     registry = build_registry([too_new], api_version="1.0")
     assert "too_new" not in registry
@@ -44,9 +41,6 @@ def test_build_registry_keeps_other_plugins_when_one_is_incompatible():
 
 
 def test_all_registered_plugins_satisfy_the_current_api_version():
-    """Whatever ships in ALL_PLUGINS must actually be usable by this same
-    build's own API_VERSION -- a real plugin declaring a min_api_version
-    this host can't satisfy would be a packaging bug."""
     from plugins_registry import ALL_PLUGINS
 
     for plugin in ALL_PLUGINS:

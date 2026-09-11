@@ -1,4 +1,3 @@
-"""Qt list model exposing tasks to QML."""
 from __future__ import annotations
 
 import re
@@ -9,16 +8,10 @@ from PySide6.QtCore import QAbstractListModel, QModelIndex, QSettings, Qt, Signa
 
 from plugins.simple_task_list.storage import STATUS_ACTIVE, STATUS_CANCELLED, STATUS_DONE, Task, TaskStore
 
-# Matches Markdown [label](url) links — same syntax TaskDelegate.qml's
-# mdToHtml() already renders as clickable, so "a URL mentioned in a task"
-# means exactly what's already clickable there, not any URL-shaped substring.
-# Captures both groups: label is shown in LinksView (not the raw URL), url is
-# the actual link target.
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]\n]*)\]\(([^)\n]*)\)")
 
 
 def _read_bool(s: QSettings, key: str, default: bool) -> bool:
-    """Read a boolean from QSettings, correctly handling stored 'false' strings."""
     v = s.value(key, default)
     if isinstance(v, bool):
         return v
@@ -42,7 +35,7 @@ class TaskListModel(QAbstractListModel):
     showActiveChanged = Signal()
     showDoneChanged = Signal()
     showCancelledChanged = Signal()
-    taskAdded = Signal(str)  # emits the new task's ID after the model is ready
+    taskAdded = Signal(str)
 
     def __init__(self, store: TaskStore, settings: QSettings | None = None, parent=None):
         super().__init__(parent)
@@ -57,8 +50,6 @@ class TaskListModel(QAbstractListModel):
         self._show_done = _read_bool(self._settings, "filters/showDone", True)
         self._show_cancelled = _read_bool(self._settings, "filters/showCancelled", True)
         self._recompute()
-
-    # --- QAbstractListModel plumbing -------------------------------------
 
     def roleNames(self):
         return {
@@ -93,15 +84,7 @@ class TaskListModel(QAbstractListModel):
             return task.note
         return None
 
-    # --- view state --------------------------------------------------------
-
     def _get_can_reorder(self) -> bool:
-        # Grouping by day does not block manual reordering: dragging a task
-        # onto a different day's section reassigns it to that day (see
-        # moveTask). A search still does, since the visible order isn't the
-        # manual order in that case. An active status sort no longer blocks
-        # it (r-7.md): reordering while sorted is allowed and switches the
-        # sort back to manual instead (see moveTask).
         return not self._search
 
     canReorder = Property(bool, _get_can_reorder, notify=canReorderChanged)
@@ -149,9 +132,6 @@ class TaskListModel(QAbstractListModel):
         if not self._show_cancelled:
             items = [t for t in items if t.status != STATUS_CANCELLED]
         if self._group_by_day:
-            # Day (newest first) is always the primary key; within a day,
-            # respect the active status sort if any, else keep manual order
-            # (both via Python's stable sort).
             def day_sort_key(t: Task):
                 day_ordinal = datetime.fromisoformat(t.created_at).date().toordinal()
                 status_rank = 0 if not self._status_sort or t.status == self._status_sort else 1
@@ -161,17 +141,6 @@ class TaskListModel(QAbstractListModel):
         elif self._status_sort:
             items = sorted(items, key=lambda t: t.status != self._status_sort)
 
-        # Which set/order of tasks is visible is unchanged for plenty of
-        # mutations (e.g. editing one task's text while no search/sort is
-        # narrowing or reordering the list) — for those, a plain
-        # dataChanged() lets every existing delegate update in place instead
-        # of beginResetModel()/endResetModel() destroying and recreating
-        # all of them (see TaskDelegate.qml's forceEditing/suppressAutoSave/
-        # committedViaEnter, which exists specifically to survive a reset
-        # firing mid-edit-commit — this avoids triggering that in the first
-        # place for the common case, rather than papering over it further).
-        # Only genuinely structural changes (search, sort, grouping,
-        # reordering, visibility filters adding/removing rows) still reset.
         new_ids = [t.id for t in items]
         if new_ids == old_ids:
             self._visible = items
@@ -181,8 +150,6 @@ class TaskListModel(QAbstractListModel):
             self.beginResetModel()
             self._visible = items
             self.endResetModel()
-
-    # --- mutation slots, callable from QML ---------------------------------
 
     def _save(self):
         self._store.save(self._tasks)
@@ -198,29 +165,12 @@ class TaskListModel(QAbstractListModel):
 
     @Slot(result=str)
     def addTask(self) -> str:
-        # Drop any empty tasks left over from a previous ADD that was
-        # abandoned without typing anything (click-away without Enter/Esc).
         self._tasks = [t for t in self._tasks if t.text]
         task = Task(text="", status=STATUS_ACTIVE)
         self._insert(task)
         return task.id
 
     def insert_task(self, task: Task, target_index: int = -1) -> None:
-        """Inserts a Task moved in from another window's model (see
-        WindowManager.moveTaskToWindow) — not a QML-facing Slot, only called
-        Python-to-Python between two TaskListModel instances WindowManager
-        already holds references to. Reassigns a fresh id on the (astronomically
-        unlikely, uuid4) chance it collides with an existing task in this
-        store, keeping "ids are unique per store" airtight.
-
-        target_index is the row (in this model's current _visible list) the
-        drop was hovering over, as tracked by WindowManager from the target
-        window's own live placeholder position — lands the task right after
-        that row, matching moveTask()'s identical "insert after, not at"
-        semantics for TaskDelegate.qml's drop placeholder. -1 (no specific
-        row hovered — dropped below the last item, or onto an empty list)
-        falls back to inserting at the top, same as every other "new task"
-        entry point in this app."""
         if self._find(task.id) is not None:
             task.id = uuid.uuid4().hex
         if 0 <= target_index < len(self._visible):
@@ -230,10 +180,6 @@ class TaskListModel(QAbstractListModel):
             self._insert(task)
 
     def take_task(self, task_id: str) -> Task | None:
-        """Removes and returns a task, or None if not found — the shared
-        implementation behind both deleteTask() (which discards it) and
-        WindowManager.moveTaskToWindow() (which hands it to another
-        window's model via insert_task())."""
         task = self._find(task_id)
         if task is None:
             return None
@@ -281,9 +227,6 @@ class TaskListModel(QAbstractListModel):
 
     @Slot(str, result=str)
     def noteFor(self, task_id: str) -> str:
-        """Reads a task's note by id — NoteEditorView.qml has no per-row
-        QML context to bind `note` from directly the way TaskDelegate can
-        (it's a whole-list-view sibling, not a delegate)."""
         task = self._find(task_id)
         return task.note if task is not None else ""
 
@@ -292,26 +235,6 @@ class TaskListModel(QAbstractListModel):
         self.take_task(task_id)
 
     def _rebase_manual_order(self, new_visible_order: list[Task]):
-        """Replaces the manual order's (self._tasks) VISIBLE-subset slots
-        with new_visible_order (the same set of tasks as self._visible, in
-        a new sequence), leaving any task currently hidden by a search or
-        visibility filter exactly where it already was.
-
-        Used whenever a status sort is about to stop governing what's
-        shown — either because a move just happened (_reposition, with the
-        move already applied to new_visible_order) or because the sort was
-        explicitly turned off (setStatusSortMode(""), with self._visible
-        itself passed unchanged) — so that whichever way it happens, the
-        order the user was just looking at is what "manual" now means,
-        rather than resurfacing whatever unrelated manual order existed
-        from before the sort was ever turned on. Confirmed as an actual
-        reported bug via both paths: moving one task while Active-sorted
-        surfaced Cancelled/Done at the top instead of keeping Active first
-        with just that one move applied; separately, simply toggling the
-        Active sort button back off did the same thing, since visibility
-        filters and ordering are independent — "turn ordering off" must
-        not look like "also reorder to something else."
-        """
         visible_ids = {t.id for t in self._visible}
         new_order_iter = iter(new_visible_order)
         self._tasks = [
@@ -320,15 +243,6 @@ class TaskListModel(QAbstractListModel):
         ]
 
     def _reposition(self, moved_task: Task, target_task: Task, after: bool):
-        """Places moved_task immediately before/after target_task in the
-        manual order (self._tasks) — the one mechanism shared by moveTask
-        (drag&drop) and _move_by_one (the "^"/"v" row controls).
-
-        If a status sort is currently active, this ALSO switches ordering
-        back to Manual (r-7.md), rebasing first — see _rebase_manual_order.
-        Otherwise (already manual), self._tasks already IS the current
-        order, so it's spliced directly.
-        """
         if self._status_sort:
             new_visible = [t for t in self._visible if t.id != moved_task.id]
             insert_at = next(i for i, t in enumerate(new_visible) if t.id == target_task.id)
@@ -362,26 +276,16 @@ class TaskListModel(QAbstractListModel):
             moved_day = datetime.fromisoformat(moved_task.created_at).date()
             target_day = datetime.fromisoformat(target_task.created_at).date()
             if moved_day != target_day:
-                # Dropped onto a different day's section: reassign the task
-                # to that day, keeping its original time of day.
                 old_dt = datetime.fromisoformat(moved_task.created_at)
                 moved_task.created_at = old_dt.replace(
                     year=target_day.year, month=target_day.month, day=target_day.day
                 ).isoformat()
 
-        # Inserted AFTER target_task, not at its index (i.e. before it) —
-        # matches TaskDelegate.qml's drop placeholder, which renders
-        # *below* the hovered row (see its showGapBelow), meaning "drop it
-        # right after this one".
         self._reposition(moved_task, target_task, after=True)
         self._recompute()
         self._save()
 
     def _move_by_one(self, task_id: str, delta: int):
-        """Shared body of moveTaskUp/moveTaskDown (r-7.md's "^"/"v" row
-        controls) — always exactly one VISIBLE position, unlike moveTask
-        (tuned for drag&drop's drop-below-row placeholder, where the target
-        is wherever the pointer happens to be hovering)."""
         if not self._get_can_reorder():
             return
         index = next((i for i, t in enumerate(self._visible) if t.id == task_id), None)
@@ -402,8 +306,6 @@ class TaskListModel(QAbstractListModel):
                     year=neighbor_day.year, month=neighbor_day.month, day=neighbor_day.day
                 ).isoformat()
 
-        # Moving up (delta < 0): land right before the neighbor (push it
-        # down). Moving down (delta > 0): land right after it.
         self._reposition(moved_task, neighbor_task, after=delta > 0)
         self._recompute()
         self._save()
@@ -433,10 +335,6 @@ class TaskListModel(QAbstractListModel):
             return
         was_reorderable = self._get_can_reorder()
         if mode == "" and self._status_sort:
-            # r-7.md: explicitly turning the sort back off (FilterBar's
-            # Active/Done/Cancel button toggling itself off, as opposed to
-            # a move switching it off) must freeze the sorted order just
-            # shown as manual too — see _rebase_manual_order.
             self._rebase_manual_order(self._visible)
         self._status_sort = mode
         self._settings.setValue("filters/statusSortMode", mode)
@@ -464,7 +362,7 @@ class TaskListModel(QAbstractListModel):
         if flag == self._show_active:
             return
         if not flag and not self._show_done and not self._show_cancelled:
-            return  # at least one of Active/Done/Cancelled must stay visible
+            return
         self._show_active = flag
         self._settings.setValue("filters/showActive", flag)
         self._settings.sync()
@@ -476,7 +374,7 @@ class TaskListModel(QAbstractListModel):
         if flag == self._show_done:
             return
         if not flag and not self._show_active and not self._show_cancelled:
-            return  # at least one of Active/Done/Cancelled must stay visible
+            return
         self._show_done = flag
         self._settings.setValue("filters/showDone", flag)
         self._settings.sync()
@@ -488,7 +386,7 @@ class TaskListModel(QAbstractListModel):
         if flag == self._show_cancelled:
             return
         if not flag and not self._show_active and not self._show_done:
-            return  # at least one of Active/Done/Cancelled must stay visible
+            return
         self._show_cancelled = flag
         self._settings.setValue("filters/showCancelled", flag)
         self._settings.sync()
@@ -497,21 +395,11 @@ class TaskListModel(QAbstractListModel):
 
     @Slot()
     def reloadTasks(self):
-        """Re-reads tasks.json from disk, discarding any in-memory state."""
         self._tasks = self._store.load()
         self._recompute()
 
-    # --- calendar views (MonthView/YearView) --------------------------------
-
     @Slot(int, int, result='QVariant')
     def monthCounts(self, year: int, month: int):
-        """Per-day active/done/cancelled counts for one month.
-
-        Sparse: only days with at least one task are included. Ungrouped by
-        self._search/showActive/etc. — the calendar always reflects every
-        task regardless of the current visibility filters, since it's a
-        navigation aid, not a filtered view.
-        """
         counts: dict[int, dict[str, int]] = {}
         for t in self._tasks:
             d = datetime.fromisoformat(t.created_at).date()
@@ -522,7 +410,6 @@ class TaskListModel(QAbstractListModel):
 
     @Slot(int, result='QVariant')
     def yearCounts(self, year: int):
-        """Per-month active/done/cancelled counts for one year. Sparse, see monthCounts."""
         counts: dict[int, dict[str, int]] = {}
         for t in self._tasks:
             d = datetime.fromisoformat(t.created_at).date()
@@ -533,23 +420,14 @@ class TaskListModel(QAbstractListModel):
 
     @Slot(int, int, int, result=int)
     def indexForDate(self, year: int, month: int, day: int) -> int:
-        """Row index of the first task on the given date in the current
-        (visible, day-grouped) list, or -1. Callers switch to Day/grouped
-        view first (setGroupByDay(True) recomputes _visible synchronously),
-        then use this to scroll the ListView to that day."""
         for i, t in enumerate(self._visible):
             d = datetime.fromisoformat(t.created_at).date()
             if d.year == year and d.month == month and d.day == day:
                 return i
         return -1
 
-    # --- links view ----------------------------------------------------------
-
     @Slot(str, result=int)
     def indexForTask(self, task_id: str) -> int:
-        """Row index of the given task in the current visible list, or -1
-        (e.g. it's filtered out by the active Active/Done/Cancelled
-        visibility toggles). Used by the Links view's "to task" button."""
         for i, t in enumerate(self._visible):
             if t.id == task_id:
                 return i
@@ -557,12 +435,6 @@ class TaskListModel(QAbstractListModel):
 
     @Slot(result='QVariant')
     def linkedTasks(self):
-        """Every task that mentions at least one [label](url) Markdown link,
-        regardless of status or the active visibility/search filters — this
-        is a lookup across ALL tasks, not the currently filtered view.
-        Every link in a task is included (not just the first), in the order
-        it appears. "label" falls back to the URL itself for the (unusual)
-        empty-label case, e.g. `[](https://example.com)`."""
         result = []
         for t in self._tasks:
             matches = _MARKDOWN_LINK_RE.findall(t.text)

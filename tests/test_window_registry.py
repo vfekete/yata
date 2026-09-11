@@ -85,14 +85,14 @@ def test_next_available_tag_appends_dash_2_for_first_duplicate(tmp_path):
 def test_next_available_tag_increments_past_the_highest_existing_suffix(tmp_path):
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     registry.add("YATA - 2")
-    registry.add("YATA - 5")  # gap left by e.g. a manual rename elsewhere
+    registry.add("YATA - 5")
     assert registry.next_available_tag(DEFAULT_TAG) == "YATA - 6"
 
 
 def test_next_available_tag_ignores_unrelated_tags(tmp_path):
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     registry.remove(DEFAULT_WINDOW_ID)
-    registry.add("YATA - work")  # non-numeric suffix, not a real dedup match
+    registry.add("YATA - work")
     registry.add("Something else")
     assert registry.next_available_tag("YATA") == "YATA"
 
@@ -120,10 +120,6 @@ def test_set_open_persists_across_instances(tmp_path):
 
 
 def test_entries_written_before_open_field_existed_default_to_open(tmp_path):
-    """Regression guard: upgrading users' windows.json predates the "open"/
-    "deleted" fields entirely — those windows must still show up as open and
-    not-deleted, not silently vanish from restart just because the keys are
-    missing."""
     import json
 
     path = tmp_path / "windows.json"
@@ -150,8 +146,6 @@ def test_set_deleted_persists_across_instances(tmp_path):
 
 
 def test_next_available_tag_ignores_deleted_entries(tmp_path):
-    """A deleted window isn't currently visible, so it shouldn't force a
-    freshly-created ACTIVE window into an "- 2" name."""
     registry = WindowRegistry(path=str(tmp_path / "windows.json"))
     registry.set_deleted(DEFAULT_WINDOW_ID, True)
 

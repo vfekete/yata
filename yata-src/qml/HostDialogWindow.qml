@@ -4,17 +4,6 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Window
 
-// Host-owned twin of plugins/simple_task_list/qml/DialogWindow.qml — same
-// "real top-level Window, not an in-window Popup" reasoning (see that
-// file's own comment for why), but styled off Main.qml's fixed chrome
-// palette instead of the plugin's Theme, since this is used exclusively by
-// host-owned dialogs (DeleteWindowDialog/PurgeWindowDialog) that must look
-// the same regardless of which plugin happens to be running in the window
-// that opened them. Not shared with the plugin's own DialogWindow.qml on
-// purpose — that one stays Theme-coupled for NoteDialog.qml, which IS
-// plugin content; duplicating this small chrome is the same deliberate
-// tradeoff Main.qml itself already makes (its own chromeTextColor etc.
-// duplicate, rather than reuse, Theme's equivalents).
 Window {
     id: root
     flags: Qt.Dialog | Qt.FramelessWindowHint
@@ -58,10 +47,6 @@ Window {
     width: contentWidth
     height: outerColumn.implicitHeight
 
-    // Centered over whichever YATA window opened it, at open time and
-    // whenever that window subsequently moves/resizes — see
-    // DialogWindow.qml's own comment for why transientParent is already
-    // set with no code on our part.
     x: transientParent ? Math.round(transientParent.x + (transientParent.width - width) / 2) : 0
     y: transientParent ? Math.round(transientParent.y + (transientParent.height - height) / 2) : 0
 
@@ -114,11 +99,6 @@ Window {
                 Layout.topMargin: 4
                 spacing: 8
 
-                // Custom background/contentItem, not the plain QtQuick.
-                // Controls default look (which is styled for a light
-                // "Basic" theme, not this dark chrome panel) — same
-                // Rectangle+Text+hover-glow idiom the plugin's own toolbar
-                // buttons and Main.qml's own icon boxes already use.
                 Button {
                     id: cancelBtn
                     text: root.cancelText

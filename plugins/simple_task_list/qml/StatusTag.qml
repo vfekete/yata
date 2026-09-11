@@ -1,15 +1,9 @@
 import QtQuick
 import QtQuick.Effects
 
-// Status tag used by LinksView's rows: colored status word + glow, plus a
-// timestamp for done/cancelled. Mirrors TaskDelegate.qml's existing
-// completedLabel Row (kept as-is there, per explicit decision not to change
-// the main task list), extended with an "active" case — every Links row
-// needs a status indicator since, unlike the main list, there's no
-// strikethrough/muted-text to convey status instead.
 Row {
     id: root
-    property string status: "active"  // "active" | "done" | "cancelled"
+    property string status: "active"
     property string completedAt: ""
     spacing: 0
 
@@ -38,7 +32,6 @@ Row {
         }
     }
 
-    // No timestamp for "active" — spec: "doesn't have timestamp, just status".
     Text {
         visible: root.status !== "active" && root.completedAt !== ""
         textFormat: Text.PlainText

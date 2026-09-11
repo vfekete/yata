@@ -1,10 +1,3 @@
-"""Tests for the classic "X" close-window button next to the lock icon
-(top-right corner) — clicking it calls WindowManager.closeWindow() for this
-window, same as YatasView's own SHOW toggle does.
-
-Runs against a real QML engine (offscreen) using QTest.mouseClick, same
-construction pattern as the other QML integration test files.
-"""
 import os
 import sys
 
@@ -44,10 +37,6 @@ def _find_by_class_prefix(item, prefix, results=None):
 
 
 def _close_icon_box(window):
-    """The close ("X") icon's background box: the rightmost QQuickRectangle
-    straddling the top border line (y ~ 0) — same "read the live layout"
-    technique used elsewhere in this test suite (e.g. test_lock_feature.py's
-    _find_lock_icon) rather than a hardcoded pixel offset."""
     rects = [
         r for r in _find_by_class_prefix(window.contentItem(), "QQuickRectangle")
         if r.mapToItem(window.contentItem(), 0, 0).y() < 5
@@ -75,9 +64,6 @@ def _close_mouse_area(box):
 
 @pytest.fixture()
 def two_windows(tmp_path, monkeypatch):
-    """Yields (app, window_manager, window1, id1, window2, id2) — two real
-    windows in one engine, same real construction path as main.py
-    (window_factory building each one via main._make_window)."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -85,7 +71,7 @@ def two_windows(tmp_path, monkeypatch):
 
     src = os.path.join(os.path.dirname(__file__), "..", "yata-src")
     sys.path.insert(0, src)
-    import resources_rc  # noqa: F401,PLC0415 — registers qrc:/icons/*.svg etc.
+    import resources_rc  # noqa: F401,PLC0415
     from icons import IconProvider  # noqa: PLC0415
     from main import _make_window  # noqa: PLC0415
     from settings import AppSettings  # noqa: PLC0415
@@ -147,10 +133,6 @@ def test_close_button_closes_this_window_when_another_is_open(two_windows):
 
 
 def test_close_button_is_a_noop_on_the_last_open_window(two_windows):
-    """Same "at least one window must stay visible" guard WindowManager
-    already enforces for every other close path (YatasView's SHOW toggle
-    included) — the close button reuses closeWindow(), not a bespoke path,
-    so it inherits this for free."""
     app, window_manager, window1, id1, window2, id2 = two_windows
 
     QTest.mouseClick(window1, Qt.LeftButton, Qt.NoModifier, _close_button_center(window1))
@@ -165,11 +147,6 @@ def test_close_button_is_a_noop_on_the_last_open_window(two_windows):
 
 
 def test_close_button_looks_disabled_once_it_is_the_only_window(two_windows):
-    """Explicit request: closing the last window was already a safe no-op
-    (the test above), but the button still looked fully interactive
-    regardless — dim it and stop it reacting to hover/clicks once there's
-    only one window left, rather than quietly no-op-ing behind a normal-
-    looking control."""
     app, window_manager, window1, id1, window2, id2 = two_windows
 
     box1 = _close_icon_box(window1)
