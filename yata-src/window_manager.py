@@ -18,9 +18,9 @@ from typing import Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtQml import QJSValue
 
 import plugins_registry
+from qml_interop import unwrap_qvariant
 from window_registry import (
     DEFAULT_PLUGIN_ID,
     DEFAULT_TAG,
@@ -331,13 +331,7 @@ class WindowManager(QObject):
 
     @Slot("QVariant", result=str)
     def createWindow(self, caller_state) -> str:
-        # QML calls this with a JS object literal, which PySide hands over
-        # as a QJSValue (not auto-converted to a Python dict) — must be
-        # unwrapped via toVariant() first. Direct Python callers (tests)
-        # already pass a plain dict, so only convert when needed.
-        if isinstance(caller_state, QJSValue):
-            caller_state = caller_state.toVariant()
-        caller_state = dict(caller_state)
+        caller_state = dict(unwrap_qvariant(caller_state))
         # "plugin": which plugin the new window runs — YatasView's own Add
         # picker (r-10.md, once a second plugin existed to actually choose
         # between). Falls back to DEFAULT_PLUGIN_ID for any caller that

@@ -5,23 +5,13 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot
-from PySide6.QtQml import QJSValue
+
+from qml_interop import unwrap_qvariant
 
 from . import pdf_export
 from .storage import TimesheetStore, WorkItem, WorkSession
 
-
-def _unwrap(value):
-    """QML calls a "QVariant"-typed slot with a JS object literal, which
-    PySide hands over as a QJSValue (not auto-converted to a Python dict)
-    — must be unwrapped via toVariant() first. Same gotcha WindowManager.
-    createWindow() already documents/handles; direct Python callers
-    (tests) already pass a plain dict/None, so only convert when needed."""
-    if isinstance(value, QJSValue):
-        return value.toVariant()
-    return value
-
-_ID, _NAME, _NON_WORKING, _RUNNING, _DURATION_LABEL = (Qt.UserRole + i for i in range(1, 6))
+_ID, _NAME, _NON_WORKING, _RUNNING, _DURATION_LABEL, _ABANDONED = (Qt.UserRole + i for i in range(1, 7))
 
 
 def _parse(iso: str) -> datetime:
@@ -145,21 +135,58 @@ def compute_summary(
 
 class TimesheetModel(QAbstractListModel):
     itemAdded = Signal(str)
+    searchTextChanged = Signal()
 
     def __init__(self, store: TimesheetStore, parent=None):
         super().__init__(parent)
         self._store = store
         self._items, self._day_locations = store.load()
+        self._search = ""
+        # Cached, not recomputed on every rowCount()/data() call — same
+        # pattern TaskListModel's own self._visible already establishes,
+        # needed now that visibility depends on search text too (a plain
+        # per-call filter, tried first for the not-deleted-only case,
+        # can't properly signal a search-driven visibility change to
+        # QML — see _recompute() below for why that matters).
+        self._visible: list[WorkItem] = []
+        self._recompute()
 
     # ── QAbstractListModel plumbing ──────────────────────────────────────
 
-    def _visible(self) -> list[WorkItem]:
-        return [i for i in self._items if not i.deleted]
+    def _matches_search(self, item: WorkItem) -> bool:
+        if not self._search:
+            return True
+        return self._search.lower() in item.name.lower()
+
+    def _recompute(self) -> None:
+        """Rebuilds self._visible (not-deleted, search-matching) and
+        signals QML appropriately — a dataChanged over the unchanged range
+        when the same set/order of items is still visible (e.g. renaming
+        one while no search narrows the list), a full reset when the
+        visible set itself changed (search text edited, item added/
+        deleted). Same "reset only when the row SET changes, dataChanged
+        otherwise" split TaskListModel's own _recompute() already
+        establishes, for the same reason: a search keystroke removing a
+        row needs proper structural signaling, but every other mutation
+        (rename, start/stop, non-working toggle) shouldn't force-destroy
+        every delegate just to update one.
+        """
+        old_ids = [i.id for i in self._visible]
+        new_visible = [i for i in self._items if not i.deleted and self._matches_search(i)]
+        new_ids = [i.id for i in new_visible]
+        if new_ids == old_ids:
+            self._visible = new_visible
+            if new_visible:
+                self.dataChanged.emit(self.index(0), self.index(len(new_visible) - 1))
+        else:
+            self.beginResetModel()
+            self._visible = new_visible
+            self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()) -> int:
         if parent.isValid():
             return 0
-        return len(self._visible())
+        return len(self._visible)
 
     def roleNames(self):
         return {
@@ -172,6 +199,7 @@ class TimesheetModel(QAbstractListModel):
             _NON_WORKING: b"nonWorking",
             _RUNNING: b"running",
             _DURATION_LABEL: b"durationLabel",
+            _ABANDONED: b"hasAbandonedSession",
         }
 
     def _total_duration(self, item: WorkItem) -> timedelta:
@@ -182,10 +210,9 @@ class TimesheetModel(QAbstractListModel):
         return total
 
     def data(self, index, role):
-        items = self._visible()
-        if not index.isValid() or not (0 <= index.row() < len(items)):
+        if not index.isValid() or not (0 <= index.row() < len(self._visible)):
             return None
-        item = items[index.row()]
+        item = self._visible[index.row()]
         if role == _ID:
             return item.id
         if role == _NAME:
@@ -196,6 +223,8 @@ class TimesheetModel(QAbstractListModel):
             return self._running_session(item) is not None
         if role == _DURATION_LABEL:
             return format_duration(self._total_duration(item))
+        if role == _ABANDONED:
+            return any(s.abandoned for s in item.sessions)
         return None
 
     # ── internal helpers ──────────────────────────────────────────────
@@ -222,39 +251,38 @@ class TimesheetModel(QAbstractListModel):
         self._store.save(self._items, self._day_locations)
 
     def _refresh_row(self, item: WorkItem) -> None:
-        items = self._visible()
-        if item in items:
-            row = items.index(item)
+        if item in self._visible:
+            row = self._visible.index(item)
             idx = self.index(row)
             self.dataChanged.emit(idx, idx)
 
     # ── QML-facing API ──────────────────────────────────────────────────
 
     @Slot(result=str)
-    def addItem(self) -> str:
-        """No-argument, empty-name creation — same convention TaskListModel.
-        addTask() already established: the row starts in-place-editable
-        (WorkItemRow.qml focuses its name field the moment itemAdded fires,
-        mirroring TaskDelegate's own onTaskAdded handling), and any
-        previous ADD abandoned without typing anything (click-away, no
-        text ever entered) is dropped first rather than accumulating
-        empty rows.
+    def getSearchText(self) -> str:
+        return self._search
 
-        Always goes through a full reset rather than begin/endInsertRows:
-        the pruning step can itself remove a currently-visible row in the
-        same call, and Qt's begin/end-InsertRows contract requires
-        announcing a row count change BEFORE the data actually changes —
-        incrementally signaling only the new row while a prune is also
-        silently happening would violate that. A reset here is
-        imperceptible either way (this is a fresh, still-empty row, not a
-        mid-edit commit TaskListModel's own dataChanged-preferring
-        _recompute() is protecting elsewhere).
-        """
-        self.beginResetModel()
+    @Slot(str)
+    def setSearchText(self, text: str) -> None:
+        if text == self._search:
+            return
+        self._search = text
+        self._recompute()
+        self.searchTextChanged.emit()
+
+    @Slot(result=str)
+    def addItem(self) -> str:
+        """No-argument, empty-name creation — same convention
+        TaskListModel.addTask() already established: the row starts
+        in-place-editable (WorkItemRow.qml focuses its name field the
+        moment itemAdded fires, mirroring TaskDelegate's own onTaskAdded
+        handling), and any previous ADD abandoned without typing anything
+        (click-away, no text ever entered) is dropped first rather than
+        accumulating empty rows."""
         self._items = [i for i in self._items if i.name or i.deleted or i.sessions]
         item = WorkItem(name="")
         self._items.append(item)
-        self.endResetModel()
+        self._recompute()
         self._save()
         self.itemAdded.emit(item.id)
         return item.id
@@ -269,7 +297,7 @@ class TimesheetModel(QAbstractListModel):
             return
         target.name = trimmed
         self._save()
-        self._refresh_row(target)
+        self._recompute()
 
     @Slot(str)
     def startItem(self, item_id: str) -> None:
@@ -284,17 +312,10 @@ class TimesheetModel(QAbstractListModel):
                 self._stop_now(other)
         target.sessions.append(WorkSession())
         self._save()
-        # dataChanged over the WHOLE visible range, not layoutChanged
-        # (tried first) — layoutChanged signals a row-ORDER change, not a
-        # role-VALUE change, so QML's required-property role bindings
-        # (running/durationLabel) never actually refreshed from it,
-        # confirmed live (a started item's row silently kept showing its
-        # old state). Any OTHER row may also have just been auto-stopped
-        # above, so the whole range is covered rather than tracking
-        # exactly which single row that was.
-        items = self._visible()
-        if items:
-            self.dataChanged.emit(self.index(0), self.index(len(items) - 1))
+        # Whole visible range, not just target's own row -- any OTHER
+        # item may have just been auto-stopped above too.
+        if self._visible:
+            self.dataChanged.emit(self.index(0), self.index(len(self._visible) - 1))
 
     @Slot(str)
     def stopItem(self, item_id: str) -> None:
@@ -314,16 +335,10 @@ class TimesheetModel(QAbstractListModel):
         target = self._find(item_id)
         if target is None:
             return
-        items_before = self._visible()
-        row = items_before.index(target) if target in items_before else -1
         self._stop_now(target)
-        if row >= 0:
-            self.beginRemoveRows(QModelIndex(), row, row)
-            target.deleted = True
-            self.endRemoveRows()
-        else:
-            target.deleted = True
+        target.deleted = True
         self._save()
+        self._recompute()
 
     @Slot(str, bool)
     def setNonWorking(self, item_id: str, non_working: bool) -> None:
@@ -395,7 +410,7 @@ class TimesheetModel(QAbstractListModel):
     def summary(self, period: str, reference_iso_date: str, holiday_dates, daily_hours: float):
         reference = date.fromisoformat(reference_iso_date)
         return compute_summary(
-            self._items, period, reference, dict(_unwrap(holiday_dates)), daily_hours, self._day_locations,
+            self._items, period, reference, dict(unwrap_qvariant(holiday_dates)), daily_hours, self._day_locations,
         )
 
     @Slot(str, str, str, "QVariant", float, "QVariant", result=bool)
@@ -414,9 +429,9 @@ class TimesheetModel(QAbstractListModel):
         try:
             reference = date.fromisoformat(reference_iso_date)
             summary = compute_summary(
-                self._items, period, reference, dict(_unwrap(holiday_dates)), daily_hours, self._day_locations,
+                self._items, period, reference, dict(unwrap_qvariant(holiday_dates)), daily_hours, self._day_locations,
             )
-            options = dict(_unwrap(options))
+            options = dict(unwrap_qvariant(options))
             html = pdf_export.build_html(
                 summary,
                 customer_name=options.get("customerName", ""),

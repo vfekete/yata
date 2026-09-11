@@ -89,9 +89,16 @@ QtObject {
 
     // Fixed, theme-independent — same reasoning TaskDelegate's own
     // checkIconColor/crossIconColor use literal green/red under "none":
-    // ON-SITE/REMOTE and the abandoned-session flag are semantic signals,
-    // not decorative accents.
+    // ON-SITE/REMOTE is a semantic signal, not a decorative accent.
     readonly property color onSiteColor: "#22c55e"
     readonly property color remoteColor: "#0ea5e9"
-    readonly property color abandonedColor: "#ef4444"
+
+    // r-10.md "Bug wave 1": user-configurable (SETTINGS menu's "Ongoing
+    // color"/"Abandoned color" pickers), NOT fixed like onSiteColor/
+    // remoteColor above — these coerce appSettings' plain string
+    // properties into real `color` values the same way effectiveGlowColor
+    // above coerces hostSettings.borderColor, so WorkItemRow.qml can read
+    // .r/.g/.b off them directly.
+    readonly property color ongoingColor: appSettings.ongoingColor
+    readonly property color abandonedColor: appSettings.abandonedColor
 }

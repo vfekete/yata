@@ -3,12 +3,15 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
 
-// One row in the work-item list — name (double-click to rename, matching
-// YatasRow.qml/TaskDelegate.qml's own double-click-to-edit convention),
-// hover-revealed start/stop + sessions + non-working + delete buttons
-// (same hover-reveal convention TaskDelegate.qml's own action row uses —
-// see its own "Row { visible: root.hovered && !root.editing }" at the end
-// of its RowLayout), total duration shown beneath the name.
+// One row in the work-item list. Layout follows r-10.md's "Bug wave 1"
+// spec literally: a fixed-width state indicator (a filled circle — blank
+// normally, "ongoing color" while running, "abandoned color" while an
+// abandoned session exists), then a fixed-width, right-aligned duration
+// column (blank for non-working items — their time is still tracked,
+// just not shown), then the item's name (wraps across multiple lines
+// once hovered, exactly like TaskDelegate.qml's own taskText). Hover-only
+// action icons (mirroring TaskDelegate's own trailing action Row) sit at
+// the far right.
 Item {
     id: root
     required property string itemId
@@ -25,7 +28,15 @@ Item {
     signal nonWorkingToggled(string itemId, bool nonWorking)
     signal sessionsRequested(string itemId)
 
-    property bool editing: root.name.length === 0
+    // Same forceEditing/editing split TaskDelegate.qml uses: editing is
+    // true either because this is a brand new, still-unnamed item (name
+    // is empty) or because the user double-clicked to rename an existing
+    // one — kept as two separate properties (not one direct getter/
+    // setter) so double-clicking an EXISTING item can cleanly exit back
+    // to non-editing afterward without the "editing" state trying to
+    // re-derive itself from an emptied-out name field along the way.
+    property bool forceEditing: false
+    readonly property bool editing: root.forceEditing || root.name.length === 0
     readonly property bool hovered: hoverHandler.hovered
 
     // While running, ticks every second so the duration shown actually
@@ -70,62 +81,97 @@ Item {
         anchors.fill: parent
         radius: 4
         color: root.running
-            ? Qt.rgba(Theme.effectiveGlowColor.r, Theme.effectiveGlowColor.g, Theme.effectiveGlowColor.b, root.hovered ? 0.22 : 0.14)
+            ? Qt.rgba(Theme.ongoingColor.r, Theme.ongoingColor.g, Theme.ongoingColor.b, root.hovered ? 0.22 : 0.14)
             : (root.hovered ? Theme.hoverColor : "transparent")
-        border.color: root.running ? Theme.effectiveGlowColor : "transparent"
+        border.color: root.running ? Theme.ongoingColor : "transparent"
         border.width: root.running ? 1 : 0
+    }
+
+    // Measures a representative "worst case" duration string, so every
+    // row's duration column gets the SAME fixed width regardless of its
+    // own text length — same "FontMetrics + a representative string"
+    // technique TaskDelegate.qml's own completedStatus (DONE/CANCELED)
+    // uses to keep a column's width, and therefore its right-aligned
+    // digits, identical across every row. Durations are unbounded (a
+    // multi-day session is plausible), so unlike DONE/CANCELED this can
+    // still occasionally be exceeded by a genuinely huge value —
+    // harmless, that row's own text just grows past the shared column
+    // edge rather than the whole list silently losing its alignment for
+    // one outlier.
+    FontMetrics {
+        id: durationMetrics
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.taskFontPixelSize
     }
 
     RowLayout {
         id: mainRow
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.top: parent.top
+        anchors.topMargin: 6
         anchors.leftMargin: 6
         anchors.rightMargin: 6
         spacing: 10
 
-        // Column, NOT ColumnLayout — confirmed via a minimal reproduction
-        // that a ColumnLayout nested inside this RowLayout silently
-        // ignores Layout.fillWidth entirely (stays at its own implicit
-        // content width, e.g. 41px, regardless of how much space the
-        // RowLayout actually has), while a plain Column honors it
-        // correctly. This is what pushed the action-icon Row into the
-        // middle of the row instead of flush against the right edge —
-        // the "column" here consuming only ~45px left the icons sitting
-        // wherever 45px-plus-spacing happened to land, not at the true
-        // right edge the fillWidth was supposed to push them to.
-        Column {
+        // State indicator: a filled circle, "big as 1/2 size of the
+        // font" (explicit spec) — a real Rectangle rather than a text
+        // glyph, so its size/color are exact rather than approximated by
+        // whatever a font happens to render a dot-shaped character as.
+        // Blank (fully transparent) for a plain active/non-running,
+        // non-abandoned item.
+        Rectangle {
+            id: stateIndicator
+            readonly property int diameter: Math.round(Theme.taskFontPixelSize * 0.5)
+            Layout.preferredWidth: diameter
+            Layout.preferredHeight: diameter
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: Math.round((Theme.taskFontPixelSize - diameter) / 2)
+            radius: diameter / 2
+            color: root.running ? Theme.ongoingColor
+                : root.hasAbandonedSession ? Theme.abandonedColor : "transparent"
+        }
+
+        // Duration column: fixed width (see durationMetrics above),
+        // right-aligned — "Items beneath each other should be aligned so
+        // the timestamps will appear as in a single column right
+        // aligned" (explicit spec). Blank for a non-working item: "track
+        // the time, but do not display it."
+        Text {
+            Layout.preferredWidth: durationMetrics.advanceWidth("9999:59:59")
+            Layout.alignment: Qt.AlignTop
+            horizontalAlignment: Text.AlignRight
+            text: root.nonWorking ? "" : root.displayedDuration
+            color: Theme.mutedTextColor
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.taskFontPixelSize
+        }
+
+        Text {
+            id: nameText
             Layout.fillWidth: true
-            spacing: 0
+            Layout.alignment: Qt.AlignTop
             visible: !root.editing
+            text: root.name
+            color: Theme.textColor
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.taskFontPixelSize
+            font.italic: root.nonWorking
+            wrapMode: root.hovered ? Text.Wrap : Text.NoWrap
+            elide: root.hovered ? Text.ElideNone : Text.ElideRight
 
-            Text {
-                text: root.name
-                color: root.nonWorking ? Theme.mutedTextColor : Theme.textColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize
-                font.bold: root.running
-                font.italic: root.nonWorking
-
-                TapHandler {
-                    onDoubleTapped: root.editing = true
-                }
-            }
-
-            Text {
-                text: root.displayedDuration + (root.nonWorking ? qsTr(" (non-working)") : "")
-                color: Theme.mutedTextColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Math.round(Theme.taskFontPixelSize * 0.75)
+            TapHandler {
+                onDoubleTapped: root.forceEditing = true
             }
         }
 
         TextField {
             id: nameField
             Layout.fillWidth: true
+            Layout.alignment: Qt.AlignTop
             visible: root.editing
             text: root.name
+            placeholderText: qsTr("New work item")
             color: Theme.textColor
             font.family: Theme.fontFamily
             font.pixelSize: Theme.taskFontPixelSize
@@ -134,53 +180,76 @@ Item {
                 color: Theme.fieldColor
             }
 
-            onVisibleChanged: if (visible) { selectAll(); forceActiveFocus() }
+            // Mirrors TaskDelegate.qml's own editField exactly (same
+            // focus/default-name/cancel-on-Escape behavior, explicit
+            // follow-up request: "the addition behaves the same as in
+            // STP") — committedViaEnter/suppressAutoSave exist for the
+            // identical reason documented there: Enter's own handler
+            // already applied the change, so the onEditingFinished that
+            // fires right after (focus loss as a side effect of the
+            // model update) must not re-apply or override it, and a
+            // brand-new row's own birth-time focus grab must not be
+            // undone by the spurious blur Qt delivers when the click that
+            // triggered ADD returns focus in the same event-loop tick.
+            property bool committedViaEnter: false
+            property bool suppressAutoSave: false
 
-            function commit() {
-                root.editing = false
-                var trimmed = text.trim()
-                if (trimmed.length > 0)
-                    root.renamed(root.itemId, trimmed)
-                else if (root.name.length === 0)
-                    root.deleteRequested(root.itemId, "")  // abandoned ADD, never named -- see model.py's addItem pruning
+            onVisibleChanged: if (visible) forceActiveFocus()
+            Component.onCompleted: {
+                if (visible) {
+                    suppressAutoSave = true
+                    Qt.callLater(function() { suppressAutoSave = false })
+                    forceActiveFocus()
+                }
             }
-            onEditingFinished: commit()
-            Keys.onReturnPressed: commit()
-            Keys.onEscapePressed: { root.editing = false; text = root.name }
-        }
-
-        // Persistent status indicator, NOT hover-gated (unlike the action
-        // buttons below) — same "a status stays visible, only the
-        // ACTIONS hide behind hover" split TaskDelegate.qml's own
-        // completedLabel/reopenGlyph (always shown) vs. doneBtn/cancelBtn/
-        // deleteBtn (hover-only) already establishes. Warns when at least
-        // one of this item's sessions was auto-closed by the abandoned-
-        // session sweep (storage.py) — tap to jump straight to
-        // SessionsDialog to review/fix it.
-        Text {
-            visible: root.hasAbandonedSession && !root.editing
-            text: "⚠"
-            color: Theme.abandonedColor
-            font.pixelSize: Math.round(Theme.taskFontPixelSize * 1.1)
-            ToolTip.visible: abandonedHover.hovered
-            ToolTip.text: qsTr("Has an abandoned session -- click to review")
-            HoverHandler { id: abandonedHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: root.sessionsRequested(root.itemId) }
+            onEditingFinished: {
+                if (committedViaEnter) return
+                if (suppressAutoSave && root.name.length === 0) return
+                root.forceEditing = false
+                if (text.length > 0) {
+                    root.renamed(root.itemId, text)
+                } else if (root.name.length === 0) {
+                    root.renamed(root.itemId, qsTr("New work item"))
+                }
+                // else: existing item, user cleared all text -- cancel edit silently
+            }
+            Keys.onReturnPressed: (event) => {
+                event.accepted = true
+                committedViaEnter = true
+                if (text.length > 0) {
+                    root.forceEditing = false
+                    root.renamed(root.itemId, text)
+                } else if (root.name.length === 0) {
+                    root.deleteRequested(root.itemId, "")  // never-named ADD, cancelled -- no confirmation needed
+                } else {
+                    root.forceEditing = false
+                }
+            }
+            Keys.onEscapePressed: {
+                if (root.name.length === 0)
+                    root.deleteRequested(root.itemId, "")  // never-named ADD, cancelled -- no confirmation needed
+                else
+                    root.forceEditing = false
+            }
         }
 
         // Action buttons — hover-only (explicit follow-up request: "the
         // icons... should not [be] always visible, the visual behavior
         // should mimic task row"), and pushed to the row's right edge by
-        // the Column's own Layout.fillWidth above rather than an
+        // the fillWidth name Text/TextField above rather than an
         // anchors.right (same mechanism TaskDelegate.qml's own trailing
-        // action Row relies on — nothing here needs anchoring, RowLayout
-        // does it once the fillWidth sibling consumes the rest of the
-        // space). Layout.alignment: Qt.AlignVCenter is NOT implied by
-        // default for a Row nested in a RowLayout — has to be set
-        // explicitly, or it drifts to the top of a taller row.
+        // action Row relies on). Single-colored glyphs only (explicit
+        // follow-up request: "no red trash bin") — no color-emoji
+        // characters, which ignore Text.color entirely regardless of
+        // what it's set to; delete uses "✕" (already this app's own
+        // "remove/close" glyph elsewhere: Main.qml's close button,
+        // Toolbar.qml's clear-search icon) instead of the 🗑 emoji, and
+        // "edit sessions" uses the existing calendar SVG asset (via
+        // iconProvider.coloredSvgUri, already proven single-color-
+        // recolorable) instead of the 🕘 clock emoji.
         Row {
             visible: root.hovered && !root.editing
-            Layout.alignment: Qt.AlignVCenter
+            Layout.alignment: Qt.AlignTop
             spacing: 6
 
             Text {
@@ -193,10 +262,15 @@ Item {
                 TapHandler { onTapped: root.nonWorkingToggled(root.itemId, !root.nonWorking) }
             }
 
-            Text {
-                text: "🕘"
-                color: sessionsHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
-                font.pixelSize: Math.round(Theme.taskFontPixelSize * 1.2)
+            Image {
+                id: sessionsIcon
+                height: Math.round(Theme.taskFontPixelSize * 1.15)
+                width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
+                anchors.verticalCenter: parent.verticalCenter
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                source: iconProvider.coloredSvgUri("calendar",
+                    (sessionsHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor).toString())
                 ToolTip.visible: sessionsHover.hovered
                 ToolTip.text: qsTr("Edit sessions")
                 HoverHandler { id: sessionsHover; cursorShape: Qt.PointingHandCursor }
@@ -206,9 +280,9 @@ Item {
             Text {
                 // Stop is a filled square, not the pause glyph — explicit
                 // follow-up request ("change pause icon || for stop icon
-                // (filled square)"): pausing implies resumable mid-
+                // (filled square)"): pausing implied a resumable mid-
                 // session state this plugin doesn't have (stopping always
-                // ends the session; starting again begins a NEW one).
+                // ends the session; starting again begins a new one).
                 text: root.running ? "⏹" : "▶"
                 color: startStopHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
                 font.pixelSize: Math.round(Theme.taskFontPixelSize * 1.3)
@@ -228,8 +302,8 @@ Item {
             }
 
             Text {
-                text: "🗑"
-                color: deleteHover.hovered ? Theme.abandonedColor : Theme.mutedTextColor
+                text: "✕"
+                color: deleteHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor
                 font.pixelSize: Math.round(Theme.taskFontPixelSize * 1.2)
                 HoverHandler { id: deleteHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: root.deleteRequested(root.itemId, root.name) }

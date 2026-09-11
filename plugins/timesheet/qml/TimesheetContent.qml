@@ -12,6 +12,12 @@ import QtQuick.Window
 // Main.qml, zoom handled once generically there, window management
 // entirely host chrome now).
 //
+// "Bug wave 1" (r-10.md follow-up) asked this to copy as much of
+// simple_task_list's own UI/UX as possible: two header rows — an upper
+// menu (ADD/EXPORT/SETTINGS/search, mirroring Toolbar.qml) and a
+// sub-toolbar (the period selector, mirroring FilterBar.qml's own
+// icon-prefixed button groups) — rather than one flat row.
+//
 // context properties this relies on (set by plugin.py's create_content):
 // timesheetModel, appSettings (TimesheetSettings), holidaysProvider,
 // Theme, iconProvider, windowManager, windowId, hostSettings.
@@ -19,7 +25,7 @@ Item {
     id: contentRoot
     anchors.fill: parent
 
-    readonly property alias actionButtonsWidth: menuRow.implicitWidth
+    readonly property alias actionButtonsWidth: upperMenu.implicitWidth
     readonly property alias contentHovered: contentHoverHandler.hovered
     readonly property real windowOpacity: Theme.windowOpacity
 
@@ -45,9 +51,23 @@ Item {
         return merged
     }
 
+    function openExportDialog() {
+        exportDialog.openFor(
+            contentRoot.activePeriod === "" ? "month" : contentRoot.activePeriod,
+            contentRoot.summaryReferenceDate, contentRoot.holidayDates,
+            appSettings.defaultDailyHours)
+    }
+
+    // First-run country prompt: opens the (now comprehensive) export
+    // dialog the first time this window's countryCode comes back empty
+    // (system locale was unset/C/POSIX, so there was nothing to default
+    // to) — same dialog the EXPORT button and SETTINGS menu's own
+    // "Export..." item open, since customer/contractor/country/PDF-part
+    // settings now all live there together (see ExportPdfDialog.qml's
+    // own header for why they were merged in).
     Component.onCompleted: {
         if (appSettings.countryCode === "")
-            pdfSettingsDialog.openSettings()
+            contentRoot.openExportDialog()
     }
 
     // Same "sibling of the content, not a wrapping overlay Item" placement
@@ -61,18 +81,13 @@ Item {
         id: contentHoverHandler
     }
 
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.RightButton
-        onClicked: pdfSettingsDialog.openSettings()
-    }
-
     ColumnLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: 4
 
+        // ── Upper menu (mirrors Toolbar.qml) ─────────────────────────────
         RowLayout {
-            id: menuRow
+            id: upperMenu
             Layout.fillWidth: true
             spacing: 10
 
@@ -85,6 +100,11 @@ Item {
                 color: addHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
                 HoverHandler { id: addHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
+                    // Behaves the same as STP's own ADD (explicit
+                    // follow-up request): switches back to the item list
+                    // if a summary is showing, then creates a new,
+                    // still-unnamed item that WorkItemRow.qml's own
+                    // nameField immediately focuses for typing.
                     onTapped: {
                         contentRoot.activePeriod = ""
                         timesheetModel.addItem()
@@ -93,21 +113,157 @@ Item {
                 }
             }
 
-            Item { Layout.preferredWidth: 12 }
+            Text {
+                text: qsTr("EXPORT")
+                font.bold: true
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
+                font.capitalization: Font.AllUppercase
+                color: exportHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
+                HoverHandler { id: exportHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: contentRoot.openExportDialog() }
+            }
+
+            Text {
+                id: settingsButton
+                text: qsTr("SETTINGS")
+                font.bold: true
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
+                font.capitalization: Font.AllUppercase
+                color: settingsHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
+                HoverHandler { id: settingsHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: settingsMenu.popup() }
+
+                Menu {
+                    id: settingsMenu
+
+                    MenuItem {
+                        text: qsTr("Export...")
+                        padding: 10
+                        onTriggered: contentRoot.openExportDialog()
+                    }
+
+                    MenuSeparator {}
+
+                    // "Co" = a filled circle in the currently-picked
+                    // color, right after the label — explicit spec
+                    // wording ("'Co' part of the text represents
+                    // 'C'olor circle").
+                    MenuItem {
+                        padding: 10
+                        onTriggered: ongoingColorDialog.open()
+                        contentItem: RowLayout {
+                            spacing: 8
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("Ongoing color")
+                                color: Theme.textColor
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.taskFontPixelSize
+                            }
+                            Rectangle {
+                                width: Theme.taskFontPixelSize
+                                height: Theme.taskFontPixelSize
+                                radius: width / 2
+                                color: Theme.ongoingColor
+                            }
+                        }
+                    }
+                    MenuItem {
+                        padding: 10
+                        onTriggered: abandonedColorDialog.open()
+                        contentItem: RowLayout {
+                            spacing: 8
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("Abandoned color")
+                                color: Theme.textColor
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.taskFontPixelSize
+                            }
+                            Rectangle {
+                                width: Theme.taskFontPixelSize
+                                height: Theme.taskFontPixelSize
+                                radius: width / 2
+                                color: Theme.abandonedColor
+                            }
+                        }
+                    }
+                }
+
+                ColorDialog {
+                    id: ongoingColorDialog
+                    title: qsTr("Ongoing color")
+                    selectedColor: Theme.ongoingColor
+                    onAccepted: appSettings.ongoingColor = selectedColor.toString()
+                }
+                ColorDialog {
+                    id: abandonedColorDialog
+                    title: qsTr("Abandoned color")
+                    selectedColor: Theme.abandonedColor
+                    onAccepted: appSettings.abandonedColor = selectedColor.toString()
+                }
+            }
+
+            TextField {
+                id: searchField
+                Layout.fillWidth: true
+                placeholderText: qsTr("Search for item")
+                placeholderTextColor: Theme.mutedTextColor
+                leftPadding: searchIcon.width + 12
+                rightPadding: clearIcon.width + 14
+                color: Theme.textColor
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.taskFontPixelSize
+                onTextChanged: timesheetModel.setSearchText(text)
+                background: Rectangle {
+                    radius: 4
+                    color: Theme.fieldColor
+                }
+
+                Image {
+                    id: searchIcon
+                    source: iconProvider.coloredSvgUri("search", Theme.mutedTextColor.toString())
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    height: Math.round(Theme.taskFontPixelSize * 1.15)
+                    width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
+                    anchors.left: parent.left
+                    anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    id: clearIcon
+                    visible: searchField.text.length > 0
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "✕"
+                    color: Theme.mutedTextColor
+
+                    TapHandler { onTapped: searchField.text = "" }
+                }
+            }
+        }
+
+        // ── Sub-toolbar (mirrors FilterBar.qml) ──────────────────────────
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
 
             // Temporary placeholder, not a real icon (explicit follow-up
             // request — will be replaced by a proper icon from the nuon
             // project later): a static, non-interactive marker before the
             // DAY/WEEK/MONTH/YEAR group, same role IconIndicator.qml
             // plays before simple_task_list's own FilterBar button groups
-            // (e.g. a calendar icon before its own Day/Month/Year set) —
-            // just a plain glyph here rather than a themed SVG.
+            // (e.g. a calendar icon before its own Day/Month/Year set).
             Text {
                 text: "Σ"
                 color: Theme.mutedTextColor
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.taskFontPixelSize
-                Layout.alignment: Qt.AlignVCenter
             }
 
             PeriodToggle {
@@ -132,30 +288,6 @@ Item {
             }
 
             Item { Layout.fillWidth: true }
-
-            Text {
-                text: qsTr("EXPORT")
-                font.bold: true
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize
-                font.capitalization: Font.AllUppercase
-                color: exportHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
-                HoverHandler { id: exportHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler {
-                    onTapped: exportDialog.openFor(
-                        contentRoot.activePeriod === "" ? "month" : contentRoot.activePeriod,
-                        contentRoot.summaryReferenceDate, contentRoot.holidayDates,
-                        appSettings.defaultDailyHours)
-                }
-            }
-
-            Text {
-                text: "⚙"
-                font.pixelSize: Math.round(Theme.taskFontPixelSize * 1.2)
-                color: settingsHover.hovered ? Theme.effectiveGlowColor : Theme.textColor
-                HoverHandler { id: settingsHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: pdfSettingsDialog.openSettings() }
-            }
         }
 
         ListView {
@@ -168,22 +300,14 @@ Item {
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             delegate: WorkItemRow {
-                // itemId/name/nonWorking/running/durationLabel are all
-                // declared as `required property` on WorkItemRow.qml's own
-                // root already, and auto-populated straight from
-                // timesheetModel's role names (itemId/name/nonWorking/
-                // running/durationLabel) — same "no wrapper, no manual
-                // mapping needed" pattern TaskDelegate.qml already
-                // established for TaskListModel's own roles. Only
-                // hasAbandonedSession needs an explicit binding: it's
-                // derived, not a model role.
+                // itemId/name/nonWorking/running/durationLabel/
+                // hasAbandonedSession are all declared as `required
+                // property` on WorkItemRow.qml's own root already, and
+                // auto-populated straight from timesheetModel's matching
+                // role names — same "no wrapper, no manual mapping
+                // needed" pattern TaskDelegate.qml already established
+                // for TaskListModel's own roles.
                 width: itemsList.width
-                hasAbandonedSession: {
-                    var sessions = timesheetModel.sessionsFor(itemId)
-                    for (var i = 0; i < sessions.length; i++)
-                        if (sessions[i].abandoned) return true
-                    return false
-                }
 
                 onRenamed: (itemId, newName) => timesheetModel.renameItem(itemId, newName)
                 onStartRequested: (itemId) => timesheetModel.startItem(itemId)
@@ -234,10 +358,6 @@ Item {
 
     SessionsDialog {
         id: sessionsDialog
-    }
-
-    PdfSettingsDialog {
-        id: pdfSettingsDialog
     }
 
     ExportPdfDialog {

@@ -6,10 +6,11 @@ window instance, via plugin_data.py's versioned block envelope. No legacy
 QSettings migration here (this plugin never existed before), unlike
 TaskListSettings' one-time theme/* migration.
 
-themeMode/themeTint/opacityPercent are deliberately named and shaped
-identically to TaskListSettings' own — main.py's window_factory clones a
-NEW window's theme generically onto whatever "appSettings" object the
-new window's plugin returns (plugin_settings.themeMode = ..., etc.),
+themeMode/themeTint/opacityPercent — the shared property trio yata-src/
+plugin_settings.py's ThemedSettings base provides — are deliberately kept
+identical to TaskListSettings' own: main.py's window_factory clones a NEW
+window's theme generically onto whatever "appSettings" object the new
+window's plugin returns (plugin_settings.themeMode = ..., etc.),
 regardless of which plugin that turns out to be. Keeping the exact same
 property surface here is what makes "new window clones the creating
 window's theme" keep working across a plugin boundary, and gives every
@@ -19,25 +20,27 @@ TaskListSettings' theme drives).
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QLocale, QObject, Signal
+from PySide6.QtCore import Property, QLocale, Signal
 
 import plugin_data
 from plugin_api import API_VERSION
+from plugin_settings import ThemedSettings
 
 from .storage import PLUGIN_ID
 
 MODEL_VERSION = "1.0"
 
-THEME_MODES = ("light", "dark")
-THEME_TINTS = ("none", "green", "goldenrod", "white", "black")
-
-DEFAULT_OPACITY_PERCENT = 65
-MIN_OPACITY_PERCENT = 5
-MAX_OPACITY_PERCENT = 100
-
 DEFAULT_DAILY_HOURS = 8.0
 MIN_DAILY_HOURS = 0.5
 MAX_DAILY_HOURS = 24.0
+
+# r-10.md "Bug wave 1": per-window colors for the work-item row's state
+# indicator (a filled circle — see WorkItemRow.qml). "By default it is
+# Lime" is explicit for ongoing; abandoned's default isn't specified
+# there, so it keeps the red ThemeImpl.qml's own abandonedColor constant
+# already used for the (now-removed) standalone warning icon.
+DEFAULT_ONGOING_COLOR = "lime"
+DEFAULT_ABANDONED_COLOR = "#ef4444"
 
 
 def _detect_country_code() -> str:
@@ -52,10 +55,7 @@ def _detect_country_code() -> str:
     return name.split("_", 1)[1].upper()
 
 
-class TimesheetSettings(QObject):
-    themeModeChanged = Signal()
-    themeTintChanged = Signal()
-    opacityPercentChanged = Signal()
+class TimesheetSettings(ThemedSettings):
     countryCodeChanged = Signal()
     customerNameChanged = Signal()
     customerAddressChanged = Signal()
@@ -64,6 +64,8 @@ class TimesheetSettings(QObject):
     pdfIncludeCustomerChanged = Signal()
     pdfIncludeContractorChanged = Signal()
     pdfIncludeSignaturesChanged = Signal()
+    ongoingColorChanged = Signal()
+    abandonedColorChanged = Signal()
 
     def __init__(self, path: str, parent=None):
         super().__init__(parent)
@@ -71,12 +73,7 @@ class TimesheetSettings(QObject):
         data = plugin_data.read_compatible(path, MODEL_VERSION, API_VERSION)
         already_on_disk = data is not None
         data = data or {}
-
-        mode = data.get("themeMode", "dark")
-        self._theme_mode = mode if mode in THEME_MODES else "dark"
-        tint = data.get("themeTint", "none")
-        self._theme_tint = tint if tint in THEME_TINTS else "none"
-        self._opacity_percent = self._clamp_opacity(data.get("opacityPercent", DEFAULT_OPACITY_PERCENT))
+        self._load_themed(data)
 
         self._country_code = data.get("countryCode", None)
         if self._country_code is None:
@@ -88,13 +85,11 @@ class TimesheetSettings(QObject):
         self._pdf_include_customer = bool(data.get("pdfIncludeCustomer", True))
         self._pdf_include_contractor = bool(data.get("pdfIncludeContractor", True))
         self._pdf_include_signatures = bool(data.get("pdfIncludeSignatures", True))
+        self._ongoing_color = data.get("ongoingColor", DEFAULT_ONGOING_COLOR)
+        self._abandoned_color = data.get("abandonedColor", DEFAULT_ABANDONED_COLOR)
 
         if not already_on_disk:
             self._save()
-
-    @staticmethod
-    def _clamp_opacity(value) -> int:
-        return max(MIN_OPACITY_PERCENT, min(MAX_OPACITY_PERCENT, int(round(float(value)))))
 
     @staticmethod
     def _clamp_hours(value) -> float:
@@ -102,9 +97,7 @@ class TimesheetSettings(QObject):
 
     def _save(self) -> None:
         plugin_data.write_block(self._path, PLUGIN_ID, MODEL_VERSION, API_VERSION, {
-            "themeMode": self._theme_mode,
-            "themeTint": self._theme_tint,
-            "opacityPercent": self._opacity_percent,
+            **self._themed_data(),
             "countryCode": self._country_code,
             "customerName": self._customer_name,
             "customerAddress": self._customer_address,
@@ -113,46 +106,9 @@ class TimesheetSettings(QObject):
             "pdfIncludeCustomer": self._pdf_include_customer,
             "pdfIncludeContractor": self._pdf_include_contractor,
             "pdfIncludeSignatures": self._pdf_include_signatures,
+            "ongoingColor": self._ongoing_color,
+            "abandonedColor": self._abandoned_color,
         })
-
-    def _get_theme_mode(self) -> str:
-        return self._theme_mode
-
-    def _set_theme_mode(self, value: str):
-        if value not in THEME_MODES or value == self._theme_mode:
-            return
-        self._theme_mode = value
-        self._save()
-        self.themeModeChanged.emit()
-
-    themeMode = Property(str, _get_theme_mode, _set_theme_mode, notify=themeModeChanged)
-
-    def _get_theme_tint(self) -> str:
-        return self._theme_tint
-
-    def _set_theme_tint(self, value: str):
-        if value not in THEME_TINTS or value == self._theme_tint:
-            return
-        self._theme_tint = value
-        self._save()
-        self.themeTintChanged.emit()
-
-    themeTint = Property(str, _get_theme_tint, _set_theme_tint, notify=themeTintChanged)
-
-    def _get_opacity_percent(self) -> int:
-        return self._opacity_percent
-
-    def _set_opacity_percent(self, value: int):
-        value = self._clamp_opacity(value)
-        if value == self._opacity_percent:
-            return
-        self._opacity_percent = value
-        self._save()
-        self.opacityPercentChanged.emit()
-
-    opacityPercent = Property(
-        int, _get_opacity_percent, _set_opacity_percent, notify=opacityPercentChanged
-    )
 
     def _get_country_code(self) -> str:
         return self._country_code
@@ -266,8 +222,33 @@ class TimesheetSettings(QObject):
         notify=pdfIncludeSignaturesChanged
     )
 
+    def _get_ongoing_color(self) -> str:
+        return self._ongoing_color
+
+    def _set_ongoing_color(self, value: str):
+        if value == self._ongoing_color:
+            return
+        self._ongoing_color = value
+        self._save()
+        self.ongoingColorChanged.emit()
+
+    ongoingColor = Property(str, _get_ongoing_color, _set_ongoing_color, notify=ongoingColorChanged)
+
+    def _get_abandoned_color(self) -> str:
+        return self._abandoned_color
+
+    def _set_abandoned_color(self, value: str):
+        if value == self._abandoned_color:
+            return
+        self._abandoned_color = value
+        self._save()
+        self.abandonedColorChanged.emit()
+
+    abandonedColor = Property(str, _get_abandoned_color, _set_abandoned_color, notify=abandonedColorChanged)
+
     # Read-only so QML can reset to these without hardcoding the values
-    # itself in more than one place — same convention TaskListSettings'
-    # own defaultOpacityPercent already established.
-    defaultOpacityPercent = Property(int, lambda self: DEFAULT_OPACITY_PERCENT, constant=True)
+    # itself in more than one place — same convention ThemedSettings'
+    # own defaultOpacityPercent already establishes.
     defaultDailyHoursDefault = Property(float, lambda self: DEFAULT_DAILY_HOURS, constant=True)
+    defaultOngoingColor = Property(str, lambda self: DEFAULT_ONGOING_COLOR, constant=True)
+    defaultAbandonedColor = Property(str, lambda self: DEFAULT_ABANDONED_COLOR, constant=True)

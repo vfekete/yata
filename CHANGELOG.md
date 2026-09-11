@@ -7,6 +7,77 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.49.0] - 2026-09-11
+
+### Changed
+- **Timesheet's UI now closely mirrors Simple Task List's own** (r-10.md
+  "Bug wave 1"): a two-row header — an upper menu (ADD / EXPORT /
+  SETTINGS / search field, mirroring Toolbar.qml) and a sub-toolbar (the
+  DAY/WEEK/MONTH/YEAR period selector behind a placeholder marker,
+  mirroring FilterBar.qml's own icon-prefixed button groups) — instead of
+  one flat row.
+  - **ADD** now behaves exactly like Simple Task List's own: focuses the
+    new item's name field immediately, defaults to "New work item" if
+    you click away without typing, and Escape/Enter-while-empty cancels
+    (deletes) it instead of leaving a blank row behind.
+  - **SETTINGS** is now a menu: "Export..." (opens the same dialog as the
+    EXPORT button), "Ongoing color" and "Abandoned color" (each shows a
+    live color swatch and opens a picker) — the customer/contractor/
+    country/PDF-part settings that used to live behind a separate gear
+    icon are now part of the Export dialog itself, reachable the same
+    way whether you open it from EXPORT, SETTINGS, or (first run) the
+    automatic country prompt.
+  - **Work-item rows redesigned**: a state-indicator circle (blank
+    normally, colored "Ongoing"/"Abandoned" per the new SETTINGS colors)
+    followed by a fixed-width, right-aligned duration column (blank for
+    non-working items) and the item's name — matching the spec's own
+    worked example layout exactly, with every row's duration digits
+    aligning into one column regardless of name length. Durations now
+    show full `H:MM:SS` precision (was a rounded `Xh MMm`), and the
+    currently-running item's duration ticks live once a second.
+  - Action icons (non-working toggle, sessions, start/stop, delete) are
+    now hover-only and right-aligned, matching TaskDelegate.qml's own
+    convention — previously always visible and loosely positioned.
+    Single-colored icons only, no color-emoji glyphs (which ignore
+    Qt Quick's `color:` property regardless of what it's set to): delete
+    is "✕" instead of 🗑, sessions-edit reuses the existing calendar SVG
+    instead of 🕘, stop is a filled square "⏹" instead of the pause glyph
+    "⏸" (pausing implied a resumable state this plugin doesn't have).
+  - The currently-tracked item's row is highlighted (a tinted background
+    and border in the "Ongoing" color).
+  - Added item search, filtering the list by name (same convention Simple
+    Task List's own Toolbar search field already uses).
+
+### Fixed
+- **Real regression, caught only by testing live**: an initial attempt at
+  this round shared `DialogWindow.qml` between both plugins from one
+  common location to remove a byte-for-byte duplicate. This silently
+  broke every dialog built on it in the *timesheet* plugin specifically
+  (confirmed: the window still appeared to load fine — no exception, no
+  visible error — but the delete-confirmation dialog itself would have
+  failed the moment anyone actually opened it) — QML's bare-type
+  resolution across two different plugin directories doesn't reliably
+  work via `engine.addImportPath()` alone, matching an already-documented
+  constraint elsewhere in this codebase (`PeriodToggle.qml`: "plugins
+  can't share QML across their own import boundaries"). Reverted to a
+  per-plugin copy of `DialogWindow.qml`; the equivalent Python-side
+  duplication (a `themeMode`/`themeTint`/`opacityPercent` property trio
+  repeated verbatim in both plugins' own settings classes, and a
+  QJSValue-unwrapping helper repeated in two Python files) doesn't have
+  this restriction and *was* successfully extracted — see below.
+
+### Internal
+- New `yata-src/plugin_settings.py`: `ThemedSettings`, a shared `QObject`
+  base providing the `themeMode`/`themeTint`/`opacityPercent` property
+  trio every plugin's own settings class needs (main.py's window_factory
+  clones a new window's theme onto this exact surface regardless of
+  which plugin the window ends up running). Both `TaskListSettings` and
+  `TimesheetSettings` now subclass it instead of each carrying their own
+  ~90 lines of identical Property/Signal boilerplate.
+- New `yata-src/qml_interop.py`: `unwrap_qvariant()`, the QJSValue→dict
+  unwrapping every "QVariant"-typed Slot called from QML needs (three
+  independent call sites had each re-derived this same few lines).
+
 ## [0.48.2] - 2026-09-10
 
 ### Fixed
