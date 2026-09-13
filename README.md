@@ -7,93 +7,60 @@
   <img src="docs/promo/demo.gif" alt="YATA demo — adding, editing, and organizing tasks" width="76%"/>
 </p>
 
-A minimal always-on-desktop todo list for GNOME/Ubuntu: a borderless,
-transparent, vertical list of one-line tasks that sits on the desktop like a
-sticky note.
+Mini "sub-window" manager. Which allows to draw content of its plugins into
+separate windows. Windows sticks to desktop (like sticky note). Content
+of the windows is wrote by the user. There are several "internal" plugins,
+TODO application being one of them.
+
+Besides my desire to have simple TODO application, the UI/UX feeling was inspired
+by [Awesome WM](https://awesomewm.org/) and [conky](https://github.com/brndnmtthws/conky).
 
 ## Features
 
-- Add, edit, cancel, mark done, re-open and delete tasks
-- Task text supports Markdown (bold, italic, ...)
-- Reorder tasks manually by dragging a row (from anywhere on it), or with
-  the up/down icon buttons that appear on hover (each disabled at its end
-  of the list) — both work while a status sort is active too (switching
-  ordering back to manual, keeping the order just shown rather than
-  reshuffling it), and in day-grouped view, where dragging a task onto a
-  different day's section reassigns it to that day
-- Group the list by day (with a bigger day-heading font and indented tasks),
-  or sort with a chosen status first via the Active/Done/Cancel buttons
-  (mutually exclusive — tapping the active one clears back to manual order,
-  same as moving a task any other way) — status sort also applies within
-  each day when both are active
-- Non-active tasks show a small check (done) or cross (cancelled) icon in
-  front of their text, colored green/red in the plain theme or tint-native
-  colors under a CRT tint
-- Filter which statuses are shown (Active/Done/Cancelled) independently of
-  the Day/Month/Year grouping — each toggles on/off on its own, so e.g.
-  Done and Cancelled can be shown together while Active is hidden
-- Press-and-hold a task's done/cancel icon (instead of a quick click) to
-  attach an optional Markdown note explaining the change before it's
-  applied, via a fill-up progress ring on the icon itself; a plain click
-  still applies the status instantly with no note, and an existing note can
-  be reopened and edited the same way
-- Realtime text search
-- Window position/size is remembered per monitor layout; first launch
-  centers the window at 20% of the screen width with a 9:16 aspect ratio
-- Theming via the "Theme" button (toolbar) or the right-click background
-  menu: an opacity setting (5-100%, click the progress bar to type an exact
-  value), a RESET button (restores default opacity and font size), Dark
-  theme/Light theme (the safe/plain look — Noto Sans font, picking either
-  also switches to it), and a Tint submenu with four looks that each
-  recreate a specific old CRT/terminal display — green phosphor, amber
-  phosphor, paperwhite monitor, and teletype paper — with a monospace font
-  and tint-appropriate colors for active/done/cancelled tasks, borders,
-  buttons and fields (tints ignore the Dark/Light choice, but do follow the
-  opacity and font-size settings). Window opacity is a single global
-  setting applied to every theme alike
-- A lock icon (top-right of the window) cycles Unlocked → Auto-locked →
-  Locked: Locked blurs and freezes the entire window, toolbar included,
-  until clicked again; Auto-locked does the same but automatically and
-  temporarily unlocks itself while the mouse is inside the window or a task
-  is dropped in from another one
-- `Ctrl+=`/`Ctrl+-` grow/shrink the whole app's font size; `Ctrl+0` resets it
-- Toolbar and filter-bar button captions render in capitals in every theme
-  (e.g. ADD, THEME, DAY, YEAR); RELOAD re-reads that window's tasks from
-  disk, for picking up changes made by an external process
-- Month and Year calendar views (FilterBar's MONTH/YEAR buttons) show
-  active/done/cancelled counts per day or month; clicking a day jumps back
-  to the task list grouped by day and scrolled to it
-- A "LINKS" toolbar button switches the list to every task that mentions at
-  least one `[label](url)` Markdown link, across all tasks regardless of
-  status or filters, each showing its status and a button that scrolls back
-  to that task; the search field searches link labels/URLs while this view
-  is active instead of task text
-- **Multiple windows**, for separating e.g. work from personal todos: each
-  window has its own tasks, theme and position, shown as a tag label on the
-  window's own top border (double-click a row in the YATAS list, below, to
-  rename it — default tag is "YATA"). Drag a task from one window onto
-  another to move it there, with a live placeholder showing where it'll
-  land. The "YATAS" toolbar button switches to a list of every window; ADD
-  there opens a new window (cloning the current window's theme, positioned
-  so it doesn't overlap existing ones) instead of adding a task, and the
-  search field searches window tags. Each row has a SHOW toggle (closes/
-  reopens that window without touching its data) and a delete button, which
-  always asks for confirmation — deleting moves a window to the DELETED
-  category (its tasks/settings are kept), switchable via YATAS's own
-  ACTIVE/DELETED sub-toolbar; from there, Re-create restores it, and Purge
-  permanently discards it. Each window also has its own close ("✕") button
-  (top-right, next to the lock icon) that hides it without touching its
-  data — the same action as the SHOW toggle — and can be given a custom
-  border/glow color from the YATAS list, overriding the theme's own accent
-  color everywhere in that window
+- **Multiple independent sticky sub-windows**, each pinned to the desktop
+  and running one plugin (TODO list, work timesheet, ...) — add, rename,
+  hide/show or delete windows via the YATAS view, each with its own
+  settings and an optional custom border/glow color
+- Drag a task (or other draggable plugin content) from one window onto
+  another to move it there
+- **Theming** shared by every plugin: Dark/Light look, or one of four
+  CRT/terminal tints (green phosphor, amber phosphor, paperwhite monitor,
+  teletype paper), plus adjustable window opacity and font size
+- A lock icon cycles Unlocked → Auto-locked → Locked, to blur/freeze a
+  window's content in place
+- No title bar — drag a window by empty toolbar space; right-click the
+  background for the theme menu and Quit
+- `./run.sh --backup` zips every window's settings and data into a
+  timestamped archive
 
-## Usage notes
+## Internal plugins
 
-- The window has no title bar; drag it by pressing on empty toolbar space
-- Use the toolbar's "Theme" button, or right-click the background, for
-  theme options; the background menu also has Quit
-- Double-click a task to edit its text
-- Right-click a task for the option to delete it permanently
+### TODO list (main motivation behind the YATA)
+
+- Add, edit (double-click), cancel, mark done, re-open and delete tasks;
+  task text supports Markdown
+- Reorder manually by dragging, or sort by status (Active/Done/Cancel),
+  with independent status filters and day/Month/Year grouping (calendar
+  views show per-day/month status counts)
+- Press-and-hold a task's done/cancel icon to attach an optional Markdown
+  note explaining the change
+- Realtime text search, plus a LINKS view listing every task that
+  contains a Markdown link
+
+### [[IN_PROGRESS]] Work timesheet notebook and exporter
+
+- Tracks named work items, each with its own history of start/stop
+  sessions (one running at a time per window) and a per-day
+  ON-SITE/REMOTE marker; a session left running when YATA closes is
+  marked abandoned
+- **Summary** view per day/week/month/year: worked vs. target time,
+  remaining/overtime, with public holidays (fetched from the
+  OpenHolidays API, cached offline) excluded from the target the same
+  way weekends already are
+- **PDF export** (day/week/month) with an optional customer/contractor
+  header and signature lines
+
+### [[IN_PROGRESS]] System / PC monitor
 
 ## Quick start
 
@@ -132,8 +99,8 @@ locked/auto-locked/unlocked states), and the **startup loader's** artwork
 (the logo and the light/dark mountain-and-lake background) generated by
 ChatGPT (OpenAI), steered/iterated on by the author.
 
-**VT323** font by Peter Hull — used for the CRT tint themes.  
-Copyright 2011 The VT323 Project Authors (peter.hull@oikoi.com).  
+**VT323** font by Peter Hull — used for the CRT tint themes.
+Copyright 2011 The VT323 Project Authors (peter.hull@oikoi.com).
 Licensed under the [SIL Open Font License 1.1](resources/OFL-VT323.txt).
 
 **Toolbar icons** from [the Noun Project](https://thenounproject.com) (the SVGs
@@ -169,3 +136,5 @@ windows request a stacking layer at all, so on Wayland the app behaves like
 a normal window instead (visible and usable, but not pinned beneath
 others). Revisit if a GNOME-Wayland-compatible way to achieve the intended
 layering is found.
+
+

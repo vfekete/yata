@@ -5,6 +5,20 @@ import QtQuick.Effects
 
 Item {
     id: root
+
+    Component {
+        id: glowMultiEffect
+        MultiEffect {
+                        shadowEnabled: true
+                        shadowColor: Theme.effectiveGlowShadowColor
+                        shadowBlur: 1.0
+                        shadowHorizontalOffset: 0
+                        shadowVerticalOffset: 0
+                        shadowOpacity: 1.0
+                        shadowScale: 1.05
+        }
+    }
+
     required property string itemId
     required property string name
     required property bool nonWorking
@@ -169,7 +183,7 @@ Item {
 
             Image {
                 id: nonWorkingIcon
-                height: Math.round(Theme.taskFontPixelSize * 1.2)
+                height: Math.round(Theme.taskFontPixelSize * 1.8)
                 width: implicitHeight > 0 ? Math.round(height * implicitWidth / implicitHeight) : height
                 anchors.verticalCenter: parent.verticalCenter
                 fillMode: Image.PreserveAspectFit
@@ -178,15 +192,7 @@ Item {
                     (nonWorkingHover.hovered ? Theme.effectiveGlowColor
                         : root.nonWorking ? Theme.borderColor : Theme.mutedTextColor).toString())
                 layer.enabled: nonWorkingHover.hovered
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Theme.effectiveGlowShadowColor
-                    shadowBlur: 1.0
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    shadowOpacity: 1.0
-                    shadowScale: 1.05
-                }
+                layer.effect: glowMultiEffect
                 ToolTip.visible: nonWorkingHover.hovered
                 ToolTip.text: qsTr("Non-working (excluded from totals)")
                 HoverHandler { id: nonWorkingHover; cursorShape: Qt.PointingHandCursor }
@@ -203,15 +209,7 @@ Item {
                 source: iconProvider.coloredSvgUri("timelist",
                     (sessionsHover.hovered ? Theme.effectiveGlowColor : Theme.mutedTextColor).toString())
                 layer.enabled: sessionsHover.hovered
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Theme.effectiveGlowShadowColor
-                    shadowBlur: 1.0
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    shadowOpacity: 1.0
-                    shadowScale: 1.05
-                }
+                layer.effect: glowMultiEffect
                 ToolTip.visible: sessionsHover.hovered
                 ToolTip.text: qsTr("Edit sessions")
                 HoverHandler { id: sessionsHover; cursorShape: Qt.PointingHandCursor }
@@ -228,15 +226,7 @@ Item {
                 source: iconProvider.coloredSvgUri(root.running ? "stop" : "start",
                     (startStopHover.hovered ? Theme.effectiveGlowColor : Theme.textColor).toString())
                 layer.enabled: startStopHover.hovered
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Theme.effectiveGlowShadowColor
-                    shadowBlur: 1.0
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    shadowOpacity: 1.0
-                    shadowScale: 1.05
-                }
+                layer.effect: glowMultiEffect
                 HoverHandler { id: startStopHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
                     onTapped: root.running ? root.stopRequested(root.itemId) : root.startRequested(root.itemId)
@@ -250,15 +240,7 @@ Item {
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.taskFontPixelSize * 2
                 layer.enabled: deleteHover.hovered
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Theme.effectiveGlowShadowColor
-                    shadowBlur: 1.0
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    shadowOpacity: 1.0
-                    shadowScale: 1.05
-                }
+                layer.effect: glowMultiEffect
                 HoverHandler { id: deleteHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: root.deleteRequested(root.itemId, root.name) }
             }
