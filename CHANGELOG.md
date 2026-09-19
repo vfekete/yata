@@ -7,6 +7,45 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.50.1] - 2026-09-20
+
+### Fixed
+- **SettingsView's rows (Reset/Switch zoom direction/Dark/Light theme,
+  plus the Opacity label and "Tint" header) were center-aligned** —
+  ported unthinkingly from `ThemeMenu.qml`'s opacity-label centering
+  without noticing its actual `MenuItem`s had been left-aligned by Qt
+  Quick Controls' own default padding all along. Now left-aligned with a
+  shared inset so every line starts at the same x position, like an
+  ordinary settings list. The Tint color swatches keep their text
+  centered within their own pill shape — a different, correct convention
+  for compact chip buttons, not left unfixed by oversight.
+
+## [0.50.0] - 2026-09-20
+
+### Changed
+- **Theme/opacity settings moved from the plugin's own toolbar to a new
+  host-chrome "S" button**, on the window border next to "Y" (window
+  management), before it. Same checkable-button look/behavior as "Y":
+  pressing it swaps the whole content area for a new inline
+  `SettingsView.qml` (the same content-replacement mechanic `YatasView`
+  already used), mutually exclusive with "Y" so only one of
+  plugin-content/YATAS/Settings shows at a time. Unlike `YatasView`
+  (fixed host-chrome dark palette by design), `SettingsView` deliberately
+  follows the current plugin's actual theme (`Theme.*`) — it's editing
+  that theme, so it renders in it.
+- Removed the old access points entirely: `Toolbar.qml`'s "Theme" button
+  and its popup `ThemeMenu.qml` (deleted), and the right-click quick menu
+  on the task list (`TaskListContent.qml`) that duplicated the same
+  controls plus a "Quit" item.
+
+### Removed
+- **The app's only in-UI "Quit" action** was on that now-removed
+  right-click menu — there is currently no UI path to fully exit YATA
+  (the border's "✕" only closes a window, and is a no-op on the very
+  last one by design since 0.17.4). Flagged for follow-up; not restored
+  automatically since removing the whole right-click menu, Quit
+  included, was an explicit instruction this iteration.
+
 ## [0.49.2] - 2026-09-20
 
 ### Changed

@@ -47,7 +47,7 @@ SCENARIOS = {
     "main_settings": dict(
         theme_mode="dark", theme_tint="none", opacity=57,
         view="list", group_by_day=True, status_sort="",
-        wheel_zoom_inverted=True, open_theme_menu=True,
+        wheel_zoom_inverted=True, open_settings=True,
     ),
     "main-links": dict(
         theme_mode="dark", theme_tint="none", opacity=100,
@@ -93,15 +93,6 @@ def find_task_delegate(root, contains):
         if text and contains in text:
             return item
     return None
-
-
-def find_qobject_by_class(root_qobject, class_substr):
-    from PySide6.QtCore import QObject
-
-    return [
-        obj for obj in root_qobject.findChildren(QObject)
-        if class_substr in obj.metaObject().className()
-    ]
 
 
 def center_of(item, content_root):
@@ -256,25 +247,8 @@ def run_scenario(name: str, cfg: dict, out_dir: Path):
                         check=False,
                     )
 
-                if cfg.get("open_theme_menu"):
-                    menus = [
-                        m for m in find_qobject_by_class(win, "ThemeMenu")
-                        if m.property("showQuit") is False
-                    ]
-                    if not menus:
-                        raise RuntimeError("no toolbar ThemeMenu found")
-                    theme_buttons = [
-                        b for b in find_by_class(content, "ToolButton")
-                        if b.property("text") == "Theme"
-                    ]
-                    if not theme_buttons:
-                        raise RuntimeError("no Theme toolbar button found")
-                    tx, ty = center_of(theme_buttons[0], content)
-                    subprocess.run(
-                        ["xdotool", "mousemove", "--window", str(win_id), str(tx), str(ty)],
-                        check=False,
-                    )
-                    QMetaObject.invokeMethod(menus[0], "popup")
+                if cfg.get("open_settings"):
+                    win.setProperty("settingsActive", True)
 
                 QTimer.singleShot(400, capture)
 

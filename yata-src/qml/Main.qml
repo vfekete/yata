@@ -59,6 +59,7 @@ Window {
         && root.activeFocusItem.objectName === "taskDescriptionField"
 
     property bool yatasActive: false
+    property bool settingsActive: false
 
     readonly property bool contentLocked: {
         if (hostSettings.lockState === "unlocked") return false
@@ -68,7 +69,7 @@ Window {
         return !hovered && !root.dragHoverActive
     }
 
-    property real blurAmount: (root.contentLocked && !root.yatasActive) ? 1.0 : 0.0
+    property real blurAmount: (root.contentLocked && !root.yatasActive && !root.settingsActive) ? 1.0 : 0.0
     Behavior on blurAmount {
         NumberAnimation { duration: 150 }
     }
@@ -126,7 +127,7 @@ Window {
                 anchors.margins: 15
                 anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
                 source: pluginContentUrl
-                visible: !root.yatasActive
+                visible: !root.yatasActive && !root.settingsActive
             }
         }
 
@@ -170,6 +171,15 @@ Window {
             chromeFieldColor: root.chromeFieldColor
             chromeHoverColor: root.chromeHoverColor
             chromeDangerColor: root.chromeDangerColor
+        }
+
+        SettingsView {
+            id: settingsView
+            x: contentLoader.x
+            y: contentLoader.y
+            width: contentLoader.width
+            height: contentLoader.height
+            visible: root.settingsActive
         }
 
         Rectangle {
@@ -394,9 +404,58 @@ Window {
                 anchors.margins: -4
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.yatasActive = !root.yatasActive
+                onClicked: {
+                    root.yatasActive = !root.yatasActive
+                    if (root.yatasActive) root.settingsActive = false
+                }
                 ToolTip.visible: containsMouse
                 ToolTip.text: qsTr("Manage windows")
+            }
+        }
+
+        Rectangle {
+            id: settingsIconBg
+            y: 0
+            height: tagLabelBg.height
+            radius: 3
+            color: root.settingsActive ? root.chromeAccentColor
+              : root.chromeBoxColor(settingsMouseArea.containsMouse)
+            width: settingsGlyph.implicitWidth + 16
+            x: yatasIconBg.x - root.lockCloseIconGap - width
+
+            layer.enabled: settingsMouseArea.containsMouse || root.settingsActive
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: root.chromeAccentColor
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowOpacity: 1.0
+                shadowScale: 1.08
+            }
+
+            Text {
+                id: settingsGlyph
+                anchors.centerIn: parent
+                text: "S"
+                font.bold: true
+                font.family: root.chromeFontFamily
+                font.pixelSize: Math.round(settingsIconBg.height * 0.6)
+                color: root.settingsActive ? root.chromeBoxColor(false) : root.chromeAccentColor
+            }
+
+            MouseArea {
+                id: settingsMouseArea
+                anchors.fill: parent
+                anchors.margins: -4
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.settingsActive = !root.settingsActive
+                    if (root.settingsActive) root.yatasActive = false
+                }
+                ToolTip.visible: containsMouse
+                ToolTip.text: qsTr("Settings")
             }
         }
 

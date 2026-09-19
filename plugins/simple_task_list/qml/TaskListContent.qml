@@ -17,17 +17,6 @@ Item {
 
     readonly property bool noteEditorVisible: listView.noteEditorTaskId !== "" && !filterBar.linksActive
 
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.RightButton
-        onClicked: contextMenu.popup()
-    }
-
-    ThemeMenu {
-        id: contextMenu
-        showQuit: true
-    }
-
     Connections {
         target: windowManager
         function onTaskDragHoverChanged(targetWindowId, globalX, globalY) {

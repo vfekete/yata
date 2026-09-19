@@ -12,7 +12,7 @@ Item {
 
     readonly property string searchText: searchField.text
 
-    readonly property real actionButtonsWidth: addButton.width + reloadButton.width + themeButton.width + linksButton.width + row.spacing * 3
+    readonly property real actionButtonsWidth: addButton.width + reloadButton.width + linksButton.width + row.spacing * 2
 
     MouseArea {
         anchors.fill: parent
@@ -67,31 +67,6 @@ Item {
                 font.capitalization: Font.AllUppercase
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-            }
-        }
-
-        ToolButton {
-            id: themeButton
-            text: qsTr("Theme")
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Change theme")
-            onClicked: themeMenu.popup()
-            background: Rectangle {
-                radius: 4
-                color: themeButton.hovered ? Theme.hoverColor : "transparent"
-            }
-            contentItem: Text {
-                text: themeButton.text
-                color: Theme.textColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.taskFontPixelSize
-                font.capitalization: Font.AllUppercase
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            ThemeMenu {
-                id: themeMenu
             }
         }
 
