@@ -362,7 +362,8 @@ Window {
             y: 0
             height: tagLabelBg.height
             radius: 3
-            color: root.yatasActive ? root.chromeAccentColor : root.chromeBoxColor(yatasMouseArea.containsMouse)
+            color: root.yatasActive ? root.chromeAccentColor
+              : root.chromeBoxColor(yatasMouseArea.containsMouse)
             width: yatasGlyph.implicitWidth + 16
             x: lockIconBg.x - root.lockCloseIconGap - width
 

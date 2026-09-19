@@ -85,8 +85,10 @@ Item {
             readonly property int diameter: Math.round(Theme.taskFontPixelSize * 0.5)
             Layout.preferredWidth: diameter
             Layout.preferredHeight: diameter
-            Layout.alignment: Qt.AlignTop
-            Layout.topMargin: Math.round((Theme.taskFontPixelSize - diameter) / 2)
+            Layout.alignment: root.hovered ? Qt.AlignTop
+                : Qt.AlignCenter
+            Layout.topMargin: root.hovered ? Math.round(Theme.taskFontPixelSize - diameter) + 1
+                : Math.round((Theme.taskFontPixelSize - diameter) / 2)
             radius: diameter / 2
             color: root.running ? Theme.ongoingColor
                 : root.hasAbandonedSession ? Theme.abandonedColor : "transparent"

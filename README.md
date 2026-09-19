@@ -120,6 +120,8 @@ required by the Noun Project's license), licensed under
 - "Stop" by Wahyu Adam — `resources/assets/noun_Stop_8389958.svg`
 - "Summary" by I Putu Dicky Adi Pranatha — `resources/assets/noun_summary_8078125.svg`
 - "Time List" by Iconiqu — `resources/assets/noun_timelist_4046224.svg`
+- "Summary" by Adrien Coquet — `resources/assets/noun_summary_8247478.svg`
+- "Settings" by Win Ningsih — `resources/assets/noun_Settings_8461059.svg`
 
 ## Known limitation
 

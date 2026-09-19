@@ -32,11 +32,12 @@ Item {
     }
 
     readonly property var availablePlugins: windowManager.listPlugins()
+    readonly property string defaultPluginId: root.availablePlugins.length > 0 ? root.availablePlugins[0].id : ""
 
     property string selectedPluginId: ""
     readonly property string _thisWindowPluginId: {
         var mine = root.allWindows.find(function(w) { return w.id === windowId })
-        return mine ? mine.plugin : (root.availablePlugins.length > 0 ? root.availablePlugins[0].id : "")
+        return mine ? mine.plugin : root.defaultPluginId
     }
     onAllWindowsChanged: if (root.selectedPluginId === "") root.selectedPluginId = root._thisWindowPluginId
 
@@ -91,7 +92,7 @@ Item {
                 HoverHandler { id: addHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
                     onTapped: windowManager.createWindow({
-                        plugin: root.selectedPluginId,
+                        plugin: root.defaultPluginId,
                         themeMode: appSettings.themeMode,
                         themeTint: appSettings.themeTint,
                         opacityPercent: appSettings.opacityPercent,
@@ -107,11 +108,11 @@ Item {
 
             ComboBox {
                 id: pluginCombo
-                visible: root.availablePlugins.length > 1
+                visible: false
                 model: root.availablePlugins
                 textRole: "displayName"
                 valueRole: "id"
-                Layout.preferredWidth: Math.max(120, implicitWidth)
+                Layout.preferredWidth: Math.max(200, implicitWidth)
                 font.family: root.chromeFontFamily
                 font.pixelSize: root.chromeFontPixelSize
 

@@ -37,7 +37,7 @@ def create_content(window_id: str, instance_dir: str | None, settings) -> Plugin
 
 PLUGIN = Plugin(
     id="simple_task_list",
-    display_name="Simple Task List",
+    display_name="ToDo",
     min_api_version=API_VERSION,
     create_content=create_content,
     copyright=COPYRIGHT,

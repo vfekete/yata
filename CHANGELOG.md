@@ -7,6 +7,19 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.49.2] - 2026-09-20
+
+### Changed
+- **Hid the plugin-type picker on the YATAS "Add" button** — only "todo"
+  (`simple_task_list`) is creatable for now, not left up to a combobox
+  choosing between it and Timesheet. Suppressed, not removed: the
+  combobox and its backing `selectedPluginId` state are still there in
+  `YatasView.qml`, just `visible: false` and bypassed in favor of a new
+  `defaultPluginId` (first registered plugin, i.e. `simple_task_list`) fed
+  to `createWindow()` instead — flipping the picker's `visible` back and
+  `Add`'s `plugin:` argument back to `selectedPluginId` fully re-enables
+  it, no other change needed. Existing Timesheet windows are unaffected.
+
 ## [0.49.1] - 2026-09-11
 
 ### Fixed

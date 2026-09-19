@@ -13,8 +13,9 @@ yata-src/pysidedeploy.spec
 x-loader/assets.h
 x-loader/x-loader
 
-# Claude AI
+# AI
 claude-docs/
 claude-scripts/
+claude-blocks/
 .claude
 cresume
