@@ -24,7 +24,7 @@ def create_content(window_id: str, instance_dir: str | None, settings) -> Plugin
     tasks_path = os.path.join(instance_dir, "tasks.json") if instance_dir else None
     if instance_dir:
         os.makedirs(instance_dir, exist_ok=True)
-    task_model = TaskListModel(TaskStore(tasks_path))
+    task_model = TaskListModel(TaskStore(tasks_path), settings)
     task_list_settings = TaskListSettings(_plugin_state_path(instance_dir), settings)
     return PluginContent(
         context_properties={"taskModel": task_model, "appSettings": task_list_settings},

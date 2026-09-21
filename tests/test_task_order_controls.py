@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 import pytest
 from PySide6.QtCore import QPoint, Qt
@@ -102,6 +103,32 @@ def _find_qobjects_by_class_prefix(obj, prefix, results=None):
     return results
 
 
+def _wait_for_layout_settle(app, item, timeout_ms=2000):
+    deadline = time.monotonic() + timeout_ms / 1000
+    last = None
+    stable_ticks = 0
+    while stable_ticks < 2:
+        app.processEvents()
+        current = (item.x(), item.y(), item.width(), item.height())
+        stable_ticks = stable_ticks + 1 if current == last else 0
+        last = current
+        if time.monotonic() > deadline:
+            raise AssertionError(f"layout did not settle within {timeout_ms}ms")
+        QTest.qWait(10)
+
+
+def _expand_filter_group(app, window, icon_name):
+    icons = [
+        i for i in _find_by_class_prefix(window.contentItem(), "FilterGroupIcon")
+        if i.property("iconName") == icon_name
+    ]
+    assert len(icons) == 1, f"expected exactly one {icon_name!r} FilterGroupIcon, found {len(icons)}"
+    group_row = icons[0].parent()
+    QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, _center_point(window, icons[0]))
+    app.processEvents()
+    _wait_for_layout_settle(app, group_row)
+
+
 def _find_month_button(window):
     matches = [
         t for t in _find_by_class_prefix(window.contentItem(), "QQuickText")
@@ -126,6 +153,7 @@ def _find_sort_order_active_button(window):
 
 def test_active_sort_button_toggles_instead_of_always_selecting(qml_window):
     app, window, task_model = qml_window
+    _expand_filter_group(app, window, "order")
     active_btn = _find_sort_order_active_button(window)
     assert task_model.statusSortMode == ""
 
@@ -156,6 +184,7 @@ def test_toggling_active_sort_off_live_freezes_the_sorted_order(qml_window):
     QTest.qWait(200)
     app.processEvents()
 
+    _expand_filter_group(app, window, "order")
     active_btn = _find_sort_order_active_button(window)
     QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, _center_point(window, active_btn))
     app.processEvents()
@@ -207,6 +236,8 @@ def test_row_down_button_moves_task_live(qml_window):
 
 def test_order_group_blocked_while_month_active(qml_window):
     app, window, task_model = qml_window
+    _expand_filter_group(app, window, "calendar")
+    _expand_filter_group(app, window, "order")
     active_text = _find_sort_order_active_button(window)
     active_btn = active_text.parent()
     order_row = active_btn.parent()

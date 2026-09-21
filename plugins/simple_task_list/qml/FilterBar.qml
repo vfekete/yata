@@ -51,18 +51,26 @@ Item {
 
         RowLayout {
             spacing: root.buttonSpacing
-            IconIndicator { iconName: "calendar"; sizeScale: 0.9 }
+            FilterGroupIcon {
+                iconName: "calendar"
+                sizeScale: 0.9
+                active: taskModel.groupByDay || root.monthActive || root.yearActive
+                onTapped: taskModel.setCalendarGroupExpanded(!taskModel.calendarGroupExpanded)
+            }
             FilterButton {
+                visible: taskModel.calendarGroupExpanded
                 label: qsTr("Day")
                 active: taskModel.groupByDay
                 onToggled: (checked) => root.setGrouping("day", checked)
             }
             FilterButton {
+                visible: taskModel.calendarGroupExpanded
                 label: qsTr("Month")
                 active: root.monthActive
                 onToggled: (checked) => root.setGrouping("month", checked)
             }
             FilterButton {
+                visible: taskModel.calendarGroupExpanded
                 label: qsTr("Year")
                 active: root.yearActive
                 onToggled: (checked) => root.setGrouping("year", checked)
@@ -71,18 +79,26 @@ Item {
 
         RowLayout {
             spacing: root.buttonSpacing
-            IconIndicator { iconName: "visibility"; sizeScale: 0.9 }
+            FilterGroupIcon {
+                iconName: "visibility"
+                sizeScale: 0.9
+                active: taskModel.showActive || taskModel.showDone || taskModel.showCancelled
+                onTapped: taskModel.setVisibilityGroupExpanded(!taskModel.visibilityGroupExpanded)
+            }
             FilterButton {
+                visible: taskModel.visibilityGroupExpanded
                 label: qsTr("Active")
                 active: taskModel.showActive
                 onToggled: (checked) => taskModel.setShowActive(checked)
             }
             FilterButton {
+                visible: taskModel.visibilityGroupExpanded
                 label: qsTr("Done")
                 active: taskModel.showDone
                 onToggled: (checked) => taskModel.setShowDone(checked)
             }
             FilterButton {
+                visible: taskModel.visibilityGroupExpanded
                 label: qsTr("Cancel")
                 active: taskModel.showCancelled
                 onToggled: (checked) => taskModel.setShowCancelled(checked)
@@ -99,18 +115,26 @@ Item {
                 id: orderRow
                 anchors.fill: parent
                 spacing: root.buttonSpacing
-                IconIndicator { iconName: "order"; sizeScale: 0.9 }
+                FilterGroupIcon {
+                    iconName: "order"
+                    sizeScale: 0.9
+                    active: taskModel.statusSortMode !== ""
+                    onTapped: taskModel.setOrderGroupExpanded(!taskModel.orderGroupExpanded)
+                }
                 FilterButton {
+                    visible: taskModel.orderGroupExpanded
                     label: qsTr("Active")
                     active: taskModel.statusSortMode === "active"
                     onToggled: (checked) => taskModel.setStatusSortMode(checked ? "active" : "")
                 }
                 FilterButton {
+                    visible: taskModel.orderGroupExpanded
                     label: qsTr("Done")
                     active: taskModel.statusSortMode === "done"
                     onToggled: (checked) => taskModel.setStatusSortMode(checked ? "done" : "")
                 }
                 FilterButton {
+                    visible: taskModel.orderGroupExpanded
                     label: qsTr("Cancel")
                     active: taskModel.statusSortMode === "cancelled"
                     onToggled: (checked) => taskModel.setStatusSortMode(checked ? "cancelled" : "")

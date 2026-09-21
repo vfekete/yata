@@ -7,6 +7,43 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.52.0] - 2026-09-21
+
+### Changed
+- **The calendar/visibility/order filter groups' expanded/collapsed state
+  now persists per window**, same as position, size, and theme — asking
+  again after a restart shows the sub-toolbar exactly as you left it.
+
+### Fixed
+- **Real pre-existing bug found while wiring the above up**: a window's
+  task-list filters (Day grouping, Active/Done/Cancel visibility, sort
+  order — the whole `[filters]` settings section) were never actually
+  saved to that window's own settings file. `create_content()` built the
+  task model without passing its `settings` argument through at all, so
+  every window silently fell back to one shared, process-wide settings
+  store instead. Invisible for the single default window (the fallback
+  happens to be the same file there), but for any second/third window,
+  its filter/sort/grouping state was actually being read from and
+  overwritten by whichever window touched that shared store last — a
+  real cross-window data leak. New regression test in
+  `tests/test_simple_task_list_plugin.py`.
+
+## [0.51.0] - 2026-09-21
+
+### Changed
+- **FilterBar's three group icons (calendar/visibility/order) are now
+  checkable "expand this group" buttons, not static labels.** Each
+  group's Day/Month/Year, Active/Done/Cancel, or sort-order buttons now
+  start hidden and only "roll out" once you tap that group's icon; a
+  second tap rolls them back up. The icon itself stays highlighted
+  independently of expanded/collapsed state as long as at least one
+  button in that group is checked (e.g. the visibility icon starts
+  highlighted, since "Active" is on by default). Groups expand/collapse
+  fully independently — opening one never closes another. New
+  `FilterGroupIcon.qml` component (kept separate from the existing
+  `IconIndicator.qml`, which stays purely static — it's also used for
+  the unrelated search-field icon, which must not change).
+
 ## [0.50.1] - 2026-09-20
 
 ### Fixed

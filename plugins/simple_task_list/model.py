@@ -35,6 +35,9 @@ class TaskListModel(QAbstractListModel):
     showActiveChanged = Signal()
     showDoneChanged = Signal()
     showCancelledChanged = Signal()
+    calendarGroupExpandedChanged = Signal()
+    visibilityGroupExpandedChanged = Signal()
+    orderGroupExpandedChanged = Signal()
     taskAdded = Signal(str)
 
     def __init__(self, store: TaskStore, settings: QSettings | None = None, parent=None):
@@ -49,6 +52,9 @@ class TaskListModel(QAbstractListModel):
         self._show_active = _read_bool(self._settings, "filters/showActive", True)
         self._show_done = _read_bool(self._settings, "filters/showDone", True)
         self._show_cancelled = _read_bool(self._settings, "filters/showCancelled", True)
+        self._calendar_group_expanded = _read_bool(self._settings, "filters/calendarGroupExpanded", False)
+        self._visibility_group_expanded = _read_bool(self._settings, "filters/visibilityGroupExpanded", False)
+        self._order_group_expanded = _read_bool(self._settings, "filters/orderGroupExpanded", False)
         self._recompute()
 
     def roleNames(self):
@@ -113,6 +119,21 @@ class TaskListModel(QAbstractListModel):
         return self._show_cancelled
 
     showCancelled = Property(bool, _get_show_cancelled, notify=showCancelledChanged)
+
+    def _get_calendar_group_expanded(self) -> bool:
+        return self._calendar_group_expanded
+
+    calendarGroupExpanded = Property(bool, _get_calendar_group_expanded, notify=calendarGroupExpandedChanged)
+
+    def _get_visibility_group_expanded(self) -> bool:
+        return self._visibility_group_expanded
+
+    visibilityGroupExpanded = Property(bool, _get_visibility_group_expanded, notify=visibilityGroupExpandedChanged)
+
+    def _get_order_group_expanded(self) -> bool:
+        return self._order_group_expanded
+
+    orderGroupExpanded = Property(bool, _get_order_group_expanded, notify=orderGroupExpandedChanged)
 
     def _get_search_text(self) -> str:
         return self._search
@@ -392,6 +413,33 @@ class TaskListModel(QAbstractListModel):
         self._settings.sync()
         self._recompute()
         self.showCancelledChanged.emit()
+
+    @Slot(bool)
+    def setCalendarGroupExpanded(self, flag: bool):
+        if flag == self._calendar_group_expanded:
+            return
+        self._calendar_group_expanded = flag
+        self._settings.setValue("filters/calendarGroupExpanded", flag)
+        self._settings.sync()
+        self.calendarGroupExpandedChanged.emit()
+
+    @Slot(bool)
+    def setVisibilityGroupExpanded(self, flag: bool):
+        if flag == self._visibility_group_expanded:
+            return
+        self._visibility_group_expanded = flag
+        self._settings.setValue("filters/visibilityGroupExpanded", flag)
+        self._settings.sync()
+        self.visibilityGroupExpandedChanged.emit()
+
+    @Slot(bool)
+    def setOrderGroupExpanded(self, flag: bool):
+        if flag == self._order_group_expanded:
+            return
+        self._order_group_expanded = flag
+        self._settings.setValue("filters/orderGroupExpanded", flag)
+        self._settings.sync()
+        self.orderGroupExpandedChanged.emit()
 
     @Slot()
     def reloadTasks(self):

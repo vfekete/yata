@@ -51,3 +51,25 @@ def test_create_content_with_none_path_uses_legacy_default_store(tmp_path, monke
     task_model.addTask()
 
     assert (tmp_path / "yata" / "tasks.json").exists()
+
+
+def test_create_content_persists_filters_to_its_own_settings_not_a_shared_default(tmp_path):
+    settings_a = QSettings(str(tmp_path / "a.ini"), QSettings.IniFormat)
+    settings_b = QSettings(str(tmp_path / "b.ini"), QSettings.IniFormat)
+    model_a = create_content("window-a", str(tmp_path / "window-a"), settings_a).context_properties["taskModel"]
+    model_b = create_content("window-b", str(tmp_path / "window-b"), settings_b).context_properties["taskModel"]
+
+    model_a.setGroupByDay(True)
+    model_a.setOrderGroupExpanded(True)
+
+    assert model_b.groupByDay is False, "window B's own filters must not see window A's changes"
+    assert model_b.orderGroupExpanded is False
+
+    settings_a.sync()
+    assert settings_a.value("filters/groupByDay") in (True, "true"), (
+        "must land in window A's own settings file"
+    )
+    settings_b.sync()
+    assert settings_b.value("filters/groupByDay", None) is None, (
+        "window B's own settings file must stay untouched by window A's change"
+    )
