@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.environ.setdefault("QT_QPA_PLATFORM", "xcb;wayland")
 
 from PySide6.QtCore import QFile, QIODevice, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QFontDatabase, QGuiApplication, QIcon
@@ -34,7 +35,7 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.52.0"
+APP_VERSION = "0.53.1"
 
 _IS_COMPILED = "__compiled__" in globals()
 
@@ -269,6 +270,13 @@ def _send_loader_message(sock: socket.socket, message: str) -> None:
         pass
 
 
+def _configure_app_identity(app: QGuiApplication) -> None:
+    app.setOrganizationName("yata")
+    app.setApplicationName("yata")
+    app.setDesktopFileName("yata")
+    app.setWindowIcon(QIcon(":/icon/icon.png"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="yata", description="Yet Another Todo Application")
     parser.add_argument("-b", "--backup", action="store_true",
@@ -288,9 +296,7 @@ def main() -> int:
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     app = QGuiApplication(sys.argv)
-    app.setOrganizationName("yata")
-    app.setApplicationName("yata")
-    app.setWindowIcon(QIcon(":/icon/icon.png"))
+    _configure_app_identity(app)
     _ensure_desktop_entry(APP_VERSION)
     QQuickStyle.setStyle("Basic")
 

@@ -7,6 +7,42 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.53.1] - 2026-09-23
+
+### Fixed
+- **App icon sometimes not showing at startup** ("as if it was not
+  registered"), reported as a long-standing issue unrelated to the
+  Wayland work above. Real cause: the app never called
+  `QGuiApplication.setDesktopFileName()`, so the shell had no reliable
+  way to match the running process back to its installed `.desktop`
+  entry for icon/taskbar/Alt-Tab purposes — it fell back to guessing
+  from the executable path instead, which doesn't match. Extracted the
+  app-identity setup into `_configure_app_identity()` and added the
+  missing call (`"yata"`, matching `_ensure_desktop_entry`'s own
+  `yata.desktop` filename). New regression test in
+  `tests/test_desktop_integration.py`, confirmed to fail against the
+  pre-fix code before asserting it passes.
+
+## [0.53.0] - 2026-09-23
+
+### Fixed
+- **Windows opened centered at a generic size, ignoring saved
+  position/size, after upgrading to a Wayland-only desktop (Ubuntu
+  24→26)**. Not an app bug: Wayland's `xdg-shell` protocol gives clients
+  no way to request their own absolute screen position, and GNOME/Mutter
+  implements no extension that would let one — this app's remembered
+  per-window position and always-below stacking are both fundamentally
+  X11-shaped. Fixed by forcing Qt's XCB platform plugin
+  (`QT_QPA_PLATFORM=xcb;wayland`, `;`-list so it still falls back to
+  native Wayland if XWayland isn't available rather than failing to
+  launch), which routes through XWayland — a real X11 client as far as
+  Mutter's X11-compatibility layer is concerned, so both position and the
+  always-below trick work exactly as they did on X11. Verified live
+  against the real Wayland session, not just reasoning about the
+  protocol. `scripts/capture_screenshots.py` likely needs the same
+  treatment before screenshots can be regenerated on a Wayland-only
+  machine — not yet done.
+
 ## [0.52.0] - 2026-09-21
 
 ### Changed

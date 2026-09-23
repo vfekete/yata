@@ -3,10 +3,12 @@ import stat
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PySide6.QtGui import QGuiApplication
 
 from main import (
     APP_VERSION,
     _compute_exec_cmd,
+    _configure_app_identity,
     _ensure_desktop_entry,
     _maybe_launch_bundled_loader,
     _version_tuple,
@@ -202,3 +204,13 @@ def test_app_version_constant_is_set():
     parts = APP_VERSION.split(".")
     assert len(parts) == 3
     assert all(p.isdigit() for p in parts)
+
+
+def test_configure_app_identity_sets_desktop_file_name():
+    app = QGuiApplication.instance()
+    _configure_app_identity(app)
+
+    assert app.desktopFileName() == "yata"
+    assert app.applicationName() == "yata"
+    assert app.organizationName() == "yata"
+    assert not app.windowIcon().isNull()
