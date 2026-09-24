@@ -125,7 +125,6 @@ Window {
                 id: contentLoader
                 anchors.fill: parent
                 anchors.margins: 15
-                anchors.topMargin: 15 + tagLabelBg.height / 2 + 4
                 source: pluginContentUrl
                 visible: !root.yatasActive && !root.settingsActive
             }

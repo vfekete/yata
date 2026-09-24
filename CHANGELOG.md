@@ -7,6 +7,19 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.53.2] - 2026-09-24
+
+### Changed
+- **Window content top margin was much larger than the left/right/bottom
+  margins.** The content area (toolbar, task list, etc.) was inset by an
+  extra `tagLabelBg.height / 2 + 4` on top, on top of the usual 15px,
+  to clear the floating tag-label/icon row — netting ~42px from the
+  window's top edge versus 15px on the other sides. Removed the special
+  top-margin override in `yata-src/qml/Main.qml` so all four sides use
+  the same 15px margin; content now sits higher and is correspondingly
+  taller, while still clearing the tag/icon row (which now ends ~5.5px
+  above the content, instead of ~19px).
+
 ## [0.53.1] - 2026-09-23
 
 ### Fixed
