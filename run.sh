@@ -25,6 +25,14 @@ done
 
 make -C x-loader >&2
 
+# Hold everything (loader included) until Xwayland, RandR, D-Bus and the
+# shell are all up -- autostart can otherwise race GNOME's own startup.
+# Gives up (logging to the journal) after 2 minutes; see display_ready.py.
+# It may also recover DISPLAY/XAUTHORITY/... from the systemd user session
+# if we were spawned before those were set, hence the eval.
+session_env="$(uv run python yata-src/display_ready.py --shell)" || exit 1
+eval "$session_env"
+
 socket_path="$(mktemp -u "${XDG_RUNTIME_DIR:-/tmp}/yata-loader-XXXXXXXX.sock")"
 export YATA_LOADER_SOCKET="$socket_path"
 trap 'rm -f "$socket_path"' EXIT

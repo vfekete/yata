@@ -21,6 +21,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 import resources_rc  # noqa: F401
 import plugins_registry
+from display_ready import wait_for_display
 from icons import IconProvider
 from settings import AppSettings
 from window_manager import WindowManager
@@ -35,7 +36,7 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.53.2"
+APP_VERSION = "0.54.0"
 
 _IS_COMPILED = "__compiled__" in globals()
 
@@ -286,6 +287,11 @@ def main() -> int:
         dest = _create_backup()
         print(f"Backup written to {dest}")
         return 0
+
+    # Before the loader too: when autostarted, Xwayland/RandR/D-Bus may
+    # still be coming up (see display_ready.py).
+    if not wait_for_display():
+        return 1
 
     _maybe_launch_bundled_loader()
     loader_socket = _connect_to_loader()

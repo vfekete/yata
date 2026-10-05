@@ -1,0 +1,90 @@
+import syslog
+
+from display_ready import check_session, parse_systemd_environment, wait_for_display
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
+def _run(probe_results, *, timeout=120.0, environ=None):
+    clock = FakeClock()
+    results = iter(probe_results)
+    logs = []
+    ok = wait_for_display(
+        timeout=timeout, interval=1.0, settle_polls=3,
+        probe=lambda: next(results), environ=environ or {},
+        clock=clock, sleep=clock.sleep, log=lambda prio, msg: logs.append((prio, msg)),
+    )
+    return ok, clock.now, logs
+
+
+def test_ready_immediately_does_not_wait_or_log():
+    ok, elapsed, logs = _run([[]])
+    assert ok and elapsed == 0 and logs == []
+
+
+def test_waits_until_ready_then_settles():
+    ok, elapsed, logs = _run([["no X"], ["no X"], [], [], []])
+    assert ok
+    assert elapsed == 4.0
+    assert logs[-1][0] == syslog.LOG_INFO and "ready after" in logs[-1][1]
+
+
+def test_flapping_readiness_restarts_settle_count():
+    ok, elapsed, _ = _run([["no X"], [], [], ["no RANDR"], [], [], []])
+    assert ok and elapsed == 6.0
+
+
+def test_gives_up_after_timeout_with_journal_error():
+    ok, elapsed, logs = _run(iter(lambda: ["DISPLAY is not set"], None), timeout=120.0)
+    assert not ok
+    assert elapsed == 120.0
+    prio, msg = logs[-1]
+    assert prio == syslog.LOG_ERR
+    assert "DISPLAY is not set" in msg and "120s" in msg
+
+
+def test_skip_env_var_bypasses_everything():
+    ok, elapsed, logs = _run([], environ={"YATA_SKIP_DISPLAY_WAIT": "1"})
+    assert ok and elapsed == 0 and logs == []
+
+
+def test_check_session_reports_missing_runtime_dir_and_display():
+    problems = check_session({"QT_QPA_PLATFORM": "xcb;wayland"})
+    assert any("XDG_RUNTIME_DIR" in p for p in problems)
+    assert any("DISPLAY" in p for p in problems)
+
+
+def test_check_session_skips_x11_for_non_x_platform(tmp_path):
+    problems = check_session({"QT_QPA_PLATFORM": "offscreen", "XDG_RUNTIME_DIR": str(tmp_path)})
+    assert problems == [] or all("DISPLAY" not in p for p in problems)
+
+
+def test_check_session_reports_missing_wayland_socket(tmp_path):
+    problems = check_session({
+        "QT_QPA_PLATFORM": "offscreen",
+        "XDG_RUNTIME_DIR": str(tmp_path),
+        "WAYLAND_DISPLAY": "wayland-9",
+    })
+    assert any("wayland-9" in p for p in problems)
+
+
+def test_parse_systemd_environment_handles_quoting():
+    env = parse_systemd_environment(
+        "DISPLAY=:0\n"
+        "XAUTHORITY=/run/user/1000/.mutter-Xwaylandauth.ABC\n"
+        "WEIRD=$'a b\\nc'\n"
+        "garbage-line\n"
+    )
+    assert env["DISPLAY"] == ":0"
+    assert env["XAUTHORITY"] == "/run/user/1000/.mutter-Xwaylandauth.ABC"
+    assert "garbage-line" not in env
+    assert env["WEIRD"].startswith("a b")

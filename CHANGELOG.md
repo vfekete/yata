@@ -7,6 +7,27 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.54.0] - 2026-10-05
+
+### Added
+- **Startup now waits for the graphical session to be fully up.** When
+  autostarted, YATA (and the x-loader splash) could race GNOME's own
+  startup -- Xwayland, RandR, the session D-Bus or gnome-shell not yet
+  ready -- occasionally breaking the session start. New
+  `yata-src/display_ready.py` polls every second, before the loader and
+  before Qt, until: `XDG_RUNTIME_DIR` exists, the Wayland socket exists
+  (if any), the session bus answers and (on GNOME) `org.gnome.Shell` is
+  owned, and the X display opens with RANDR and at least one active
+  monitor. If it only became ready while waiting, it must stay ready for
+  3 consecutive polls. Missing `DISPLAY`/`XAUTHORITY`/`WAYLAND_DISPLAY`/
+  `XDG_RUNTIME_DIR` are recovered from `systemctl --user
+  show-environment`. After 2 minutes it gives up, logs an error to the
+  journal (`journalctl --user -t yata`) and exits with status 1. Wired
+  into both `run.sh` (before the loader) and `main.py` (covers the
+  compiled binary, which spawns its bundled loader itself). Bypass with
+  `YATA_SKIP_DISPLAY_WAIT=1`. When the session is already up the check
+  is effectively instant.
+
 ## [0.53.2] - 2026-09-24
 
 ### Changed
