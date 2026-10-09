@@ -36,7 +36,7 @@ from window_registry import (
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.54.0"
+APP_VERSION = "0.54.1"
 
 _IS_COMPILED = "__compiled__" in globals()
 

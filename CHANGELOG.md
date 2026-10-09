@@ -7,6 +7,19 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.54.1] - 2026-10-09
+
+### Fixed
+- **Windows narrower than 600px were widened to 600px on every start,
+  overlapping their neighbours.** `Main.qml`'s `minimumWidth` fell back to
+  a placeholder `300 * 2` while the plugin content `Loader` had no item
+  yet; Qt applied that minimum to the window during construction, and
+  `onWidthChanged` persisted the enlarged width before the real minimum
+  (`actionButtonsWidth * 2`, ~330-350px at zoom 1.0) took over. The
+  fallback is now `0` (no constraint until the content exists); genuine
+  clamping to the real minimum is unchanged. Regression test:
+  `tests/test_restore_width.py`.
+
 ## [0.54.0] - 2026-10-05
 
 ### Added

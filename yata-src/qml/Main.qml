@@ -26,7 +26,11 @@ Window {
     y: hostSettings.y
     width: hostSettings.width
     height: hostSettings.height
-    minimumWidth: (contentLoader.item ? contentLoader.item.actionButtonsWidth : 300) * 2
+    // No minimum until the plugin content exists: a placeholder value here
+    // (formerly 600) would get applied to the window -- and persisted via
+    // onWidthChanged -- before the real one is known, widening every saved
+    // window narrower than it on each start.
+    minimumWidth: contentLoader.item ? contentLoader.item.actionButtonsWidth * 2 : 0
 
     onXChanged: hostSettings.x = x
     onYChanged: hostSettings.y = y
