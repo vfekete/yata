@@ -2,9 +2,13 @@
 
 When YATA is autostarted at login it can race GNOME's own startup:
 Xwayland (started on demand by mutter), its RandR monitor layout, the
-session D-Bus and gnome-shell may not all be ready yet, and the x-loader
-splash (pure Xlib) and Qt's xcb platform plugin both fall over in odd ways
-when they aren't. wait_for_display() polls every capability we depend on
+session D-Bus, gnome-shell and the X11 scale (gsd-xsettings' Xft.dpi,
+which it can only compute once mutter's org.gnome.Mutter.X11 is up) may
+not all be ready yet, and the x-loader splash (pure Xlib) and Qt's xcb
+platform plugin both fall over in odd ways when they aren't. Starting
+before the scale is final is worse than a crash: Qt picks a device pixel
+ratio of 1, the scale then flips to 2 under it, and every window's saved
+geometry gets reinterpreted (and persisted) at half size. wait_for_display() polls every capability we depend on
 until they all answer, for up to WAIT_TIMEOUT seconds, and logs to the
 journal (via syslog) if they never do.
 
@@ -29,8 +33,9 @@ from typing import Callable
 WAIT_TIMEOUT = 120.0
 POLL_INTERVAL = 1.0
 # Once the session only *became* ready while we were waiting, require it to
-# stay ready for this many consecutive polls before trusting it -- the shell
-# is still busy bringing things up at that point.
+# stay ready -- with an unchanged monitor layout and scale -- for this many
+# consecutive polls before trusting it; the shell is still busy bringing
+# things up at that point.
 SETTLE_POLLS = 3
 
 # Variables a GNOME session exports into the systemd user manager's
@@ -101,31 +106,95 @@ def _check_wayland(environ) -> str | None:
     return None
 
 
-def _check_x11(environ) -> str | None:
-    if not environ.get("DISPLAY"):
-        return "DISPLAY is not set (Xwayland not started yet?)"
-    try:
-        from Xlib import display
-    except ImportError:
-        return None
+def _is_gnome(environ) -> bool:
+    return "GNOME" in environ.get("XDG_CURRENT_DESKTOP", "").upper().split(":")
+
+
+def parse_xft_dpi(resource_manager: str) -> str | None:
+    for line in resource_manager.splitlines():
+        key, sep, value = line.partition(":")
+        if sep and key.strip() == "Xft.dpi":
+            return value.strip() or None
+    return None
+
+
+def _read_x11_state(d) -> tuple[str | None, str | None, tuple]:
+    """(problem, Xft.dpi, monitor layout) for an open python-xlib display."""
+    from Xlib import Xatom
+
+    if not d.has_extension("RANDR"):
+        return "X server has no RANDR extension yet", None, ()
+    root = d.screen().root
+    monitors = root.xrandr_get_monitors(is_active=True).monitors
+    if not monitors:
+        return "X server reports no active monitors yet", None, ()
+    layout = tuple(sorted((m.x, m.y, m.width_in_pixels, m.height_in_pixels) for m in monitors))
+    prop = root.get_full_property(d.intern_atom("RESOURCE_MANAGER"), Xatom.STRING)
+    value = prop.value if prop else b""
+    dpi = parse_xft_dpi(value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value))
+    return None, dpi, layout
+
+
+def _with_display(environ, fn):
+    from Xlib import display
+
     try:
         d = display.Display(environ["DISPLAY"])
     except Exception as exc:  # Xlib raises a zoo of error types here
-        return f"cannot open X display {environ['DISPLAY']}: {exc}"
+        return f"cannot open X display {environ['DISPLAY']}: {exc}", None
     try:
-        if not d.has_extension("RANDR"):
-            return "X server has no RANDR extension yet"
-        monitors = d.screen().root.xrandr_get_monitors(is_active=True).monitors
-        if not monitors:
-            return "X server reports no active monitors yet"
+        return None, fn(d)
     except Exception as exc:
-        return f"X server query failed: {exc}"
+        return f"X server query failed: {exc}", None
     finally:
         try:
             d.close()
         except Exception:
             pass
+
+
+def _check_x11(environ) -> str | None:
+    if not environ.get("DISPLAY"):
+        return "DISPLAY is not set (Xwayland not started yet?)"
+    try:
+        import Xlib  # noqa: F401
+    except ImportError:
+        return None
+
+    def query(d):
+        problem, dpi, _ = _read_x11_state(d)
+        if problem or not _is_gnome(environ):
+            return problem
+        if not d.get_selection_owner(d.intern_atom("_XSETTINGS_S0")):
+            return "no XSETTINGS manager yet (gsd-xsettings not running)"
+        if dpi is None:
+            return "Xft.dpi not published yet (X11 scale unknown)"
+        return None
+
+    problem, result = _with_display(environ, query)
+    if problem:
+        return problem
+    if result:
+        return result
+    if _is_gnome(environ) and shutil.which("gdbus"):
+        # gsd-xsettings derives the X11 scale from mutter's X11 interface;
+        # until that exists it publishes a fallback scale.
+        for name in ("org.gnome.Mutter.X11", "org.gnome.SettingsDaemon.XSettings"):
+            if _gdbus_call("--method", "org.freedesktop.DBus.NameHasOwner", name) != "(true,)":
+                return f"{name} is not on the session bus yet"
     return None
+
+
+def session_fingerprint(environ=os.environ):
+    """Monitor layout + X11 scale; must stay unchanged while settling."""
+    if not _needs_x11(environ) or not environ.get("DISPLAY"):
+        return None
+    try:
+        import Xlib  # noqa: F401
+    except ImportError:
+        return None
+    _, result = _with_display(environ, lambda d: _read_x11_state(d)[1:])
+    return result
 
 
 def _gdbus_call(*args: str) -> str | None:
@@ -145,7 +214,7 @@ def _check_dbus(environ) -> str | None:
         return None
     if _gdbus_call("--method", "org.freedesktop.DBus.GetId") is None:
         return "session D-Bus is not reachable"
-    if "GNOME" in environ.get("XDG_CURRENT_DESKTOP", "").upper().split(":"):
+    if _is_gnome(environ):
         reply = _gdbus_call("--method", "org.freedesktop.DBus.NameHasOwner", "org.gnome.Shell")
         if reply != "(true,)":
             return "gnome-shell is not on the session bus yet"
@@ -172,6 +241,7 @@ def wait_for_display(
     interval: float = POLL_INTERVAL,
     settle_polls: int = SETTLE_POLLS,
     probe: Callable[[], list[str]] | None = None,
+    fingerprint: Callable[[], object] | None = None,
     environ=None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
@@ -181,6 +251,7 @@ def wait_for_display(
     environ = os.environ if environ is None else environ
     if environ.get("YATA_SKIP_DISPLAY_WAIT"):
         return True
+    probe_is_default = probe is None
     if probe is None:
         def probe():
             imported = _import_session_env(environ)
@@ -188,6 +259,8 @@ def wait_for_display(
                 log(syslog.LOG_INFO, "picked up " + ", ".join(imported)
                     + " from the systemd user session environment")
             return check_session(environ)
+    if fingerprint is None:
+        fingerprint = (lambda: session_fingerprint(environ)) if probe_is_default else (lambda: None)
 
     start = clock()
     problems = probe()
@@ -197,6 +270,7 @@ def wait_for_display(
     log(syslog.LOG_INFO, "graphical session not ready, waiting up to "
         f"{timeout:.0f}s: " + "; ".join(problems))
     consecutive_ok = 0
+    settled_state = None
     while True:
         if clock() - start >= timeout:
             log(syslog.LOG_ERR, f"graphical session still not ready after {timeout:.0f}s, "
@@ -208,9 +282,15 @@ def wait_for_display(
             problems = current
             consecutive_ok = 0
             continue
+        state = fingerprint()
+        if consecutive_ok and state != settled_state:
+            log(syslog.LOG_INFO, f"monitor layout/scale changed while settling: {state!r}")
+            consecutive_ok = 0
+        settled_state = state
         consecutive_ok += 1
         if consecutive_ok >= settle_polls:
-            log(syslog.LOG_INFO, f"graphical session ready after {clock() - start:.1f}s")
+            log(syslog.LOG_INFO, f"graphical session ready after {clock() - start:.1f}s"
+                + (f" (monitors/Xft.dpi: {state!r})" if state is not None else ""))
             return True
 
 

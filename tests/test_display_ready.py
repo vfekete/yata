@@ -1,6 +1,6 @@
 import syslog
 
-from display_ready import check_session, parse_systemd_environment, wait_for_display
+from display_ready import check_session, parse_systemd_environment, parse_xft_dpi, wait_for_display
 
 
 class FakeClock:
@@ -14,13 +14,16 @@ class FakeClock:
         self.now += seconds
 
 
-def _run(probe_results, *, timeout=120.0, environ=None):
+def _run(probe_results, *, timeout=120.0, environ=None, fingerprints=None):
     clock = FakeClock()
     results = iter(probe_results)
+    states = iter(fingerprints) if fingerprints is not None else None
     logs = []
     ok = wait_for_display(
         timeout=timeout, interval=1.0, settle_polls=3,
-        probe=lambda: next(results), environ=environ or {},
+        probe=lambda: next(results),
+        fingerprint=(lambda: next(states)) if states else None,
+        environ=environ or {},
         clock=clock, sleep=clock.sleep, log=lambda prio, msg: logs.append((prio, msg)),
     )
     return ok, clock.now, logs
@@ -88,3 +91,29 @@ def test_parse_systemd_environment_handles_quoting():
     assert env["XAUTHORITY"] == "/run/user/1000/.mutter-Xwaylandauth.ABC"
     assert "garbage-line" not in env
     assert env["WEIRD"].startswith("a b")
+
+
+def test_scale_change_while_settling_restarts_settle_count():
+    # Regression: Xft.dpi flipped 96 -> 192 right after gsd-xsettings came
+    # up; starting in between halved every saved window geometry.
+    ok, elapsed, logs = _run(
+        [["no Xft.dpi"], [], [], [], [], []],
+        fingerprints=["96", "96", "192", "192", "192"],
+    )
+    assert ok and elapsed == 5.0
+    assert any("changed while settling" in msg for _, msg in logs)
+
+
+def test_parse_xft_dpi():
+    assert parse_xft_dpi("Xft.antialias:\t1\nXft.dpi:\t192\nXft.hinting:\t1\n") == "192"
+    assert parse_xft_dpi("Xft.antialias:\t1\n") is None
+    assert parse_xft_dpi("") is None
+
+
+def test_gnome_x11_checks_skipped_for_non_x_platform(tmp_path):
+    problems = check_session({
+        "QT_QPA_PLATFORM": "offscreen",
+        "XDG_RUNTIME_DIR": str(tmp_path),
+        "XDG_CURRENT_DESKTOP": "ubuntu:GNOME",
+    })
+    assert not any("Xft.dpi" in p or "XSETTINGS" in p or "Mutter.X11" in p for p in problems)

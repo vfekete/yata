@@ -7,6 +7,23 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.54.2] - 2026-10-10
+
+### Fixed
+- **Windows restored at roughly half their size (and misplaced) after an
+  autostart.** The 0.54.0 startup gate passed before GNOME's X11 scale was
+  known: on this boot YATA was autostarted at 00:30:43.40, gsd-xsettings
+  only started at 00:30:44.17 and initially could not get the UI scale
+  (`org.gnome.Mutter.X11` not yet on the bus). Qt then saw the device
+  pixel ratio change underneath already-created windows, and the halved
+  geometry (every saved height exactly halved, widths clamped to the
+  toolbar minimum, right-monitor windows snapped to its left edge) was
+  persisted. On GNOME with X11, `display_ready.py` now also waits for
+  `org.gnome.Mutter.X11` and `org.gnome.SettingsDaemon.XSettings` on the
+  session bus, an owned `_XSETTINGS_S0` selection and a published
+  `Xft.dpi`; the settle phase additionally requires the monitor layout
+  and `Xft.dpi` to stay unchanged across consecutive polls.
+
 ## [0.54.1] - 2026-10-09
 
 ### Fixed
