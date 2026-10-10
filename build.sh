@@ -63,6 +63,9 @@ rm -rf yata-src/deployment yata-src/pysidedeploy.spec
 # with no -c) gives no chance to inject extra Nuitka args before the real
 # compile runs.
 uv run --group build pyside6-deploy --init -f --name "$NAME" yata-src/main.py
+# --init defaults the binary's icon (Nuitka --linux-icon) to PySide's own
+# pyside_icon.jpg; point it at ours instead.
+sed -i -E "s|^icon = .*|icon = $(pwd)/${ICON}|" yata-src/pysidedeploy.spec
 LOADER_ABS="$(pwd)/x-loader/x-loader"
 sed -i -E "s|^extra_args = (.*)|extra_args = \1 --include-data-files=${LOADER_ABS}=x-loader-loader|" yata-src/pysidedeploy.spec
 
