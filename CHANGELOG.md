@@ -7,6 +7,21 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.55.1] - 2026-10-18
+
+### Changed
+- **README brought up to date.** YATA is described as what it now is —
+  simple TODO lists in sticky desktop windows — instead of a "sub-window
+  manager" for several plugins; the frozen timesheet plugin gets a
+  one-paragraph note and the never-started "System / PC monitor" entry
+  is gone. Stale claims fixed: theme/opacity live in the "S" settings
+  view (no right-click theme menu or Quit any more), tint names match
+  the UI, zoom shortcuts documented, reordering also via the per-task
+  arrows, Markdown support spelled out as the subset actually rendered.
+  The Wayland limitation now reflects that YATA runs through XWayland
+  (since 0.53.0), and a short Autostart section explains the startup
+  wait and where it logs.
+
 ## [0.55.0] - 2026-10-18
 
 ### Added

@@ -7,39 +7,38 @@
   <img src="docs/promo/demo.gif" alt="YATA demo — adding, editing, and organizing tasks" width="76%"/>
 </p>
 
-Mini "sub-window" manager. Which allows to draw content of its plugins into
-separate windows. Windows sticks to desktop (like sticky note). Content
-of the windows is wrote by the user. There are several "internal" plugins,
-TODO application being one of them.
+Simple TODO lists in sticky windows glued to the desktop (like sticky
+notes). Every window is its own independent list.
 
 Besides my desire to have simple TODO application, the UI/UX feeling was inspired
 by [Awesome WM](https://awesomewm.org/) and [conky](https://github.com/brndnmtthws/conky).
 
 ## Features
 
-- **Multiple independent sticky sub-windows**, each pinned to the desktop
-  and running one plugin (TODO list, work timesheet, ...) — add, rename,
-  hide/show or delete windows via the YATAS view, each with its own
-  settings and an optional custom border/glow color
-- Drag a task (or other draggable plugin content) from one window onto
-  another to move it there
-- **Theming** shared by every plugin: Dark/Light look, or one of four
-  CRT/terminal tints (green phosphor, amber phosphor, paperwhite monitor,
-  teletype paper), plus adjustable window opacity and font size
+- **Multiple independent sticky windows**, each pinned below other app
+  windows on the desktop, remembering its own position and size — add,
+  rename, hide/show or delete windows via the YATAS view ("Y" in the
+  window's border bar), each with its own settings and an optional
+  custom border/glow color
+- Drag a task from one window onto another to move it there
+- **Theming** per window via the settings view ("S" in the border bar):
+  Dark/Light look, or one of four CRT/terminal tints (Green, Goldenrod,
+  White, Black), plus adjustable window opacity
+- **Zoom** with Ctrl+scroll, Ctrl+= / Ctrl+- and Ctrl+0 (reset); the
+  scroll direction can be flipped in the settings view
 - A lock icon cycles Unlocked → Auto-locked → Locked, to blur/freeze a
   window's content in place
-- No title bar — drag a window by empty toolbar space; right-click the
-  background for the theme menu and Quit
+- No title bar — drag a window by empty toolbar space
 - `./run.sh --backup` zips every window's settings and data into a
   timestamped archive
 
-## Internal plugins
-
-### TODO list (main motivation behind the YATA)
+## TODO list
 
 - Add, edit (double-click), cancel, mark done, re-open and delete tasks;
-  task text supports Markdown
-- Reorder manually by dragging, or sort by status (Active/Done/Cancel),
+  task text supports basic Markdown (bold, italic, strikethrough,
+  inline code, links)
+- Reorder manually by dragging or with the arrows in front of each task,
+  or sort by status (Active/Done/Cancel),
   with independent status filters and day/Month/Year grouping (calendar
   views show per-day/month status counts)
 - Press-and-hold a task's done/cancel icon to attach an optional Markdown
@@ -47,20 +46,10 @@ by [Awesome WM](https://awesomewm.org/) and [conky](https://github.com/brndnmtth
 - Realtime text search, plus a LINKS view listing every task that
   contains a Markdown link
 
-### [[IN_PROGRESS]] Work timesheet notebook and exporter
-
-- Tracks named work items, each with its own history of start/stop
-  sessions (one running at a time per window) and a per-day
-  ON-SITE/REMOTE marker; a session left running when YATA closes is
-  marked abandoned
-- **Summary** view per day/week/month/year: worked vs. target time,
-  remaining/overtime, with public holidays (fetched from the
-  OpenHolidays API, cached offline) excluded from the target the same
-  way weekends already are
-- **PDF export** (day/week/month) with an optional customer/contractor
-  header and signature lines
-
-### [[IN_PROGRESS]] System / PC monitor
+Under the hood, window content is a plugin. An experimental work
+timesheet plugin still exists in the code (and can be picked when
+creating a window), but its development is frozen — YATA is meant to do
+simple TODO lists only.
 
 ## Quick start
 
@@ -74,6 +63,18 @@ shown; use `./run-yata.sh` instead to skip the splash entirely (faster for
 development), or `./run-loader.sh` to preview the splash on its own.
 
 See `BUILD.md` for setup and test instructions.
+
+### Autostart
+
+When started at login, YATA (and its splash) first waits — up to 2
+minutes — until the desktop session is fully up: Xwayland, the monitor
+layout, the session bus and, on GNOME, the final X11 scale. Starting
+earlier can misplace or shrink every window. What it waited for is
+logged to the journal:
+
+```sh
+journalctl --user -t yata -b
+```
 
 ### Backing up your data
 
@@ -132,11 +133,12 @@ hint maps to `_NET_WM_WINDOW_TYPE_DESKTOP` on GNOME/Mutter, which places the
 window below the desktop background layer itself (invisible), rather than
 merely beneath other app windows.
 
-On **Wayland** (GNOME's default session), there is no equivalent for
-ordinary applications — Wayland compositors don't let regular toolkit
-windows request a stacking layer at all, so on Wayland the app behaves like
-a normal window instead (visible and usable, but not pinned beneath
-others). Revisit if a GNOME-Wayland-compatible way to achieve the intended
-layering is found.
+On **Wayland** (GNOME's default session) native Wayland clients can
+neither request a stacking layer nor position their own windows, so YATA
+runs through **XWayland** instead (`QT_QPA_PLATFORM=xcb;wayland`, set in
+`yata-src/main.py`), where both the remembered positions and the
+below-other-windows stacking work as on X11. Only if XWayland isn't
+available does it fall back to native Wayland, where windows behave like
+normal ones (not pinned beneath others, no remembered position).
 
 
