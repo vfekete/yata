@@ -164,25 +164,85 @@ def _check_x11(environ) -> str | None:
     def query(d):
         problem, dpi, _ = _read_x11_state(d)
         if problem or not _is_gnome(environ):
-            return problem
+            return problem, dpi
         if not d.get_selection_owner(d.intern_atom("_XSETTINGS_S0")):
-            return "no XSETTINGS manager yet (gsd-xsettings not running)"
+            return "no XSETTINGS manager yet (gsd-xsettings not running)", dpi
         if dpi is None:
-            return "Xft.dpi not published yet (X11 scale unknown)"
-        return None
+            return "Xft.dpi not published yet (X11 scale unknown)", dpi
+        return None, dpi
 
     problem, result = _with_display(environ, query)
     if problem:
         return problem
-    if result:
-        return result
+    problem, dpi = result
+    if problem:
+        return problem
     if _is_gnome(environ) and shutil.which("gdbus"):
         # gsd-xsettings derives the X11 scale from mutter's X11 interface;
         # until that exists it publishes a fallback scale.
         for name in ("org.gnome.Mutter.X11", "org.gnome.SettingsDaemon.XSettings"):
             if _gdbus_call("--method", "org.freedesktop.DBus.NameHasOwner", name) != "(true,)":
                 return f"{name} is not on the session bus yet"
+        # ...and even once both exist, the fallback Xft.dpi can linger for a
+        # moment before gsd-xsettings republishes the real one. Presence
+        # isn't enough; the value has to match what mutter says.
+        expected = expected_xft_dpi(_mutter_x11_scale(), _text_scaling_factor())
+        if expected is not None and not xft_dpi_matches(dpi, expected):
+            return (f"Xft.dpi is {dpi}, mutter's X11 scale implies {expected} "
+                    "(gsd-xsettings hasn't published the real scale yet)")
     return None
+
+
+def expected_xft_dpi(ui_scale: int | None, text_scaling: float) -> int | None:
+    """gsd-xsettings publishes Xft.dpi = 96 * text-scaling-factor * UI scale."""
+    if not ui_scale:
+        return None
+    return round(96 * text_scaling * ui_scale)
+
+
+def xft_dpi_matches(dpi: str | None, expected: int) -> bool:
+    try:
+        return abs(float(dpi) - expected) <= 1
+    except (TypeError, ValueError):
+        return False
+
+
+def parse_gdbus_int_variant(reply: str | None) -> int | None:
+    # Properties.Get replies e.g. "(<2>,)" or "(<int32 2>,)".
+    if not reply:
+        return None
+    inner = reply.strip().strip("(),").strip().strip("<>")
+    try:
+        return int(inner.split()[-1])
+    except (IndexError, ValueError):
+        return None
+
+
+def _mutter_x11_scale() -> int | None:
+    try:
+        result = subprocess.run(
+            ["gdbus", "call", "--session", "--dest", "org.gnome.Mutter.X11",
+             "--object-path", "/org/gnome/Mutter/X11",
+             "--method", "org.freedesktop.DBus.Properties.Get",
+             "org.gnome.Mutter.X11", "UiScalingFactor"],
+            capture_output=True, text=True, timeout=3,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return parse_gdbus_int_variant(result.stdout) if result.returncode == 0 else None
+
+
+def _text_scaling_factor() -> float:
+    if not shutil.which("gsettings"):
+        return 1.0
+    try:
+        out = subprocess.run(
+            ["gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor"],
+            capture_output=True, text=True, timeout=3,
+        ).stdout
+        return float(out.strip())
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return 1.0
 
 
 def session_fingerprint(environ=os.environ):
@@ -265,6 +325,9 @@ def wait_for_display(
     start = clock()
     problems = probe()
     if not problems:
+        state = fingerprint()
+        if state is not None:
+            log(syslog.LOG_INFO, f"graphical session ready (monitors/Xft.dpi: {state!r})")
         return True
 
     log(syslog.LOG_INFO, "graphical session not ready, waiting up to "

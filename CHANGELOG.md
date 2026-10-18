@@ -7,6 +7,47 @@ The version scheme is `X.Y.Z`:
 - `Y` — minor changes
 - `Z` — bugfixes, trivial changes, or changes unrelated to code (e.g. documentation)
 
+## [0.55.0] - 2026-10-18
+
+### Added
+- **Scale-change safeguard** (`yata-src/scale_guard.py`). When the device
+  pixel ratio changes under a live window without it moving to another
+  screen (e.g. GNOME publishing the real X11 scale after YATA started),
+  Qt re-expresses the unchanged native window in new logical units —
+  halving it on a 1→2 flip — and those values are saved immediately.
+  Saving stays immediate (crash safety); instead the guard, triggered by
+  the window's `DevicePixelRatioChange` event or its screen's
+  `logicalDotsPerInchChanged`, rolls back afterwards: it restores the
+  geometry from before the writes within 1s of the change (written to
+  disk again at once) and re-applies it to the window. Moving a window to
+  a monitor with a different scale is left alone.
+- `AppSettings.restore_geometry()` / `add_geometry_listener()` supporting
+  it.
+
+### Changed
+- `run-loader.sh`'s header comment no longer claims the standalone
+  preview is a static image or that `build.sh` is broken by the removed
+  Qt prototypes — both stale since the loader gained its spinner and
+  became bundled into the packaged binary.
+
+## [0.54.4] - 2026-10-18
+
+### Fixed
+- **Windows still restored at half size after autostart (0.54.2's fix was
+  incomplete).** The gate only required `Xft.dpi` to be *present*. On
+  this boot (autostart 20:09:52.12, gsd-xsettings 20:09:52.86, again
+  "Failed to get current UI scaling factor") the packaged binary spent
+  ~2s self-extracting, so by the time the gate ran both D-Bus names and
+  an `Xft.dpi` existed and the first probe passed — with no settle phase.
+  Qt nonetheless started at DPR 1 and flipped to 2, and every window was
+  saved at exactly half its on-screen geometry within YATA's first
+  second. The gate now also requires `Xft.dpi` to equal what mutter
+  says it should be: `96 × text-scaling-factor × org.gnome.Mutter.X11`'s
+  `UiScalingFactor` (±1), which rejects gsd-xsettings' scale-1 fallback.
+- The gate now logs one info line with the monitor layout and `Xft.dpi`
+  even when it passes immediately (`journalctl --user -t yata`), so the
+  next occurrence can be diagnosed from the journal alone.
+
 ## [0.54.3] - 2026-10-10
 
 ### Fixed

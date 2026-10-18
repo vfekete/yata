@@ -65,6 +65,7 @@ class AppSettings(QObject):
         super().__init__(parent)
         self._settings = settings or QSettings("yata", "yata")
         self._x, self._y, self._width, self._height = self._load_geometry()
+        self._geometry_listeners = []
         self._border_color = str(self._settings.value("theme/borderColor", ""))
         lock_state = self._settings.value("theme/lockState", "unlocked")
         self._lock_state = lock_state if lock_state in LOCK_STATES else "unlocked"
@@ -96,6 +97,33 @@ class AppSettings(QObject):
             self._settings.sync()
         return x, y, width, height
 
+    def _geometry(self) -> tuple[int, int, int, int]:
+        return self._x, self._y, self._width, self._height
+
+    def add_geometry_listener(self, callback) -> None:
+        """callback(previous_geometry) after every saved geometry change."""
+        self._geometry_listeners.append(callback)
+
+    def _notify_geometry_written(self, previous) -> None:
+        for callback in self._geometry_listeners:
+            callback(previous)
+
+    def restore_geometry(self, x: int, y: int, width: int, height: int) -> None:
+        """Sets all four at once, saved immediately (one write)."""
+        previous = self._geometry()
+        new = (int(x), int(y), int(width), int(height))
+        if new == previous:
+            return
+        self._x, self._y, self._width, self._height = new
+        self._save_geometry()
+        self._notify_geometry_written(previous)
+        for changed, signal in zip(
+            (a != b for a, b in zip(new, previous)),
+            (self.xChanged, self.yChanged, self.widthChanged, self.heightChanged),
+        ):
+            if changed:
+                signal.emit()
+
     def _save_geometry(self):
         self._settings.setValue("window/monitorSignature", monitor_signature())
         self._settings.setValue("window/x", self._x)
@@ -111,8 +139,10 @@ class AppSettings(QObject):
         value = int(value)
         if value == self._x:
             return
+        previous = self._geometry()
         self._x = value
         self._save_geometry()
+        self._notify_geometry_written(previous)
         self.xChanged.emit()
 
     x = Property(int, _get_x, _set_x, notify=xChanged)
@@ -124,8 +154,10 @@ class AppSettings(QObject):
         value = int(value)
         if value == self._y:
             return
+        previous = self._geometry()
         self._y = value
         self._save_geometry()
+        self._notify_geometry_written(previous)
         self.yChanged.emit()
 
     y = Property(int, _get_y, _set_y, notify=yChanged)
@@ -137,8 +169,10 @@ class AppSettings(QObject):
         value = int(value)
         if value == self._width:
             return
+        previous = self._geometry()
         self._width = value
         self._save_geometry()
+        self._notify_geometry_written(previous)
         self.widthChanged.emit()
 
     width = Property(int, _get_width, _set_width, notify=widthChanged)
@@ -150,8 +184,10 @@ class AppSettings(QObject):
         value = int(value)
         if value == self._height:
             return
+        previous = self._geometry()
         self._height = value
         self._save_geometry()
+        self._notify_geometry_written(previous)
         self.heightChanged.emit()
 
     height = Property(int, _get_height, _set_height, notify=heightChanged)

@@ -1,6 +1,14 @@
 import syslog
 
-from display_ready import check_session, parse_systemd_environment, parse_xft_dpi, wait_for_display
+from display_ready import (
+    check_session,
+    expected_xft_dpi,
+    parse_gdbus_int_variant,
+    parse_systemd_environment,
+    parse_xft_dpi,
+    wait_for_display,
+    xft_dpi_matches,
+)
 
 
 class FakeClock:
@@ -117,3 +125,28 @@ def test_gnome_x11_checks_skipped_for_non_x_platform(tmp_path):
         "XDG_CURRENT_DESKTOP": "ubuntu:GNOME",
     })
     assert not any("Xft.dpi" in p or "XSETTINGS" in p or "Mutter.X11" in p for p in problems)
+
+
+def test_parse_gdbus_int_variant():
+    assert parse_gdbus_int_variant("(<2>,)\n") == 2
+    assert parse_gdbus_int_variant("(<int32 1>,)") == 1
+    assert parse_gdbus_int_variant("") is None
+    assert parse_gdbus_int_variant("garbage") is None
+
+
+def test_fallback_xft_dpi_does_not_match_real_scale():
+    # Regression (2026-10-18): gsd-xsettings first publishes a scale-1
+    # fallback (96) before mutter's X11 interface exists; the gate passed on
+    # its mere presence, Qt started at DPR 1, then the switch to 192
+    # halved every saved window.
+    expected = expected_xft_dpi(2, 1.0)
+    assert expected == 192
+    assert not xft_dpi_matches("96", expected)
+    assert xft_dpi_matches("192", expected)
+    assert xft_dpi_matches("192.5", expected)
+
+
+def test_expected_xft_dpi_includes_text_scaling():
+    assert expected_xft_dpi(2, 1.25) == 240
+    assert expected_xft_dpi(1, 1.0) == 96
+    assert expected_xft_dpi(None, 1.0) is None

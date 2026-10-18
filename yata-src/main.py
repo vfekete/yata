@@ -33,10 +33,11 @@ from window_registry import (
     instance_dir_for,
     settings_path_for,
 )
+from scale_guard import ScaleChangeGuard
 from x11_stacking import enable_always_below
 
 QML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qml")
-APP_VERSION = "0.54.3"
+APP_VERSION = "0.55.0"
 
 _IS_COMPILED = "__compiled__" in globals()
 
@@ -170,6 +171,7 @@ def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plu
     if window is None:
         raise RuntimeError(f"Main.qml failed to load: {main_component.errorString()}")
     QQmlEngine.setObjectOwnership(window, QQmlEngine.CppOwnership)
+    scale_guard = ScaleChangeGuard(window, host_settings)
 
     if plugin_content.on_lock_state_changed:
         host_settings.lockStateChanged.connect(
@@ -190,7 +192,7 @@ def _make_window(engine, icon_provider, window_manager, app_icon, window_id, plu
         task_model=plugin_content.context_properties.get("taskModel"),
         app_settings=host_settings, context=context, theme=theme,
         theme_component=theme_component, main_component=main_component,
-        plugin_content=plugin_content,
+        plugin_content=plugin_content, scale_guard=scale_guard,
     )
     return window
 
